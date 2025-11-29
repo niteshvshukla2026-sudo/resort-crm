@@ -1,0 +1,67 @@
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import connectDB from "./config/db.js";
+import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/users.routes.js";
+import resortRoutes from "./routes/resorts.routes.js";
+import departmentRoutes from "./routes/departments.routes.js";
+import storeRoutes from "./routes/stores.routes.js";
+import vendorRoutes from "./routes/vendors.routes.js";
+import itemRoutes from "./routes/items.routes.js";
+import requisitionRoutes from "./routes/requisitions.routes.js";
+import poRoutes from "./routes/po.routes.js";
+import grnRoutes from "./routes/grn.routes.js";
+import roleRoutes from "./routes/role.routes.js";
+import consumptionRoutes from "./routes/consumption.routes.js";
+import storeTransferRuleRoutes from "./routes/storeTransferRule.routes.js";
+
+// If running in demo mode, seed an in-memory DB
+if (process.env.USE_INMEMORY === "true") {
+  try {
+    // use CommonJS require for the in-memory module
+    const inmem = require("./inmemoryDb");
+    if (inmem && typeof inmem.seed === "function") {
+      console.log("Seeding in-memory DB (USE_INMEMORY=true)...");
+      inmem.seed();
+    }
+  } catch (e) {
+    console.warn("Failed to seed in-memory DB:", e.message || e);
+  }
+}
+
+import resortUserRoutes from "./routes/resortUser.routes.js";
+
+connectDB();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(morgan("dev"));
+
+app.get("/", (req, res) => {
+  res.send("Resort Purchase Management API");
+});
+
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/resorts", resortRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/stores", storeRoutes);
+app.use("/api/vendors", vendorRoutes);
+app.use("/api/items", itemRoutes);
+app.use("/api/requisitions", requisitionRoutes);
+app.use("/api/po", poRoutes);
+app.use("/api/grn", grnRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/consumption", consumptionRoutes);
+app.use("/api/resort-user", resortUserRoutes);
+app.use("/api/store-transfer-rules", storeTransferRuleRoutes);
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.statusCode || 500).json({
+    message: err.message || "Server Error",
+  });
+});
+
+export default app;

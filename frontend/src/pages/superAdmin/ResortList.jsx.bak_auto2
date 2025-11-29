@@ -1,0 +1,195 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const ResortList = () => {
+  const [resorts, setResorts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    location: "",
+  });
+
+  // Resorts list laao
+  const loadResorts = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/resorts`);
+      setResorts(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load resorts");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadResorts();
+  }, []);
+
+  const handleOpenForm = () => {
+    setForm({ name: "", code: "", location: "" });
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.name || !form.code) {
+      setError("Name and Code are required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API_BASE}/api/resorts`, form);
+      // list me naya resort add karo
+      setResorts((prev) => [...prev, res.data]);
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to create resort");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Resorts</h2>
+          <p>Manage all properties connected to this purchase system.</p>
+        </div>
+        <button className="sa-primary-button" type="button" onClick={handleOpenForm}>
+          <i className="ri-add-line" /> New Resort
+        </button>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            fontSize: "0.8rem",
+            marginBottom: "8px",
+            color: "#fecaca",
+            background: "rgba(248,113,113,0.15)",
+            padding: "6px 8px",
+            borderRadius: "10px",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      <div className="sa-card">
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading resorts...</div>
+        ) : resorts.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>No resorts found. Add your first resort.</div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resorts.map((r) => (
+                <tr key={r._id || r.id}>
+                  <td>{r.code}</td>
+                  <td>{r.name}</td>
+                  <td>{r.location}</td>
+                  <td>
+                    <span className="sa-badge sa-badge-success">
+                      {r.isActive === false ? "Inactive" : "Active"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Modal for New Resort */}
+      {showForm && (
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New Resort</h3>
+            <p className="sa-modal-sub">
+              Add a new property which will be available for users & transactions.
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Resort Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Beachside Resort"
+                  required
+                />
+              </label>
+              <label>
+                Code
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="BCH"
+                  required
+                />
+              </label>
+              <label>
+                Location
+                <input
+                  name="location"
+                  value={form.location}
+                  onChange={handleChange}
+                  placeholder="Goa"
+                />
+              </label>
+
+              {error && (
+                <div className="sa-modal-error">
+                  {error}
+                </div>
+              )}
+
+              <div className="sa-modal-actions">
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : "Save Resort"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ResortList;

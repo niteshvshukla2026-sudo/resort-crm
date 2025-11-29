@@ -1,0 +1,191 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const DepartmentList = () => {
+  const [departments, setDepartments] = useState([]);
+  const [resorts, setResorts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [form, setForm] = useState({
+    resort: "",
+    name: "",
+    code: "",
+  });
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [deptRes, resortRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/departments`),
+        axios.get(`${API_BASE}/api/resorts`),
+      ]);
+      setDepartments(deptRes.data || []);
+      setResorts(resortRes.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load departments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleOpenForm = () => {
+    setForm({ resort: "", name: "", code: "" });
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.resort || !form.name) {
+      setError("Resort and Department Name are required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API_BASE}/api/departments`, form);
+      setDepartments((prev) => [...prev, res.data]);
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to create department");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getResortName = (dept) => {
+    if (dept.resort && typeof dept.resort === "object") return dept.resort.name;
+    const r = resorts.find((x) => x._id === dept.resort);
+    return r ? r.name : "-";
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Departments</h2>
+          <p>Configure resort-wise departments for requisitions and approvals.</p>
+        </div>
+        <button className="sa-primary-button" type="button" onClick={handleOpenForm}>
+          <i className="ri-add-line" /> New Department
+        </button>
+      </div>
+
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="sa-card">
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading departments...</div>
+        ) : departments.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>No departments found.</div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Resort</th>
+                <th>Department</th>
+                <th>Code</th>
+              </tr>
+            </thead>
+            <tbody>
+              {departments.map((d) => (
+                <tr key={d._id || d.id}>
+                  <td>{getResortName(d)}</td>
+                  <td>{d.name}</td>
+                  <td>{d.code}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New Department</h3>
+            <p className="sa-modal-sub">
+              Map a department to a resort for requisitions and approvals.
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Resort
+                <select
+                  name="resort"
+                  value={form.resort}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select resort</option>
+                  {resorts.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Department Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="F&B / Housekeeping / Engineering..."
+                  required
+                />
+              </label>
+              <label>
+                Code
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="FNB / HK / ENG"
+                />
+              </label>
+
+              {error && <div className="sa-modal-error">{error}</div>}
+
+              <div className="sa-modal-actions">
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : "Save Department"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DepartmentList;

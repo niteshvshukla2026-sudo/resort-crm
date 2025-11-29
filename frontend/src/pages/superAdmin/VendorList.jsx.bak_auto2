@@ -1,0 +1,202 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const VendorList = () => {
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    phone: "",
+    email: "",
+    city: "",
+  });
+
+  const loadVendors = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/vendors`);
+      setVendors(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load vendors");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadVendors();
+  }, []);
+
+  const handleOpenForm = () => {
+    setForm({ name: "", code: "", phone: "", email: "", city: "" });
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.name) {
+      setError("Vendor name is required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API_BASE}/api/vendors`, {
+        name: form.name,
+        code: form.code,
+        phone: form.phone,
+        email: form.email,
+        address: form.city,
+      });
+      setVendors((prev) => [...prev, res.data]);
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to create vendor");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Vendors</h2>
+          <p>Approved suppliers for all resort purchases.</p>
+        </div>
+        <button className="sa-primary-button" type="button" onClick={handleOpenForm}>
+          <i className="ri-add-line" /> New Vendor
+        </button>
+      </div>
+
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="sa-card">
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading vendors...</div>
+        ) : vendors.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>No vendors found.</div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Vendor Name</th>
+                <th>Contact</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vendors.map((v) => (
+                <tr key={v._id || v.id}>
+                  <td>{v.code}</td>
+                  <td>{v.name}</td>
+                  <td>{v.phone}</td>
+                  <td>{v.email}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New Vendor</h3>
+            <p className="sa-modal-sub">
+              Add a supplier that can be used in purchase orders.
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Vendor Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="FreshFoods Supplier"
+                  required
+                />
+              </label>
+              <label>
+                Code
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="FFS"
+                />
+              </label>
+              <label>
+                Phone
+                <input
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="9876543210"
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="vendor@example.com"
+                />
+              </label>
+              <label>
+                City / Address
+                <input
+                  name="city"
+                  value={form.city}
+                  onChange={handleChange}
+                  placeholder="Mumbai / Goa ..."
+                />
+              </label>
+
+              {error && <div className="sa-modal-error">{error}</div>}
+
+              <div className="sa-modal-actions">
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : "Save Vendor"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default VendorList;

@@ -1,0 +1,28 @@
+.sa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.sa-modal {
+  background: linear-gradient(180deg, rgba(8,18,30,0.95), rgba(4,8,15,0.9));
+  border-radius: 12px;
+  width: 820px;
+  max-width: 95%;
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 10px 40px rgba(2,6,12,0.5);
+  overflow: hidden;
+}
+.sa-modal-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 16px;
+  border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.sa-modal-header h3 { margin:0; color:#fff; font-size:18px; }
+.sa-modal-close { background:none; border:none; color:#fff; font-size:22px; cursor:pointer; }
+.sa-modal-body { padding:16px; color:#dfe; }

@@ -1,0 +1,164 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const TYPE_OPTIONS = [
+  { value: "", label: "All Types" },
+  { value: "RECIPE_LUMPSUM", label: "By Recipe – Lumpsum" },
+  { value: "RECIPE_PORTION", label: "By Recipe – Portion" },
+  { value: "REPLACEMENT", label: "Store Replacement" },
+];
+
+const typeLabel = (type) => {
+  const found = TYPE_OPTIONS.find((t) => t.value === type);
+  return found ? found.label : type || "-";
+};
+
+const ConsumptionList = () => {
+  const [rows, setRows] = useState([]);
+  const [typeFilter, setTypeFilter] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const navigate = useNavigate();
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const params = {};
+      if (typeFilter) params.type = typeFilter;
+
+      const res = await axios.get(`${API_BASE}/api/consumption`, {
+        params,
+      });
+      setRows(res.data || []);
+    } catch (err) {
+      console.error("load consumption error", err);
+      setError("Failed to load consumption entries");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter]);
+
+  const onNewClick = () => {
+    navigate("/super-admin/consumption/new");
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Consumption</h2>
+          <p>
+            Record stock consumption by recipe (lumpsum / portion) and store
+            replacement.
+          </p>
+        </div>
+
+        <button className="sa-primary-button" onClick={onNewClick}>
+          <i className="ri-add-line" /> New Consumption
+        </button>
+      </div>
+
+      <div
+        className="sa-card"
+        style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}
+      >
+        <label style={{ fontSize: "0.8rem" }}>
+          Type
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="sa-secondary-button"
+          style={{ marginLeft: "auto" }}
+          onClick={loadData}
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="sa-card">
+        {error && (
+          <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>
+            No consumption entries found. Click “New Consumption” to add one.
+          </div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Event / Reference</th>
+                <th>Store / Dept</th>
+                <th>Lines</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={row._id}
+                  style={{ cursor: "pointer" }}
+                  onClick={() =>
+                    navigate(`/super-admin/consumption/${row._id}`)
+                  }
+                >
+                  <td>
+                    {row.date
+                      ? new Date(row.date).toLocaleDateString()
+                      : "-"}
+                  </td>
+                  <td>{typeLabel(row.type)}</td>
+                  <td>
+                    {row.type === "REPLACEMENT"
+                      ? row.referenceNo || "-"
+                      : row.eventName || row.menuName || "-"}
+                  </td>
+                  <td>
+                    {row.storeFrom?.name || ""}{" "}
+                    {row.storeTo
+                      ? `→ ${row.storeTo.name}`
+                      : row.department?.name
+                      ? `(${row.department.name})`
+                      : ""}
+                  </td>
+                  <td>{row.lines?.length || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ConsumptionList;

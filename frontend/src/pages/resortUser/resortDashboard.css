@@ -1,0 +1,13 @@
+
+.sa-stat-card {
+  background: linear-gradient(180deg, rgba(27,40,57,0.35), rgba(7,12,21,0.25));
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 18px;
+  border-radius: 12px;
+  min-height: 110px;
+}
+.sa-stat-title { color: #bcd; font-weight:600; font-size:14px; }
+.sa-stat-value { font-size:28px; font-weight:700; margin-top:6px; color:#fff; }
+.sa-stat-sub { color: #9ab; margin-top:6px; font-size:13px; }
+.sa-stat-action { display:inline-block; margin-top:8px; color:#6ee7b7; }
+.btn-primary { background:#13a884; color:white; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; }

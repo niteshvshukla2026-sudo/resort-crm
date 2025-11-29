@@ -1,0 +1,191 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const StoreList = () => {
+  const [stores, setStores] = useState([]);
+  const [resorts, setResorts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [form, setForm] = useState({
+    resort: "",
+    name: "",
+    code: "",
+  });
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [storeRes, resortRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/stores`),
+        axios.get(`${API_BASE}/api/resorts`),
+      ]);
+      setStores(storeRes.data || []);
+      setResorts(resortRes.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load stores");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleOpenForm = () => {
+    setForm({ resort: "", name: "", code: "" });
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.resort || !form.name) {
+      setError("Resort and Store Name are required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API_BASE}/api/stores`, form);
+      setStores((prev) => [...prev, res.data]);
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to create store");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getResortName = (store) => {
+    if (store.resort && typeof store.resort === "object") return store.resort.name;
+    const r = resorts.find((x) => x._id === store.resort);
+    return r ? r.name : "-";
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Stores</h2>
+          <p>Define physical stores for each resort to track inventory.</p>
+        </div>
+        <button className="sa-primary-button" type="button" onClick={handleOpenForm}>
+          <i className="ri-add-line" /> New Store
+        </button>
+      </div>
+
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="sa-card">
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading stores...</div>
+        ) : stores.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>No stores found.</div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Resort</th>
+                <th>Store</th>
+                <th>Code</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stores.map((s) => (
+                <tr key={s._id || s.id}>
+                  <td>{getResortName(s)}</td>
+                  <td>{s.name}</td>
+                  <td>{s.code}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New Store</h3>
+            <p className="sa-modal-sub">
+              Add a physical store for a resort (Main Store / Bar Store / HK Store).
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Resort
+                <select
+                  name="resort"
+                  value={form.resort}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select resort</option>
+                  {resorts.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Store Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Main Store / Bar Store..."
+                  required
+                />
+              </label>
+              <label>
+                Code
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="MAIN / BAR / HK"
+                />
+              </label>
+
+              {error && <div className="sa-modal-error">{error}</div>}
+
+              <div className="sa-modal-actions">
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : "Save Store"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default StoreList;

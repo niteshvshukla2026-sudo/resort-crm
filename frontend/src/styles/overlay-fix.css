@@ -1,0 +1,31 @@
+
+/* Fix overlay blocking header buttons (Super Admin New Requisition) */
+
+/* Common overlay classes that might block header actions - allow clicks to pass through */
+.header-overlay,
+.top-header-overlay,
+.topbar-overlay,
+.header-right-blocker,
+.top-header,
+.header-overlay::before {
+  pointer-events: none !important;
+}
+
+/* Ensure header action buttons appear above overlays and accept clicks */
+.btn.btn-primary,
+.btn-primary,
+.new-req-btn,
+.header-actions .btn,
+.topbar .btn {
+  position: relative !important;
+  z-index: 2000 !important;
+  pointer-events: auto !important;
+}
+
+/* Safety: make topbar right area not absorb pointer events except controls inside it */
+.topbar .right, .topbar .right * {
+  pointer-events: auto;
+}
+
+/* If an invisible full-width element exists, allow clicks to pass */
+[style*="pointer-events: none"] { pointer-events: none !important; }

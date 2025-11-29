@@ -1,0 +1,296 @@
+// frontend/src/pages/superAdmin/RoleList.jsx
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const RoleList = () => {
+  const [roles, setRoles] = useState([]);
+  const [modules, setModules] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [form, setForm] = useState({
+    name: "",
+    key: "",
+    description: "",
+    type: "CUSTOM",
+    permissions: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // --- API calls ---
+
+  const loadMeta = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/roles/meta`);
+      setModules(res.data.modules || []);
+      setActions(res.data.actions || []);
+    } catch (e) {
+      console.error("meta error", e);
+    }
+  };
+
+  const loadRoles = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/roles`);
+      setRoles(res.data || []);
+    } catch (err) {
+      console.error("roles error", err);
+      setError("Failed to load roles");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // simple guard so component kabhi crash na kare
+    try {
+      loadMeta();
+      loadRoles();
+    } catch (e) {
+      console.error("init error", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- helpers ---
+
+  const selectRole = (role) => {
+    setSelectedRoleId(role._id);
+    setForm({
+      name: role.name || "",
+      key: role.key || "",
+      description: role.description || "",
+      type: role.type || "CUSTOM",
+      permissions: role.permissions || [],
+    });
+    setError("");
+  };
+
+  const startNewRole = () => {
+    setSelectedRoleId(null);
+    setForm({
+      name: "",
+      key: "",
+      description: "",
+      type: "CUSTOM",
+      permissions: [],
+    });
+    setError("");
+  };
+
+  const handleBasicChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const hasPermission = (moduleKey, action) => {
+    const perm = form.permissions.find((p) => p.module === moduleKey);
+    return perm ? perm.actions.includes(action) : false;
+  };
+
+  const togglePermission = (moduleKey, action) => {
+    setForm((prev) => {
+      const perms = [...prev.permissions];
+      const idx = perms.findIndex((p) => p.module === moduleKey);
+
+      if (idx === -1) {
+        perms.push({ module: moduleKey, actions: [action] });
+      } else {
+        const set = new Set(perms[idx].actions || []);
+        if (set.has(action)) set.delete(action);
+        else set.add(action);
+        perms[idx].actions = Array.from(set);
+      }
+
+      const cleaned = perms.filter((p) => p.actions && p.actions.length);
+      return { ...prev, permissions: cleaned };
+    });
+  };
+
+  const handleSave = async () => {
+    if (!form.name || !form.key) {
+      setError("Role name & key are required");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError("");
+
+      if (selectedRoleId) {
+        const res = await axios.put(
+          `${API_BASE}/api/roles/${selectedRoleId}`,
+          {
+            name: form.name,
+            description: form.description,
+            permissions: form.permissions,
+          }
+        );
+        setRoles((prev) =>
+          prev.map((r) => (r._id === selectedRoleId ? res.data : r))
+        );
+      } else {
+        const res = await axios.post(`${API_BASE}/api/roles`, form);
+        setRoles((prev) => [...prev, res.data]);
+        setSelectedRoleId(res.data._id);
+      }
+    } catch (err) {
+      console.error("save error", err);
+      setError(err.response?.data?.message || "Failed to save role");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- UI ---
+  return (
+    <div className="sa-page sa-page-roles">
+      <div className="sa-page-header">
+        <div>
+          <h2>User Roles</h2>
+          <p>Define system & custom roles with module-wise permissions.</p>
+        </div>
+      </div>
+
+      <div className="sa-roles-layout">
+        {/* LEFT LIST */}
+        <div className="sa-roles-left">
+          <div className="sa-roles-section-title">Roles</div>
+
+          {loading ? (
+            <div>Loading roles...</div>
+          ) : (
+            <ul className="sa-roles-list">
+              {roles.map((r) => (
+                <li
+                  key={r._id}
+                  className={
+                    "sa-role-pill " +
+                    (selectedRoleId === r._id ? "active" : "") +
+                    (r.type === "SYSTEM" ? " system" : "")
+                  }
+                  onClick={() => selectRole(r)}
+                >
+                  <div className="sa-role-name">{r.name}</div>
+                  <div className="sa-role-sub">
+                    {(r.type || "CUSTOM").toLowerCase()} • {r.key}
+                  </div>
+                </li>
+              ))}
+              {!loading && roles.length === 0 && (
+                <li className="sa-role-sub">No roles created yet.</li>
+              )}
+            </ul>
+          )}
+
+          <button className="sa-primary-button" onClick={startNewRole}>
+            <i className="ri-add-line" /> New Custom Role
+          </button>
+        </div>
+
+        {/* RIGHT DETAILS */}
+        <div className="sa-roles-right">
+          <div className="sa-card" style={{ marginBottom: 12 }}>
+            <h3>Basic Details</h3>
+            <div className="sa-roles-basic">
+              <div>
+                <label>Role Name</label>
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleBasicChange}
+                  placeholder="Store Incharge / Front Office..."
+                />
+              </div>
+              <div>
+                <label>Key</label>
+                <input
+                  name="key"
+                  value={form.key}
+                  onChange={handleBasicChange}
+                  placeholder="STORE_USER"
+                  disabled={!!selectedRoleId}
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <label>Description</label>
+              <textarea
+                name="description"
+                value={form.description}
+                onChange={handleBasicChange}
+                rows={2}
+                placeholder="Short description for this role..."
+              />
+            </div>
+          </div>
+
+          <div className="sa-card">
+            <h3>Permissions</h3>
+            <p className="sa-modal-sub">
+              Tick what this role can do in each module.
+            </p>
+
+            <div className="sa-role-permission-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Module</th>
+                    {actions.map((a) => (
+                      <th key={a}>{a}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {modules.map((m) => (
+                    <tr key={m}>
+                      <td>{m.replace(/_/g, " ")}</td>
+                      {actions.map((a) => (
+                        <td key={a}>
+                          <input
+                            type="checkbox"
+                            checked={hasPermission(m, a)}
+                            onChange={() => togglePermission(m, a)}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {modules.length === 0 && (
+                    <tr>
+                      <td colSpan={actions.length + 1}>
+                        No modules metadata loaded.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {error && (
+              <div className="sa-modal-error" style={{ marginTop: 8 }}>
+                {error}
+              </div>
+            )}
+
+            <div className="sa-modal-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="sa-primary-button"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Role"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RoleList;

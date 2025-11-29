@@ -1,0 +1,34 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+const ResortDashboard = () => {
+  return (
+    <div className="sa-page">
+      <h2>Resort User Dashboard</h2>
+      <div className="sa-card-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
+        <Link to="/resort/requisitions/create" className="sa-card">
+          <h3>Create Requisition</h3>
+          <p>Raise new requisitions for your department/store</p>
+        </Link>
+        <Link to="/resort/requisitions" className="sa-card">
+          <h3>My Requisitions</h3>
+          <p>View requisitions you created and their status</p>
+        </Link>
+        <Link to="/resort/po" className="sa-card">
+          <h3>Purchase Orders</h3>
+          <p>View and manage POs</p>
+        </Link>
+        <Link to="/resort/grn" className="sa-card">
+          <h3>GRN Entry</h3>
+          <p>Record goods received and update stock</p>
+        </Link>
+        <Link to="/resort/reports" className="sa-card">
+          <h3>Reports</h3>
+          <p>Requisition, PO and GRN reports</p>
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default ResortDashboard;

@@ -1,0 +1,276 @@
+// src/pages/superAdmin/ItemList.jsx
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const ItemList = () => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    category: "",
+    uom: "",
+    minLevel: "",
+    maxLevel: "",
+    reorderLevel: "",
+  });
+
+  // Items load
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/api/items`);
+      setItems(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load items");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  const handleOpenForm = () => {
+    setForm({
+      name: "",
+      code: "",
+      category: "",
+      uom: "",
+      minLevel: "",
+      maxLevel: "",
+      reorderLevel: "",
+    });
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.name || !form.code || !form.uom) {
+      setError("Item Name, Code & UOM required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const payload = {
+        name: form.name,
+        code: form.code,
+        category: form.category,
+        uom: form.uom,
+        minLevel: form.minLevel ? Number(form.minLevel) : undefined,
+        maxLevel: form.maxLevel ? Number(form.maxLevel) : undefined,
+        reorderLevel: form.reorderLevel ? Number(form.reorderLevel) : undefined,
+      };
+
+      const res = await axios.post(`${API_BASE}/api/items`, payload);
+      setItems((prev) => [...prev, res.data]);
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to create item");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>Items</h2>
+          <p>Central item master with min/max and reorder levels.</p>
+        </div>
+        <button
+          className="sa-primary-button"
+          type="button"
+          onClick={handleOpenForm}
+        >
+          <i className="ri-add-line" /> New Item
+        </button>
+      </div>
+
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="sa-card">
+        {loading ? (
+          <div style={{ fontSize: "0.9rem" }}>Loading items...</div>
+        ) : items.length === 0 ? (
+          <div style={{ fontSize: "0.9rem" }}>
+            No items found. Add your first item.
+          </div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>UOM</th>
+                <th>Min</th>
+                <th>Reorder</th>
+                <th>Max</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i._id || i.id}>
+                  <td>{i.code}</td>
+                  <td>{i.name}</td>
+                  <td>{i.category}</td>
+                  <td>{i.uom}</td>
+                  <td>{i.minLevel ?? "-"}</td>
+                  <td>{i.reorderLevel ?? "-"}</td>
+                  <td>{i.maxLevel ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Modal */}
+      {showForm && (
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>New Item</h3>
+            <p className="sa-modal-sub">
+              Define a new inventory item with min / max / reorder levels.
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Item Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Mineral Water 1L"
+                  required
+                />
+              </label>
+
+              <label>
+                Code
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="WAT1L"
+                  required
+                />
+              </label>
+
+              <label>
+                Category
+                <input
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  placeholder="Beverages / Housekeeping / Engineering"
+                />
+              </label>
+
+              <label>
+                UOM
+                <input
+                  name="uom"
+                  value={form.uom}
+                  onChange={handleChange}
+                  placeholder="Bottle / Kg / Nos / Ltr"
+                  required
+                />
+              </label>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: "8px",
+                }}
+              >
+                <label>
+                  Min
+                  <input
+                    type="number"
+                    name="minLevel"
+                    value={form.minLevel}
+                    onChange={handleChange}
+                    placeholder="e.g. 50"
+                    min="0"
+                  />
+                </label>
+                <label>
+                  Reorder
+                  <input
+                    type="number"
+                    name="reorderLevel"
+                    value={form.reorderLevel}
+                    onChange={handleChange}
+                    placeholder="e.g. 80"
+                    min="0"
+                  />
+                </label>
+                <label>
+                  Max
+                  <input
+                    type="number"
+                    name="maxLevel"
+                    value={form.maxLevel}
+                    onChange={handleChange}
+                    placeholder="e.g. 200"
+                    min="0"
+                  />
+                </label>
+              </div>
+
+              {error && <div className="sa-modal-error">{error}</div>}
+
+              <div className="sa-modal-actions">
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Item"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ItemList;

@@ -1,0 +1,464 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate, useParams } from "react-router-dom";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const TYPE_OPTIONS = [
+  { value: "RECIPE_LUMPSUM", label: "By Recipe – Lumpsum" },
+  { value: "RECIPE_PORTION", label: "By Recipe – Portion" },
+  { value: "REPLACEMENT", label: "Store Replacement" },
+];
+
+const emptyLine = { item: "", qty: "", uom: "", remarks: "" };
+
+const ConsumptionForm = () => {
+  const { id } = useParams(); // future: edit case, abhi mostly new
+  const navigate = useNavigate();
+
+  const [type, setType] = useState("RECIPE_LUMPSUM");
+  const [resort, setResort] = useState("");
+  const [department, setDepartment] = useState("");
+  const [storeFrom, setStoreFrom] = useState("");
+  const [storeTo, setStoreTo] = useState("");
+  const [eventName, setEventName] = useState("");
+  const [menuName, setMenuName] = useState("");
+  const [pax, setPax] = useState("");
+  const [date, setDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [referenceNo, setReferenceNo] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [lines, setLines] = useState([emptyLine]);
+  const [resorts, setResorts] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [items, setItems] = useState([]);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // load dropdown data
+  const loadMasters = async () => {
+    try {
+      const [resortRes, deptRes, storeRes, itemRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/resorts`),
+        axios.get(`${API_BASE}/api/departments`),
+        axios.get(`${API_BASE}/api/stores`),
+        axios.get(`${API_BASE}/api/items`),
+      ]);
+      setResorts(resortRes.data || []);
+      setDepartments(deptRes.data || []);
+      setStores(storeRes.data || []);
+      setItems(itemRes.data || []);
+    } catch (err) {
+      console.error("load masters error", err);
+      // form still usable but dropdowns may be empty
+    }
+  };
+
+  // load existing consumption when editing (optional)
+  const loadExisting = async () => {
+    if (!id) return;
+    try {
+      const res = await axios.get(`${API_BASE}/api/consumption/${id}`);
+      const c = res.data;
+      setType(c.type || "RECIPE_LUMPSUM");
+      setResort(c.resort?._id || c.resort || "");
+      setDepartment(c.department?._id || c.department || "");
+      setStoreFrom(c.storeFrom?._id || c.storeFrom || "");
+      setStoreTo(c.storeTo?._id || c.storeTo || "");
+      setEventName(c.eventName || "");
+      setMenuName(c.menuName || "");
+      setPax(c.pax || "");
+      setDate(c.date ? c.date.slice(0, 10) : date);
+      setReferenceNo(c.referenceNo || "");
+      setNotes(c.notes || "");
+      setLines(
+        (c.lines || []).map((ln) => ({
+          item: ln.item?._id || ln.item || "",
+          qty: ln.qty || "",
+          uom: ln.uom || "",
+          remarks: ln.remarks || "",
+        }))
+      );
+    } catch (err) {
+      console.error("load consumption error", err);
+      setError("Failed to load existing consumption entry");
+    }
+  };
+
+  useEffect(() => {
+    loadMasters();
+    loadExisting();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLineChange = (index, field, value) => {
+    setLines((prev) => {
+      const next = [...prev];
+      let row = { ...next[index], [field]: value };
+
+      // if item changed, auto-fill uom from master
+      if (field === "item") {
+        const it = items.find((i) => i._id === value);
+        if (it) row.uom = it.uom || row.uom;
+      }
+
+      next[index] = row;
+      return next;
+    });
+  };
+
+  const addLine = () => setLines((prev) => [...prev, emptyLine]);
+  const removeLine = (idx) =>
+    setLines((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!resort) return setError("Resort is required");
+    if (!type) return setError("Type is required");
+    if (lines.length === 0 || !lines[0].item) {
+      return setError("At least one item line is required");
+    }
+
+    if (
+      (type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION") &&
+      !storeFrom
+    ) {
+      return setError("Store From is required for recipe consumption");
+    }
+
+    if (type === "REPLACEMENT" && (!storeFrom || !storeTo)) {
+      return setError("Store From and Store To are required for replacement");
+    }
+
+    const payload = {
+      type,
+      resort,
+      department: department || undefined,
+      storeFrom: storeFrom || undefined,
+      storeTo: storeTo || undefined,
+      eventName: type !== "REPLACEMENT" ? eventName || undefined : undefined,
+      menuName: type !== "REPLACEMENT" ? menuName || undefined : undefined,
+      pax: type === "RECIPE_LUMPSUM" ? Number(pax) || undefined : undefined,
+      referenceNo: type === "REPLACEMENT" ? referenceNo || undefined : undefined,
+      date,
+      notes: notes || undefined,
+      lines: lines
+        .filter((ln) => ln.item && ln.qty)
+        .map((ln) => ({
+          item: ln.item,
+          qty: Number(ln.qty),
+          uom: ln.uom || "",
+          remarks: ln.remarks || "",
+        })),
+    };
+
+    try {
+      setSaving(true);
+      if (id) {
+        await axios.put(`${API_BASE}/api/consumption/${id}`, payload);
+      } else {
+        await axios.post(`${API_BASE}/api/consumption`, payload);
+      }
+      navigate("/super-admin/consumption");
+    } catch (err) {
+      console.error("save consumption error", err);
+      setError(
+        err.response?.data?.message || "Failed to save consumption entry"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pageTitle = id ? "Edit Consumption" : "New Consumption";
+
+  return (
+    <div className="sa-page">
+      <div className="sa-page-header">
+        <div>
+          <h2>{pageTitle}</h2>
+          <p>
+            {type === "REPLACEMENT"
+              ? "Record stock movement between stores."
+              : "Record stock consumption based on recipe and events / menu."}
+          </p>
+        </div>
+      </div>
+
+      <form className="sa-card" onSubmit={handleSubmit}>
+        {/* BASIC SECTION */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <label>
+            Type
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              required
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Resort
+            <select
+              value={resort}
+              onChange={(e) => setResort(e.target.value)}
+              required
+            >
+              <option value="">Select resort</option>
+              {resorts.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Department (optional)
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+            >
+              <option value="">--</option>
+              {departments.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Date
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </label>
+
+          {type === "REPLACEMENT" ? (
+            <label>
+              Reference No.
+              <input
+                value={referenceNo}
+                onChange={(e) => setReferenceNo(e.target.value)}
+                placeholder="REP-2025-0001"
+              />
+            </label>
+          ) : (
+            <>
+              <label>
+                Event / Function Name
+                <input
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  placeholder="Wedding Dinner / Group Check-in..."
+                />
+              </label>
+              <label>
+                Menu Name
+                <input
+                  value={menuName}
+                  onChange={(e) => setMenuName(e.target.value)}
+                  placeholder="Veg Buffet / Set Menu A..."
+                />
+              </label>
+              {type === "RECIPE_LUMPSUM" && (
+                <label>
+                  Pax (No. of people)
+                  <input
+                    type="number"
+                    min="0"
+                    value={pax}
+                    onChange={(e) => setPax(e.target.value)}
+                  />
+                </label>
+              )}
+            </>
+          )}
+
+          <label>
+            Store From
+            <select
+              value={storeFrom}
+              onChange={(e) => setStoreFrom(e.target.value)}
+              required={type !== "RECIPE_PORTION" ? true : true}
+            >
+              <option value="">Select store</option>
+              {stores.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {type === "REPLACEMENT" && (
+            <label>
+              Store To
+              <select
+                value={storeTo}
+                onChange={(e) => setStoreTo(e.target.value)}
+                required={type === "REPLACEMENT"}
+              >
+                <option value="">Select store</option>
+                {stores.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+
+        {/* NOTES */}
+        <div style={{ marginBottom: 16 }}>
+          <label>
+            Notes (optional)
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Any remarks..."
+            />
+          </label>
+        </div>
+
+        {/* LINES TABLE */}
+        <h3 style={{ marginBottom: 8 }}>Items</h3>
+        <div className="sa-card" style={{ padding: 12, marginBottom: 16 }}>
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th style={{ width: "35%" }}>Item</th>
+                <th style={{ width: "15%" }}>Qty</th>
+                <th style={{ width: "15%" }}>UOM</th>
+                <th>Remarks</th>
+                <th style={{ width: "5%" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((ln, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <select
+                      value={ln.item}
+                      onChange={(e) =>
+                        handleLineChange(idx, "item", e.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select item</option>
+                      {items.map((it) => (
+                        <option key={it._id} value={it._id}>
+                          {it.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      value={ln.qty}
+                      onChange={(e) =>
+                        handleLineChange(idx, "qty", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      value={ln.uom}
+                      onChange={(e) =>
+                        handleLineChange(idx, "uom", e.target.value)
+                      }
+                      placeholder="Kg / Ltr / Nos"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      value={ln.remarks}
+                      onChange={(e) =>
+                        handleLineChange(idx, "remarks", e.target.value)
+                      }
+                      placeholder="optional"
+                    />
+                  </td>
+                  <td>
+                    {lines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(idx)}
+                        className="sa-secondary-button"
+                      >
+                        -
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            type="button"
+            className="sa-secondary-button"
+            style={{ marginTop: 8 }}
+            onClick={addLine}
+          >
+            + Add Item
+          </button>
+        </div>
+
+        {error && (
+          <div className="sa-modal-error" style={{ marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+
+        <div className="sa-modal-actions" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="sa-secondary-button"
+            onClick={() => navigate("/super-admin/consumption")}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="sa-primary-button"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Consumption"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default ConsumptionForm;
