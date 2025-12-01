@@ -4,7 +4,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
-const { createRouter } = require('./server_router');
+const serverRouter = require('./server_router.cjs');
+
 
 const app = express();
 app.use(cors());
