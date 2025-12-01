@@ -4,19 +4,30 @@ import axios from "axios";
 
 const AuthContext = createContext(null);
 
-// VITE_API_BASE should be set in Vercel to your backend base.
-// Example (recommended): VITE_API_BASE="https://resort-crm.onrender.com/api"
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+// VITE_API_BASE from env (may or may not include /api)
+const API_BASE_RAW = import.meta.env.VITE_API_BASE ?? "";
 
-// Configure axios defaults once
-axios.defaults.baseURL = API_BASE; // use relative paths in calls (e.g. "/auth/login")
-axios.defaults.withCredentials = true; // keep if backend uses cookies; ok for token too
+// Create a normalized base (no trailing slash)
+const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
+
+// Helper: build correct login URL ensuring exactly one /api prefix
+function buildLoginUrl() {
+  // if API_BASE already ends with '/api' -> use /auth/login
+  if (API_BASE.endsWith("/api")) {
+    return `${API_BASE}/auth/login`;
+  }
+  // if API_BASE already contains '/api' somewhere else or is backend root, add '/api/auth/login'
+  return `${API_BASE}/api/auth/login`;
+}
+
+// Configure axios defaults (do not rely on relative paths here)
+axios.defaults.withCredentials = true; // keep if you use cookies
+// NOTE: we intentionally do NOT set axios.defaults.baseURL to avoid double-append problems
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
 
-  // Load stored auth on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem("auth");
@@ -38,12 +49,8 @@ export const AuthProvider = ({ children }) => {
    * login supports two signatures:
    *  - login(email, password)
    *  - login({ email, password })
-   *
-   * IMPORTANT: axios.defaults.baseURL should include /api if you use "/auth/login" below.
-   * Example: VITE_API_BASE = "https://resort-crm.onrender.com/api"
    */
   const login = async (a, b) => {
-    // normalize credentials
     let credentials;
     if (typeof a === "string") {
       credentials = { email: a, password: b };
@@ -51,10 +58,11 @@ export const AuthProvider = ({ children }) => {
       credentials = a || {};
     }
 
+    const url = buildLoginUrl(); // explicit full URL; prevents /api/api issues
     try {
-      // Use relative path because baseURL already points to API base (including /api)
-     const res = await axios.post("/auth/login", credentials);
-
+      const res = await axios.post(url, credentials, {
+        headers: { "Content-Type": "application/json" },
+      });
 
       const data = res?.data || {};
       const newToken = data.token || data.accessToken || null;
@@ -71,7 +79,6 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true, data };
     } catch (err) {
-      // Provide structured error info
       const resp = err?.response;
       const errorPayload = resp?.data || err.message || "Login error";
       console.error("Login failed:", errorPayload);
@@ -84,8 +91,6 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     localStorage.removeItem("auth");
     delete axios.defaults.headers.common.Authorization;
-    // If your backend has a logout endpoint that clears cookies, call it here (optional)
-    // axios.post('/auth/logout').catch(()=>{});
   };
 
   return (
@@ -96,5 +101,4 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
-
 export default AuthContext;
