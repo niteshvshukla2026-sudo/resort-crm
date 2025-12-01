@@ -133,7 +133,11 @@ const VendorList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- utilities ---
+  // --- sanitizers and helpers ---
+  const sanitizeLetters = (v) => String(v || "").replace(/[^A-Za-z ]+/g, "");
+  const sanitizeDigits = (v) => String(v || "").replace(/\D+/g, "");
+  const sanitizeDecimal = (v) => String(v || "").replace(/[^0-9.]/g, "");
+
   const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
 
   // Strict regexes
@@ -275,7 +279,7 @@ const VendorList = () => {
     return Object.keys(newErr).length === 0;
   };
 
-  // --- form handlers ---
+  // --- form handlers & sanitizing on input ---
   const openCreateForm = () => {
     setForm(emptyForm());
     setFieldErrors({});
@@ -321,20 +325,41 @@ const VendorList = () => {
     setShowForm(true);
   };
 
+  // updated handleChange with sanitization
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // if user edits name and code is empty, auto generate code
+
     setForm((p) => {
-      const updated = { ...p, [name]: value };
-      // if name updated and code empty -> generate
+      let newVal = value;
+
+      // sanitization rules
+      if (name === "name" || name === "contactPerson") {
+        newVal = sanitizeLetters(value);
+      } else if (
+        name === "phone" ||
+        name === "whatsapp" ||
+        name === "alternatePhone" ||
+        name === "pincode" ||
+        name === "accountNumber" ||
+        name === "minOrderQty" ||
+        name === "deliveryTime"
+      ) {
+        newVal = sanitizeDigits(value);
+      } else if (name === "creditLimit") {
+        newVal = sanitizeDecimal(value);
+      } else if (name === "code") {
+        // normalize code: uppercase, replace spaces with underscore, remove other invalid chars
+        newVal = String(value || "").toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+      }
+
+      const updated = { ...p, [name]: newVal };
+
+      // auto-generate code when name changes AND code is empty
       if (name === "name" && (p.code === "" || p.code === undefined)) {
-        const gen = generateCodeFromName(value);
+        const gen = generateCodeFromName(newVal);
         updated.code = ensureUniqueCode(gen);
       }
-      // if code changed manually, normalize to uppercase and remove spaces
-      if (name === "code") {
-        updated.code = String(value || "").toUpperCase().replace(/\s+/g, "_");
-      }
+
       return updated;
     });
 
@@ -342,6 +367,50 @@ const VendorList = () => {
     setFieldErrors((prev) => {
       const copy = { ...prev };
       delete copy[name];
+      return copy;
+    });
+  };
+
+  // paste handlers for extra safety
+  const handlePasteLetters = (ev, fieldName) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    const sanitized = sanitizeLetters(text);
+    setForm((p) => {
+      const updated = { ...p, [fieldName]: sanitized };
+      if (fieldName === "name" && (p.code === "" || p.code === undefined)) {
+        updated.code = ensureUniqueCode(generateCodeFromName(sanitized));
+      }
+      return updated;
+    });
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  const handlePasteDigits = (ev, fieldName, limit) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    let sanitized = sanitizeDigits(text);
+    if (limit) sanitized = sanitized.slice(0, limit);
+    setForm((p) => ({ ...p, [fieldName]: sanitized }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  const handlePasteDecimal = (ev, fieldName) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    const sanitized = sanitizeDecimal(text);
+    setForm((p) => ({ ...p, [fieldName]: sanitized }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
       return copy;
     });
   };
@@ -368,7 +437,6 @@ const VendorList = () => {
       setSaving(true);
       const payload = { ...form };
       if (!form._id) delete payload._id;
-      // ensure code uppercase
       if (payload.code) payload.code = ensureUniqueCode(String(payload.code).toUpperCase());
 
       if (form._id && String(form._id).startsWith("local_")) {
@@ -461,7 +529,7 @@ const VendorList = () => {
           contactPerson: p.contactperson || p.contact_person || p.contact || "",
           phone: p.phone || p.contact || "",
           whatsapp: p.whatsapp || "",
-          alternatePhone: p.alternatephone || "",
+          alternatePhone: p.alternatephone || p.altphone || p.alt_phone || "",
           email: p.email || "",
           addressLine1: p.address || "",
           addressLine2: p.addressline2 || "",
@@ -721,14 +789,32 @@ const VendorList = () => {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <label style={{ flex: 1 }}>
                   Vendor Name *
-                  <input name="name" value={form.name} onChange={handleChange} placeholder="Only letters and spaces" />
+                  <input
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    onPaste={(e) => handlePasteLetters(e, "name")}
+                    placeholder="Only letters and spaces"
+                  />
                   {fieldErrors.name && <div className="sa-field-error">{fieldErrors.name}</div>}
                 </label>
 
                 <label style={{ width: 260 }}>
                   Code *
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input name="code" value={form.code} onChange={handleChange} placeholder="Auto generated from name" />
+                    <input
+                      name="code"
+                      value={form.code}
+                      onChange={handleChange}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const text = (e.clipboardData || window.clipboardData).getData("text");
+                        const sanitized = String(text || "").toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+                        setForm((p) => ({ ...p, code: ensureUniqueCode(sanitized) }));
+                        setFieldErrors((prev) => { const c = { ...prev }; delete c.code; return c; });
+                      }}
+                      placeholder="Auto generated from name"
+                    />
                     <button type="button" className="sa-secondary-button" onClick={handleGenerateCode}>Generate</button>
                   </div>
                   {fieldErrors.code && <div className="sa-field-error">{fieldErrors.code}</div>}
@@ -761,25 +847,49 @@ const VendorList = () => {
 
               <label>
                 Contact Person
-                <input name="contactPerson" value={form.contactPerson} onChange={handleChange} placeholder="Only letters and spaces" />
+                <input
+                  name="contactPerson"
+                  value={form.contactPerson}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteLetters(e, "contactPerson")}
+                  placeholder="Only letters and spaces"
+                />
                 {form.contactPerson && !/^[A-Za-z ]+$/.test(String(form.contactPerson).trim()) && <div className="sa-field-error">Contact person must be letters and spaces only</div>}
               </label>
 
               <label>
                 Phone
-                <input name="phone" value={form.phone} onChange={handleChange} placeholder="10 digits" />
+                <input
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "phone", 10)}
+                  placeholder="10 digits"
+                />
                 {fieldErrors.phone && <div className="sa-field-error">{fieldErrors.phone}</div>}
               </label>
 
               <label>
                 WhatsApp
-                <input name="whatsapp" value={form.whatsapp} onChange={handleChange} placeholder="10 digits" />
+                <input
+                  name="whatsapp"
+                  value={form.whatsapp}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "whatsapp", 10)}
+                  placeholder="10 digits"
+                />
                 {fieldErrors.whatsapp && <div className="sa-field-error">{fieldErrors.whatsapp}</div>}
               </label>
 
               <label>
                 Alternate Phone
-                <input name="alternatePhone" value={form.alternatePhone} onChange={handleChange} placeholder="10 digits" />
+                <input
+                  name="alternatePhone"
+                  value={form.alternatePhone}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "alternatePhone", 10)}
+                  placeholder="10 digits"
+                />
                 {fieldErrors.alternatePhone && <div className="sa-field-error">{fieldErrors.alternatePhone}</div>}
               </label>
 
@@ -811,7 +921,13 @@ const VendorList = () => {
 
               <label>
                 Pincode
-                <input name="pincode" value={form.pincode} onChange={handleChange} />
+                <input
+                  name="pincode"
+                  value={form.pincode}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "pincode", 6)}
+                  placeholder="6 digits"
+                />
                 {fieldErrors.pincode && <div className="sa-field-error">{fieldErrors.pincode}</div>}
               </label>
 
@@ -850,7 +966,13 @@ const VendorList = () => {
 
               <label>
                 Credit Limit
-                <input name="creditLimit" value={form.creditLimit} onChange={handleChange} placeholder="Numeric" />
+                <input
+                  name="creditLimit"
+                  value={form.creditLimit}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDecimal(e, "creditLimit")}
+                  placeholder="Numeric"
+                />
                 {fieldErrors.creditLimit && <div className="sa-field-error">{fieldErrors.creditLimit}</div>}
               </label>
 
@@ -866,7 +988,13 @@ const VendorList = () => {
 
               <label>
                 Account Number
-                <input name="accountNumber" value={form.accountNumber} onChange={handleChange} placeholder="6-20 digits" />
+                <input
+                  name="accountNumber"
+                  value={form.accountNumber}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "accountNumber", 20)}
+                  placeholder="6-20 digits"
+                />
                 {fieldErrors.accountNumber && <div className="sa-field-error">{fieldErrors.accountNumber}</div>}
               </label>
 
@@ -883,13 +1011,25 @@ const VendorList = () => {
 
               <label>
                 Delivery Time (days)
-                <input name="deliveryTime" value={form.deliveryTime} onChange={handleChange} placeholder="Integer days" />
+                <input
+                  name="deliveryTime"
+                  value={form.deliveryTime}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "deliveryTime")}
+                  placeholder="Integer days"
+                />
                 {fieldErrors.deliveryTime && <div className="sa-field-error">{fieldErrors.deliveryTime}</div>}
               </label>
 
               <label>
                 Minimum Order Qty
-                <input name="minOrderQty" value={form.minOrderQty} onChange={handleChange} placeholder="Integer" />
+                <input
+                  name="minOrderQty"
+                  value={form.minOrderQty}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "minOrderQty")}
+                  placeholder="Integer"
+                />
                 {fieldErrors.minOrderQty && <div className="sa-field-error">{fieldErrors.minOrderQty}</div>}
               </label>
 
