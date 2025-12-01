@@ -4,7 +4,7 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// --- 10 dev sample vendors for quick dev/demo ---
+// --- 6 dev sample vendors for quick dev/demo (shortened) ---
 const DEV_VENDORS = [
   {
     _id: "dev_vendor_1",
@@ -36,12 +36,22 @@ const DEV_VENDORS = [
     deliveryTime: "1",
     minOrderQty: "1",
     status: "Active",
-    notes: "Priority supplier"
+    notes: "Priority supplier",
   },
-  // ... other 9 dev vendors (kept short for brevity)
+  {
+    _id: "dev_vendor_2",
+    code: "GLB02",
+    name: "Global Supplies",
+    phone: "9876500022",
+    email: "contact@globalsupplies.com",
+    city: "Goa",
+    vendorType: "Distributor",
+    category: "Housekeeping",
+    status: "Active",
+  },
+  // add more as needed...
 ];
 
-// expanded empty form template
 const emptyForm = () => ({
   _id: undefined,
   code: "",
@@ -82,6 +92,8 @@ const VendorList = () => {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [categories, setCategories] = useState([]); // item categories from master
 
   // filters
   const [filterName, setFilterName] = useState("");
@@ -94,7 +106,7 @@ const VendorList = () => {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // load vendors from server then merge with dev samples (avoid duplicate ids/codes)
+  // fetch vendors and categories
   const loadVendors = async () => {
     try {
       setLoading(true);
@@ -113,13 +125,29 @@ const VendorList = () => {
     }
   };
 
+  const loadCategories = async () => {
+    try {
+      // expecting your item category master endpoint here
+      const res = await axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] }));
+      const cats = Array.isArray(res.data) ? res.data : [];
+      // Accept either array of strings or array of objects with { name, code }
+      const mapped = cats.map((c) => (typeof c === "string" ? c : c.name || c.code || JSON.stringify(c)));
+      setCategories(mapped);
+    } catch (err) {
+      console.warn("Failed to load categories", err);
+      setCategories([]); // fallback empty
+    }
+  };
+
   useEffect(() => {
     loadVendors();
+    loadCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openCreateForm = () => {
     setForm(emptyForm());
+    setFieldErrors({});
     setError("");
     setShowForm(true);
   };
@@ -157,30 +185,130 @@ const VendorList = () => {
       status: v.status || "Active",
       notes: v.notes || "",
     });
+    setFieldErrors({});
     setError("");
     setShowForm(true);
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // clear error for field as user types
+    setFieldErrors((p) => {
+      const copy = { ...p };
+      delete copy[name];
+      return copy;
+    });
     setForm((p) => ({ ...p, [name]: value }));
+  };
+
+  // validation helpers
+  const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
+
+  const validators = {
+    code: (v) => (!v ? "Vendor code is required" : undefined),
+    name: (v) => (!v ? "Vendor name is required" : undefined),
+    phone: (v) =>
+      !v
+        ? undefined
+        : !/^\d{10}$/.test(String(v).trim())
+        ? "Phone should be 10 digits"
+        : undefined,
+    whatsapp: (v) =>
+      !v
+        ? undefined
+        : !/^\d{10}$/.test(String(v).trim())
+        ? "WhatsApp should be 10 digits"
+        : undefined,
+    email: (v) =>
+      !v
+        ? undefined
+        : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim())
+        ? "Invalid email"
+        : undefined,
+    gstNumber: (v) =>
+      !v
+        ? undefined
+        : !/^[0-9A-Z]{15}$/.test(String(v).trim())
+        ? "GSTIN must be 15 chars (alphanumeric uppercase)"
+        : undefined,
+    panNumber: (v) =>
+      !v
+        ? undefined
+        : !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(String(v).trim())
+        ? "PAN must be 10 chars (AAAAA9999A)"
+        : undefined,
+    ifsc: (v) =>
+      !v
+        ? undefined
+        : !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(v).trim())
+        ? "IFSC invalid (e.g. SBIN0000001)"
+        : undefined,
+    pincode: (v) =>
+      !v
+        ? undefined
+        : !/^[1-9][0-9]{5}$/.test(String(v).trim())
+        ? "Pincode must be 6 digits"
+        : undefined,
+    accountNumber: (v) =>
+      !v
+        ? undefined
+        : !/^[0-9]{6,20}$/.test(String(v).trim())
+        ? "Account number must be 6-20 digits"
+        : undefined,
+    creditLimit: (v) =>
+      !v
+        ? undefined
+        : isNaN(Number(v))
+        ? "Credit limit must be a number"
+        : undefined,
+    deliveryTime: (v) =>
+      !v
+        ? undefined
+        : !/^\d+$/.test(String(v).trim())
+        ? "Delivery time must be whole days number"
+        : undefined,
+    minOrderQty: (v) =>
+      !v
+        ? undefined
+        : !/^\d+$/.test(String(v).trim())
+        ? "MOQ must be a number"
+        : undefined,
+  };
+
+  const validateAll = () => {
+    const keys = Object.keys(validators);
+    const newErr = {};
+    keys.forEach((k) => {
+      const msg = validators[k](form[k]);
+      if (msg) newErr[k] = msg;
+    });
+
+    // additional required fields
+    if (!form.name) newErr.name = "Vendor name is required";
+    if (!form.code) newErr.code = "Vendor code is required";
+    // category should be selected ideally
+    if (!form.category) newErr.category = "Category is required";
+
+    setFieldErrors(newErr);
+    return Object.keys(newErr).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    if (!form.name) return setError("Vendor name is required");
-    if (!form.code) return setError("Vendor code is required");
+    if (!validateAll()) {
+      setError("Please fix the validation errors");
+      return;
+    }
 
     try {
       setSaving(true);
       const payload = { ...form };
-      // Remove local-only _id when creating
+      // remove local-only _id on create
       if (!form._id) delete payload._id;
 
       if (form._id && String(form._id).startsWith("local_")) {
-        // optimistic local update for local created id - send create to server
+        // local id created earlier; create on server
         const res = await axios.post(`${API_BASE}/api/vendors`, payload).catch(() => null);
         const created = res?.data || { ...payload, _id: form._id };
         setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? created : x)));
@@ -199,9 +327,10 @@ const VendorList = () => {
 
       setShowForm(false);
       setForm(emptyForm());
+      setFieldErrors({});
     } catch (err) {
       console.error("save vendor error", err);
-      setError(err.response?.data?.message || "Failed to save vendor");
+      setError(err?.response?.data?.message || "Failed to save vendor");
     } finally {
       setSaving(false);
     }
@@ -219,7 +348,7 @@ const VendorList = () => {
     }
   };
 
-  // CSV upload & parsing
+  // CSV upload & parsing (supports extended mapping)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -259,7 +388,6 @@ const VendorList = () => {
         return;
       }
 
-      // create payloads - map known CSV column names to our fields
       const payloads = parsed.map((p) => ({
         code: p.code || "",
         name: p.name || "",
@@ -529,13 +657,15 @@ const VendorList = () => {
             <form className="sa-modal-form" onSubmit={handleSubmit}>
 
               <label>
-                Vendor Name
-                <input name="name" value={form.name} onChange={handleChange} placeholder="FreshFoods Supplier" required />
+                Vendor Name *
+                <input name="name" value={form.name} onChange={handleChange} placeholder="FreshFoods Supplier" />
+                {fieldErrors.name && <div className="sa-field-error">{fieldErrors.name}</div>}
               </label>
 
               <label>
-                Code
-                <input name="code" value={form.code} onChange={handleChange} placeholder="FFS" required />
+                Code *
+                <input name="code" value={form.code} onChange={handleChange} placeholder="FFS" />
+                {fieldErrors.code && <div className="sa-field-error">{fieldErrors.code}</div>}
               </label>
 
               <label>
@@ -550,8 +680,16 @@ const VendorList = () => {
               </label>
 
               <label>
-                Category
-                <input name="category" value={form.category} onChange={handleChange} placeholder="Food / Dairy / Electrical" />
+                Category * (from Item Category master)
+                <select name="category" value={form.category} onChange={handleChange}>
+                  <option value="">Select category</option>
+                  {categories.length === 0 ? (
+                    <option value="">(no categories)</option>
+                  ) : (
+                    categories.map((c) => <option key={c} value={c}>{c}</option>)
+                  )}
+                </select>
+                {fieldErrors.category && <div className="sa-field-error">{fieldErrors.category}</div>}
               </label>
 
               <label>
@@ -562,11 +700,13 @@ const VendorList = () => {
               <label>
                 Phone
                 <input name="phone" value={form.phone} onChange={handleChange} placeholder="9876543210" />
+                {fieldErrors.phone && <div className="sa-field-error">{fieldErrors.phone}</div>}
               </label>
 
               <label>
                 WhatsApp
                 <input name="whatsapp" value={form.whatsapp} onChange={handleChange} placeholder="WhatsApp number" />
+                {fieldErrors.whatsapp && <div className="sa-field-error">{fieldErrors.whatsapp}</div>}
               </label>
 
               <label>
@@ -577,6 +717,7 @@ const VendorList = () => {
               <label>
                 Email
                 <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="vendor@example.com" />
+                {fieldErrors.email && <div className="sa-field-error">{fieldErrors.email}</div>}
               </label>
 
               <label>
@@ -602,6 +743,7 @@ const VendorList = () => {
               <label>
                 Pincode
                 <input name="pincode" value={form.pincode} onChange={handleChange} placeholder="Pincode" />
+                {fieldErrors.pincode && <div className="sa-field-error">{fieldErrors.pincode}</div>}
               </label>
 
               <label>
@@ -611,12 +753,14 @@ const VendorList = () => {
 
               <label>
                 GST Number
-                <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="GSTIN" />
+                <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="GSTIN (15 chars)" />
+                {fieldErrors.gstNumber && <div className="sa-field-error">{fieldErrors.gstNumber}</div>}
               </label>
 
               <label>
                 PAN Number
-                <input name="panNumber" value={form.panNumber} onChange={handleChange} placeholder="PAN" />
+                <input name="panNumber" value={form.panNumber} onChange={handleChange} placeholder="PAN (AAAAA9999A)" />
+                {fieldErrors.panNumber && <div className="sa-field-error">{fieldErrors.panNumber}</div>}
               </label>
 
               <label>
@@ -638,6 +782,7 @@ const VendorList = () => {
               <label>
                 Credit Limit
                 <input name="creditLimit" value={form.creditLimit} onChange={handleChange} placeholder="Credit limit (number)" />
+                {fieldErrors.creditLimit && <div className="sa-field-error">{fieldErrors.creditLimit}</div>}
               </label>
 
               <label>
@@ -653,11 +798,13 @@ const VendorList = () => {
               <label>
                 Account Number
                 <input name="accountNumber" value={form.accountNumber} onChange={handleChange} placeholder="Account number" />
+                {fieldErrors.accountNumber && <div className="sa-field-error">{fieldErrors.accountNumber}</div>}
               </label>
 
               <label>
                 IFSC
                 <input name="ifsc" value={form.ifsc} onChange={handleChange} placeholder="IFSC code" />
+                {fieldErrors.ifsc && <div className="sa-field-error">{fieldErrors.ifsc}</div>}
               </label>
 
               <label>
@@ -668,11 +815,13 @@ const VendorList = () => {
               <label>
                 Delivery Time (days)
                 <input name="deliveryTime" value={form.deliveryTime} onChange={handleChange} placeholder="Lead time in days" />
+                {fieldErrors.deliveryTime && <div className="sa-field-error">{fieldErrors.deliveryTime}</div>}
               </label>
 
               <label>
                 Minimum Order Qty
                 <input name="minOrderQty" value={form.minOrderQty} onChange={handleChange} placeholder="MOQ" />
+                {fieldErrors.minOrderQty && <div className="sa-field-error">{fieldErrors.minOrderQty}</div>}
               </label>
 
               <label>
