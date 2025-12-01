@@ -75,7 +75,7 @@ const RecipeMaster = () => {
   const [showView, setShowView] = useState(false);
   const [viewing, setViewing] = useState(null);
 
-  // form state (minimal fields only) - now includes yieldQty & yieldUom
+  // form state (minimal fields only) - includes yieldQty & yieldUom
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
@@ -109,7 +109,7 @@ const RecipeMaster = () => {
         _id: it._id || it.id,
         id: it.id || it._id,
         name: it.name || it.title || "",
-        uom: it.uom || it.measurement || it.unit || "",
+        uom: it.uom || it.measurement || it.unit || it.unitOfMeasure || "",
         itemCategory: it.itemCategory || it.category || it.item_category || it.group || "",
         ...it,
       }));
@@ -204,33 +204,44 @@ const RecipeMaster = () => {
   const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }));
   const removeLine = (idx) => setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
 
-  // when itemCategory changes in a line, clear itemId and uom
+  // helper: items for a given category
+  const itemsForCategory = (cat) =>
+    items.filter((it) => (it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString());
+
+  // when itemCategory changes in a line, try to auto-select an item if only one item exists in that category
   const onLineCategoryChange = (idx, catVal) => {
     updateLine(idx, "itemCategory", catVal);
     updateLine(idx, "itemId", "");
     updateLine(idx, "uom", "");
+
+    if (!catVal) return;
+
+    // find items in this category
+    const matches = itemsForCategory(catVal);
+    if (matches.length === 1) {
+      // auto-select the only item and its uom
+      const only = matches[0];
+      updateLine(idx, "itemId", only._id || only.id);
+      updateLine(idx, "uom", only.uom || "");
+      // also ensure header yieldUom populates if empty
+      setForm((p) => ({ ...p, yieldUom: p.yieldUom || (only.uom || "") }));
+    }
   };
 
   // when item selected, set uom from item (if available). Also, propagate to header yieldUom if header empty or auto-enable behaviour.
   const onLineItemChange = (idx, itemId) => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
-    // set itemCategory from selected item if not already set
+
+    // set itemCategory from selected item (keeps things consistent)
     if (it && it.itemCategory) updateLine(idx, "itemCategory", it.itemCategory);
+
     // auto-fill uom if present on item
     if (it && it.uom) {
       updateLine(idx, "uom", it.uom);
-      // only auto-set header yieldUom if user hasn't already set it (empty) OR if all existing lines share same uom
-      setForm((p) => {
-        const existingYield = p.yieldUom;
-        if (!existingYield) {
-          return { ...p, yieldUom: it.uom };
-        }
-        // if existingYield matches this item's uom, keep; otherwise do not override
-        return p;
-      });
+      // populate header yieldUom if empty
+      setForm((p) => ({ ...p, yieldUom: p.yieldUom || it.uom }));
     } else {
-      // keep uom empty so user must pick
       updateLine(idx, "uom", "");
     }
   };
@@ -382,10 +393,6 @@ const RecipeMaster = () => {
       await loadData();
     }
   };
-
-  // helper: items for a given category
-  const itemsForCategory = (cat) =>
-    items.filter((it) => (it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString());
 
   return (
     <div className="sa-page">
