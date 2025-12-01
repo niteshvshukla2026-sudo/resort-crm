@@ -14,17 +14,46 @@ process.on('unhandledRejection', (reason) => {
 
 async function start() {
   const app = express();
-  app.use(express.json());
-  const frontend = process.env.FRONTEND_URL || '*';
-  app.use(cors({ origin: frontend }));
 
+  // --- IMPORTANT: read frontend origin from env, remove any trailing slash ---
+  // Set FRONTEND_URL env on Render to: https://resort-crm.vercel.app
+  let frontend = process.env.FRONTEND_URL || 'https://resort-crm.vercel.app';
+  // remove trailing slash if present (this was the root cause of your CORS issue)
+  frontend = String(frontend).replace(/\/+$/, '');
+
+  // If someone sets '*' explicitly, allow but disable credentials
+  const allowAllOrigins = frontend === '*' || frontend.toLowerCase() === 'all';
+
+  // --- CORS configuration ---
+  const corsOptions = {
+    origin: allowAllOrigins ? true : frontend, // true allows reflect origin when needed
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+    // If using cookies (httpOnly token), set credentials: true in both backend and frontend axios/fetch.
+    credentials: !allowAllOrigins // only allow credentials when origin is explicit
+  };
+
+  // Place CORS BEFORE route handlers so preflight gets handled properly
+  app.use(cors(corsOptions));
+
+  // also explicitly respond to preflight for all routes (safe)
+  app.options('*', cors(corsOptions));
+
+  // parse JSON bodies
+  app.use(express.json());
+
+  // small health endpoint
   app.get('/_health', (req, res) => res.json({ ok: true }));
+
+  // log the configured frontend origin for debugging
+  console.log('CORS configured. FRONTEND_URL ->', frontend, '| allowAllOrigins:', allowAllOrigins);
 
   let mongoose = null;
   let useMongo = false;
   if (process.env.MONGO_URI) {
     try {
       mongoose = require('mongoose');
+      // mongoose options - note: useUnifiedTopology and useNewUrlParser are common flags
       await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
       useMongo = true;
       console.log('Mongo connected');
@@ -37,7 +66,7 @@ async function start() {
     console.warn('MONGO_URI not set, running without DB');
   }
 
-  // === safe require + debug
+  // === safe require + debug for router
   let router;
   try {
     const mod = require('./server_router.cjs');
@@ -57,12 +86,15 @@ async function start() {
   }
 
   if (router) {
+    // Mount router at "/api" or root depending on how your router is structured.
+    // If your routes expect /api prefix, change second argument: app.use('/api', router);
     app.use('/', router);
     console.log('Router mounted at /');
   } else {
     console.warn('No router mounted — app running with minimal endpoints');
   }
 
+  // root fallback
   app.get('/', (req, res) => res.json({ ok: true, msg: 'root' }));
 
   const PORT = process.env.PORT || 5000;
