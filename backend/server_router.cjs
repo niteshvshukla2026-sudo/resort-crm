@@ -1,6 +1,7 @@
 // backend/server_router.js
 const express = require('express');
-const { createControllers } = require('./controllers');
+const { createControllers } = require('./controllers.cjs');
+
 
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
