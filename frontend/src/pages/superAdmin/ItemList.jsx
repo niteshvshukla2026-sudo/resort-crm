@@ -1,8 +1,6 @@
 // src/pages/superAdmin/ItemList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -319,67 +317,35 @@ const ItemList = () => {
     URL.revokeObjectURL(url);
   };
 
-  // NEW: download XLSX template with dropdowns for categories & brands
-  const downloadXlsxTemplate = async () => {
+  // new: download CSV format with metadata comments so user can see dropdown values
+  const downloadCSVFormat = () => {
+    const cols = ["code","name","itemCategory","uom","brand","indicativePrice"];
+    const example = ["RICE1","Basmati Rice 5kg","Pantry","Kg","GrainCo","60"];
+    const metaCats = itemCategories.length ? itemCategories : DEV_ITEM_CATEGORIES;
+    const metaBrands = brands.length ? brands : DEV_BRANDS;
+
+    const rows = [];
+    rows.push(cols.join(","));
+    rows.push(example.join(","));
+    // metadata lines (start with # so parser ignores them)
+    rows.push(`#CATEGORIES:${metaCats.join("|")}`);
+    rows.push(`#BRANDS:${metaBrands.join("|")}`);
+
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `items-csv-format-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
     try {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("items");
-
-      // headers
-      const headers = ["code","name","itemCategory","uom","brand","indicativePrice"];
-      sheet.addRow(headers);
-
-      // sample row
-      sheet.addRow(["RICE1","Basmati Rice 5kg","Pantry","Kg","GrainCo","60"]);
-
-      // freeze top row
-      sheet.views = [{ state: "frozen", ySplit: 1 }];
-
-      // hidden sheet with lists
-      const listsSheet = workbook.addWorksheet("_lists", { state: "veryHidden" });
-      const cats = itemCategories.length ? itemCategories : DEV_ITEM_CATEGORIES;
-      const brs = brands.length ? brands : DEV_BRANDS;
-
-      // put categories in col A, brands in col B
-      cats.forEach((c, idx) => listsSheet.getCell(`A${idx+1}`).value = c);
-      brs.forEach((b, idx) => listsSheet.getCell(`B${idx+1}`).value = b);
-
-      // create defined names for referencing list ranges
-      const catsEnd = Math.max(1, cats.length);
-      const brandsEnd = Math.max(1, brs.length);
-      workbook.definedNames.add("CATEGORIES", `_lists!$A$1:$A$${catsEnd}`);
-      workbook.definedNames.add("BRANDS", `_lists!$B$1:$B$${brandsEnd}`);
-
-      // Apply data validation to columns:
-      // itemCategory -> column C (3), brand -> column E (5)
-      // apply validation for first 1000 rows (adjust as needed)
-      for (let r = 2; r <= 1001; r++) {
-        sheet.getCell(`C${r}`).dataValidation = {
-          type: 'list',
-          allowBlank: true,
-          showInputMessage: true,
-          formulae: ['=CATEGORIES']
-        };
-        sheet.getCell(`E${r}`).dataValidation = {
-          type: 'list',
-          allowBlank: true,
-          showInputMessage: true,
-          formulae: ['=BRANDS']
-        };
-      }
-
-      // simple column widths
-      sheet.columns.forEach((col, idx) => {
-        col.width = [15, 30, 20, 10, 20, 18][idx] || 15;
-      });
-
-      const buf = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      saveAs(blob, `items-template-${Date.now()}.xlsx`);
-      alert("Excel template downloaded — Item Category & Brand have dropdowns.");
-    } catch (err) {
-      console.error("xlsx download error", err);
-      alert("Failed to create Excel template (check console).");
+      navigator.clipboard?.writeText(csv);
+      alert("CSV format downloaded and copied to clipboard (categories & brands provided in metadata lines).");
+    } catch {
+      // ignore clipboard errors
+      alert("CSV format downloaded. (If supported, format was also copied to clipboard.)");
     }
   };
 
@@ -406,8 +372,8 @@ const ItemList = () => {
             {csvLoading ? <span style={{ marginLeft: 6 }}>Uploading...</span> : <span style={{ marginLeft: 6 }}>Upload CSV</span>}
           </label>
 
-          <button className="sa-secondary-button" onClick={downloadXlsxTemplate} title="Download Excel template with dropdowns for Category & Brand">
-            Download Excel Template
+          <button className="sa-secondary-button" onClick={downloadCSVFormat} title="Download CSV format with sample row and allowed categories/brands">
+            CSV Format
           </button>
 
           <button className="sa-secondary-button" onClick={handleExportCSV} title="Export filtered items to CSV">
@@ -468,7 +434,7 @@ const ItemList = () => {
         {loading ? (
           <div style={{ fontSize: "0.9rem" }}>Loading items...</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ fontSize: "0.9rem" }}>No items found. Add your first item or upload a CSV / Excel template.</div>
+          <div style={{ fontSize: "0.9rem" }}>No items found. Add your first item or upload a CSV.</div>
         ) : (
           <table className="sa-table">
             <thead>
