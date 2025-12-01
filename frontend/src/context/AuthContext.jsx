@@ -53,7 +53,8 @@ export const AuthProvider = ({ children }) => {
 
     try {
       // Use relative path because baseURL already points to API base (including /api)
-      const res = await axios.post("/auth/login", credentials);
+     const res = await axios.post("/auth/login", credentials);
+
 
       const data = res?.data || {};
       const newToken = data.token || data.accessToken || null;
