@@ -28,6 +28,8 @@ const DEV_RECIPES = [
     name: "Plain Rice",
     recipeCategoryId: "rc_cat_1",
     type: "LUMPSUM",
+    yieldQty: 1,
+    yieldUom: "Kg",
     lines: [{ itemId: "item_rice", qty: 10, uom: "Kg", itemCategory: "Pantry" }],
   },
   {
@@ -36,6 +38,8 @@ const DEV_RECIPES = [
     name: "Chicken Curry (50 portions)",
     recipeCategoryId: "rc_cat_2",
     type: "RECIPE_PORTION",
+    yieldQty: 50,
+    yieldUom: "Nos",
     lines: [
       { itemId: "item_chicken", qty: 10, uom: "Kg", itemCategory: "Meat" },
       { itemId: "item_spice", qty: 0.3, uom: "Kg", itemCategory: "Pantry" },
@@ -71,12 +75,14 @@ const RecipeMaster = () => {
   const [showView, setShowView] = useState(false);
   const [viewing, setViewing] = useState(null);
 
-  // form state (minimal fields only)
+  // form state (minimal fields only) - now includes yieldQty & yieldUom
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
     type: "LUMPSUM",
     name: "",
+    yieldQty: "",
+    yieldUom: "",
     lines: [emptyLine()],
   });
 
@@ -97,7 +103,17 @@ const RecipeMaster = () => {
       ]);
 
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
-      const serverItems = Array.isArray(itemRes.data) ? itemRes.data : DEV_ITEMS;
+      const serverItemsRaw = Array.isArray(itemRes.data) ? itemRes.data : DEV_ITEMS;
+      // NORMALIZE items so every item has .uom and .itemCategory
+      const serverItems = serverItemsRaw.map((it) => ({
+        _id: it._id || it.id,
+        id: it.id || it._id,
+        name: it.name || it.title || "",
+        uom: it.uom || it.measurement || it.unit || "",
+        itemCategory: it.itemCategory || it.category || it.item_category || it.group || "",
+        ...it,
+      }));
+
       const serverCats = Array.isArray(catRes.data) ? catRes.data : DEV_RECIPE_CATS;
 
       // determine item categories: prefer item-categories endpoint, else derive from items, else dev fallback
@@ -116,16 +132,21 @@ const RecipeMaster = () => {
         name: r.name || "",
         recipeCategoryId: r.recipeCategoryId || r.recipeCategory || "",
         type: r.type || "LUMPSUM",
+        yieldQty: r.yieldQty ?? r.yield_qty ?? "",
+        yieldUom: r.yieldUom || r.yield_uom || "",
         lines: Array.isArray(r.lines)
           ? r.lines.map((ln) => ({
               id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
-              itemCategory: ln.itemCategory || ln.item_category || (() => {
-                const item = (serverItems || DEV_ITEMS).find(it => (it._id === ln.itemId || it.id === ln.itemId));
-                return item?.itemCategory || item?.category || "";
-              })(),
+              itemCategory:
+                ln.itemCategory ||
+                ln.item_category ||
+                (() => {
+                  const item = (serverItems || DEV_ITEMS).find((it) => it._id === ln.itemId || it.id === ln.itemId);
+                  return item?.itemCategory || item?.category || "";
+                })(),
               itemId: ln.itemId || ln.item || "",
               qty: ln.qty ?? "",
-              uom: ln.uom || (serverItems.find(it => it._id === ln.itemId || it.id === ln.itemId)?.uom || ""),
+              uom: ln.uom || (serverItems.find((it) => it._id === ln.itemId || it.id === ln.itemId)?.uom || ""),
             }))
           : [],
       }));
@@ -133,14 +154,14 @@ const RecipeMaster = () => {
       setRecipes(normalized.length ? normalized : DEV_RECIPES);
       setItems(serverItems);
       setRecipeCategories(serverCats);
-      setItemCategories(serverItemCats.length ? serverItemCats : Array.from(new Set(DEV_ITEMS.map(i => i.itemCategory || "Uncategorized"))));
+      setItemCategories(serverItemCats.length ? serverItemCats : Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))));
     } catch (err) {
       console.error(err);
       setError("Failed to load recipe data; using sample data");
       setRecipes(DEV_RECIPES);
       setItems(DEV_ITEMS);
       setRecipeCategories(DEV_RECIPE_CATS);
-      setItemCategories(Array.from(new Set(DEV_ITEMS.map(i => i.itemCategory || "Uncategorized"))));
+      setItemCategories(Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))));
     } finally {
       setLoading(false);
     }
@@ -190,13 +211,44 @@ const RecipeMaster = () => {
     updateLine(idx, "uom", "");
   };
 
-  // when item selected, set uom from item (if available)
+  // when item selected, set uom from item (if available). Also, propagate to header yieldUom if header empty or auto-enable behaviour.
   const onLineItemChange = (idx, itemId) => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
-    if (it && it.uom) updateLine(idx, "uom", it.uom);
-    else updateLine(idx, "uom", "");
+    // set itemCategory from selected item if not already set
+    if (it && it.itemCategory) updateLine(idx, "itemCategory", it.itemCategory);
+    // auto-fill uom if present on item
+    if (it && it.uom) {
+      updateLine(idx, "uom", it.uom);
+      // only auto-set header yieldUom if user hasn't already set it (empty) OR if all existing lines share same uom
+      setForm((p) => {
+        const existingYield = p.yieldUom;
+        if (!existingYield) {
+          return { ...p, yieldUom: it.uom };
+        }
+        // if existingYield matches this item's uom, keep; otherwise do not override
+        return p;
+      });
+    } else {
+      // keep uom empty so user must pick
+      updateLine(idx, "uom", "");
+    }
   };
+
+  // ensure header yieldUom picks up consistent uom across lines (runs when lines change)
+  useEffect(() => {
+    const nonEmptyUoms = form.lines.map((l) => l.uom).filter(Boolean);
+    if (nonEmptyUoms.length === 0) return;
+    const allSame = nonEmptyUoms.every((u) => u === nonEmptyUoms[0]);
+    if (allSame) {
+      // if header empty, set to that UOM; or if header equals different value, do not override
+      setForm((p) => ({ ...p, yieldUom: p.yieldUom || nonEmptyUoms[0] }));
+    } else {
+      // if mixed, prefer first value only if header empty
+      setForm((p) => ({ ...p, yieldUom: p.yieldUom || nonEmptyUoms[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.lines.map((l) => `${l.itemId}|${l.uom}|${l.qty}`).join("||")]);
 
   const handleRecipeCategoryChange = (catId) => {
     const cat = getCategoryById(catId);
@@ -217,9 +269,11 @@ const RecipeMaster = () => {
       recipeCategoryId: rcp.recipeCategoryId || "",
       type: rcp.type || "LUMPSUM",
       name: rcp.name || "",
+      yieldQty: rcp.yieldQty ?? rcp.yield_qty ?? "",
+      yieldUom: rcp.yieldUom || rcp.yield_uom || "",
       lines:
-        (r.lines &&
-          r.lines.map((ln) => ({
+        (rcp.lines &&
+          rcp.lines.map((ln) => ({
             id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
             itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || ln.item || "",
@@ -243,6 +297,8 @@ const RecipeMaster = () => {
       recipeCategoryId: rcp.recipeCategoryId || "",
       type: rcp.type || "LUMPSUM",
       name: `${rcp.name || "Copy"} (Copy)`,
+      yieldQty: rcp.yieldQty ?? rcp.yield_qty ?? "",
+      yieldUom: rcp.yieldUom || rcp.yield_uom || "",
       lines:
         (rcp.lines &&
           rcp.lines.map((ln) => ({
@@ -271,6 +327,8 @@ const RecipeMaster = () => {
       if (!ln.uom) return "Each ingredient must have a UOM (Kg/Ltr/Nos)";
       if (!UOM_OPTIONS.includes(ln.uom)) return "UOM must be one of Kg, Ltr or Nos";
     }
+    if (form.yieldQty && Number(form.yieldQty) <= 0) return "Yield Qty must be > 0";
+    if (form.yieldQty && !form.yieldUom) return "Provide Yield UOM when Yield Qty is set";
     return null;
   };
 
@@ -286,6 +344,8 @@ const RecipeMaster = () => {
       name: form.name,
       recipeCategoryId: form.recipeCategoryId,
       type: form.type,
+      yieldQty: form.yieldQty ? Number(form.yieldQty) : undefined,
+      yieldUom: form.yieldUom || undefined,
       lines: (form.lines || []).map((ln) => ({ itemId: ln.itemId, qty: Number(ln.qty), uom: ln.uom, itemCategory: ln.itemCategory })),
     };
 
@@ -324,7 +384,8 @@ const RecipeMaster = () => {
   };
 
   // helper: items for a given category
-  const itemsForCategory = (cat) => items.filter((it) => ((it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString()));
+  const itemsForCategory = (cat) =>
+    items.filter((it) => (it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString());
 
   return (
     <div className="sa-page">
@@ -335,8 +396,12 @@ const RecipeMaster = () => {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="sa-secondary-button" onClick={() => loadData()}>Refresh</button>
-          <button className="sa-primary-button" onClick={openCreate}><i className="ri-add-line" /> New Recipe</button>
+          <button className="sa-secondary-button" onClick={() => loadData()}>
+            Refresh
+          </button>
+          <button className="sa-primary-button" onClick={openCreate}>
+            <i className="ri-add-line" /> New Recipe
+          </button>
         </div>
       </div>
 
@@ -347,7 +412,9 @@ const RecipeMaster = () => {
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ marginLeft: 8 }}>
             <option value="">All</option>
             {categoryOptions.map((c) => (
-              <option key={c._id} value={c._id}>{c.name}</option>
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
             ))}
           </select>
         </label>
@@ -357,7 +424,9 @@ const RecipeMaster = () => {
           <input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="name / code ..." style={{ marginLeft: 8, width: "70%" }} />
         </label>
 
-        <div style={{ marginLeft: "auto", color: "#9ca3af" }}>Showing {filteredRecipes.length} / {recipes.length}</div>
+        <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
+          Showing {filteredRecipes.length} / {recipes.length}
+        </div>
       </div>
 
       {error && <div className="sa-modal-error">{error}</div>}
@@ -381,15 +450,25 @@ const RecipeMaster = () => {
             <tbody>
               {filteredRecipes.map((r) => (
                 <tr key={r._id}>
-                  <td style={{ color: "#0b69ff", cursor: "pointer" }} onClick={() => openView(r)}>{r.code}</td>
+                  <td style={{ color: "#0b69ff", cursor: "pointer" }} onClick={() => openView(r)}>
+                    {r.code}
+                  </td>
                   <td>{r.name}</td>
                   <td>{getCategoryById(r.recipeCategoryId)?.name || "-"}</td>
                   <td>{r.type}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <span title="View" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openView(r)}><i className="ri-eye-line" /></span>
-                    <span title="Duplicate" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => duplicateAsCreate(r)}><i className="ri-file-copy-line" /></span>
-                    <span title="Edit" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openEdit(r)}><i className="ri-edit-line" /></span>
-                    <span title="Delete" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => handleDelete(r)}><i className="ri-delete-bin-6-line" /></span>
+                    <span title="View" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openView(r)}>
+                      <i className="ri-eye-line" />
+                    </span>
+                    <span title="Duplicate" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => duplicateAsCreate(r)}>
+                      <i className="ri-file-copy-line" />
+                    </span>
+                    <span title="Edit" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openEdit(r)}>
+                      <i className="ri-edit-line" />
+                    </span>
+                    <span title="Delete" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => handleDelete(r)}>
+                      <i className="ri-delete-bin-6-line" />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -403,10 +482,10 @@ const RecipeMaster = () => {
         <div className="sa-modal-backdrop" onClick={() => !saving && (setShowForm(false), setEditing(null))}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editing ? "Edit Recipe" : "Create Recipe"}</h3>
-            <p className="sa-modal-sub">Minimal recipe: code, category, name, and ingredient lines.</p>
+            <p className="sa-modal-sub">Minimal recipe: code, category, name, yield and ingredient lines.</p>
 
             <form className="sa-modal-form" onSubmit={handleSave}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
                 <label>
                   Code
                   <input value={form.code} onChange={(e) => updateFormField("code", e.target.value)} required />
@@ -417,9 +496,16 @@ const RecipeMaster = () => {
                   <select value={form.recipeCategoryId} onChange={(e) => handleRecipeCategoryChange(e.target.value)} required>
                     <option value="">-- Select Recipe Category --</option>
                     {categoryOptions.map((c) => (
-                      <option key={c._id} value={c._id}>{c.name}</option>
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
+                </label>
+
+                <label>
+                  Type
+                  <input value={form.type} disabled />
                 </label>
 
                 <label>
@@ -428,8 +514,27 @@ const RecipeMaster = () => {
                 </label>
 
                 <label>
-                  Type
-                  <input value={form.type} disabled />
+                  Yield Qty
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.yieldQty}
+                    onChange={(e) => updateFormField("yieldQty", e.target.value)}
+                    placeholder="e.g. 50"
+                  />
+                </label>
+
+                <label>
+                  Yield UOM
+                  <select value={form.yieldUom || ""} onChange={(e) => updateFormField("yieldUom", e.target.value)}>
+                    <option value="">-- Select --</option>
+                    {UOM_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
@@ -438,7 +543,7 @@ const RecipeMaster = () => {
                 <table className="sa-table">
                   <thead>
                     <tr>
-                      <th style={{ width: "30%" }}>Item Category</th>
+                      <th style={{ width: "25%" }}>Item Category</th>
                       <th style={{ width: "30%" }}>Item</th>
                       <th style={{ width: "20%" }}>Qty</th>
                       <th style={{ width: "15%" }}>UOM</th>
@@ -449,13 +554,13 @@ const RecipeMaster = () => {
                     {form.lines.map((ln, idx) => (
                       <tr key={ln.id}>
                         <td>
-                          <select
-                            value={ln.itemCategory || ""}
-                            onChange={(e) => onLineCategoryChange(idx, e.target.value)}
-                            required
-                          >
+                          <select value={ln.itemCategory || ""} onChange={(e) => onLineCategoryChange(idx, e.target.value)} required>
                             <option value="">-- Select category --</option>
-                            {itemCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                            {itemCategories.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
                           </select>
                         </td>
 
@@ -467,7 +572,9 @@ const RecipeMaster = () => {
                           >
                             <option value="">-- Select item --</option>
                             {itemsForCategory(ln.itemCategory).map((it) => (
-                              <option key={it._id || it.id} value={it._id || it.id}>{it.name}</option>
+                              <option key={it._id || it.id} value={it._id || it.id}>
+                                {it.name}
+                              </option>
                             ))}
                           </select>
                         </td>
@@ -480,17 +587,19 @@ const RecipeMaster = () => {
                             value={ln.qty}
                             onChange={(e) => updateLine(idx, "qty", e.target.value)}
                             required
+                            placeholder="Qty"
+                            style={{ width: "100%" }}
                           />
                         </td>
 
                         <td>
-                          <select
-                            value={ln.uom || ""}
-                            onChange={(e) => updateLine(idx, "uom", e.target.value)}
-                            required
-                          >
+                          <select value={ln.uom || ""} onChange={(e) => updateLine(idx, "uom", e.target.value)} required>
                             <option value="">-- Select --</option>
-                            {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                            {UOM_OPTIONS.map((u) => (
+                              <option key={u} value={u}>
+                                {u}
+                              </option>
+                            ))}
                           </select>
                         </td>
 
@@ -500,15 +609,20 @@ const RecipeMaster = () => {
                   </tbody>
                 </table>
 
-                <button type="button" className="sa-secondary-button" style={{ marginTop: 8 }} onClick={addLine}>+ Add Ingredient</button>
-
+                <button type="button" className="sa-secondary-button" style={{ marginTop: 8 }} onClick={addLine}>
+                  + Add Ingredient
+                </button>
               </div>
 
               {formError && <div className="sa-modal-error" style={{ marginTop: 8 }}>{formError}</div>}
 
               <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-                <button type="button" className="sa-secondary-button" onClick={() => (!saving && setShowForm(false))}>Cancel</button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : editing ? "Update Recipe" : "Save Recipe"}</button>
+                <button type="button" className="sa-secondary-button" onClick={() => (!saving && setShowForm(false))}>
+                  Cancel
+                </button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : editing ? "Update Recipe" : "Save Recipe"}
+                </button>
               </div>
             </form>
           </div>
@@ -519,8 +633,16 @@ const RecipeMaster = () => {
       {showView && viewing && (
         <div className="sa-modal-backdrop" onClick={() => setShowView(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{viewing.code} — {viewing.name}</h3>
-            <p className="sa-modal-sub">Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"} — Type: {viewing.type}</p>
+            <h3>
+              {viewing.code} — {viewing.name}
+            </h3>
+            <p className="sa-modal-sub">
+              Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"} — Type: {viewing.type}
+            </p>
+
+            <p>
+              Yield: {viewing.yieldQty ?? viewing.yield_qty ?? "-"} {viewing.yieldUom ?? viewing.yield_uom ?? ""}
+            </p>
 
             <h4 style={{ marginTop: 8 }}>Ingredients</h4>
             <table className="sa-table">
@@ -545,8 +667,19 @@ const RecipeMaster = () => {
             </table>
 
             <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-              <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>Close</button>
-              <button type="button" className="sa-primary-button" onClick={() => { setShowView(false); openEdit(viewing); }}>Edit</button>
+              <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="sa-primary-button"
+                onClick={() => {
+                  setShowView(false);
+                  openEdit(viewing);
+                }}
+              >
+                Edit
+              </button>
             </div>
           </div>
         </div>
