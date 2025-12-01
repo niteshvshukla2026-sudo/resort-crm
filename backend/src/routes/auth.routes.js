@@ -1,9 +1,13 @@
+// backend/src/routes/auth.routes.js
 import express from "express";
-import { login, createInitialSuperAdmin } from "../controllers/auth.controller.js";
+import { loginController } from "../controllers/auth.controller.js";
 
 const router = express.Router();
 
-router.post("/login", login);
-router.post("/init-super-admin", createInitialSuperAdmin);
+/**
+ * POST /api/auth/login
+ * Body: { email, password }
+ */
+router.post("/login", loginController);
 
 export default router;
