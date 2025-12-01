@@ -1,16 +1,13 @@
-// backend/server_router.js
+// backend/server_router.cjs
+
 const express = require('express');
 const { createControllers } = require('./controllers.cjs');
-
 
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   const controllers = createControllers({ useMongo, mongoose });
 
-  // Demo-auth helper:
-  // If you send header `x-demo-user` with JSON string, that becomes req.user.
-  // Example header: x-demo-user: {"id":"user_1","name":"Amit","role":"RESORT_USER","resorts":["resort_1"]}
-  // In production replace with real JWT middleware.
+  // Demo-auth header (optional, used earlier in your setup)
   router.use((req, res, next) => {
     const demo = req.header('x-demo-user');
     if (demo) {
@@ -23,21 +20,40 @@ function createRouter({ useMongo, mongoose }) {
     next();
   });
 
-  // Dashboard & master endpoints
+  // ------------------------
+  // 🔐 AUTH ROUTES
+  // ------------------------
+  router.post('/api/auth/login', controllers.login);
+
+  // ------------------------
+  // 📊 Dashboard
+  // ------------------------
   router.get('/dashboard/resort/:resortId/kpi', controllers.getResortKpi);
+
+  // ------------------------
+  // 🏨 Resorts
+  // ------------------------
   router.get('/resorts', controllers.listResorts);
 
-  // Requisition endpoints
+  // ------------------------
+  // 📦 Requisition
+  // ------------------------
   router.get('/requisitions', controllers.listRequisitions);
   router.post('/requisitions', controllers.createRequisition);
 
-  // PO endpoint
+  // ------------------------
+  // 📑 Purchase Orders
+  // ------------------------
   router.get('/po', controllers.listPOs);
 
-  // Items
+  // ------------------------
+  // 📦 Items
+  // ------------------------
   router.get('/items', controllers.listItems);
 
-  // Roles / Users compatibility endpoints (used by UI)
+  // ------------------------
+  // 👥 Roles / Users
+  // ------------------------
   router.get('/roles', controllers.listRoles);
   router.get('/users', controllers.listUsers);
 
