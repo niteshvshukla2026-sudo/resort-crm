@@ -224,7 +224,9 @@ const ItemList = () => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const text = ev.target.result;
-      const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+      // ignore metadata/comment lines beginning with #
+      const allRows = text.split(/\r?\n/).map((r) => r.trim());
+      const rows = allRows.filter(Boolean).filter((r) => !r.startsWith("#"));
       if (rows.length === 0) {
         setCsvError("Empty CSV");
         setCsvLoading(false);
@@ -315,6 +317,38 @@ const ItemList = () => {
     URL.revokeObjectURL(url);
   };
 
+  // new: download CSV format with metadata comments so user can see dropdown values
+  const downloadCSVFormat = () => {
+    const cols = ["code","name","itemCategory","uom","brand","indicativePrice"];
+    const example = ["RICE1","Basmati Rice 5kg","Pantry","Kg","GrainCo","60"];
+    const metaCats = itemCategories.length ? itemCategories : DEV_ITEM_CATEGORIES;
+    const metaBrands = brands.length ? brands : DEV_BRANDS;
+
+    const rows = [];
+    rows.push(cols.join(","));
+    rows.push(example.join(","));
+    // metadata lines (start with # so parser ignores them)
+    rows.push(`#CATEGORIES:${metaCats.join("|")}`);
+    rows.push(`#BRANDS:${metaBrands.join("|")}`);
+
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `items-csv-format-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    try {
+      navigator.clipboard?.writeText(csv);
+      alert("CSV format downloaded and copied to clipboard (categories & brands provided in metadata lines).");
+    } catch {
+      // ignore clipboard errors
+      alert("CSV format downloaded. (If supported, format was also copied to clipboard.)");
+    }
+  };
+
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -338,12 +372,16 @@ const ItemList = () => {
             {csvLoading ? <span style={{ marginLeft: 6 }}>Uploading...</span> : <span style={{ marginLeft: 6 }}>Upload CSV</span>}
           </label>
 
+          <button className="sa-secondary-button" onClick={downloadCSVFormat} title="Download CSV format with sample row and allowed categories/brands">
+            CSV Format
+          </button>
+
           <button className="sa-secondary-button" onClick={handleExportCSV} title="Export filtered items to CSV">
             Export CSV
           </button>
 
           <button className="sa-primary-button" type="button" onClick={openCreate}>
-            <i className="ri-add-line" /> New Item
+            <i className="ri-add-line" /> Add New Item
           </button>
         </div>
       </div>
@@ -418,7 +456,7 @@ const ItemList = () => {
                   <td>{i.itemCategory || "-"}</td>
                   <td>{i.uom || "-"}</td>
                   <td>{i.brand || "-"}</td>
-                  <td>{i.indicativePrice !== undefined && i.indicativePrice !== "" ? String(i.indicativePrice) : "-"}</td>
+                  <td>{i.indicativePrice !== undefined && i.indicativePrice !== "" ? `₹${String(i.indicativePrice)}` : "-"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="sa-secondary-button" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(i)); alert("Copied"); }} title="Copy JSON">Copy</button>
 
@@ -443,7 +481,7 @@ const ItemList = () => {
       {showForm && (
         <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
-            <h3>{form._id ? "Edit Item" : "New Item"}</h3>
+            <h3>{form._id ? "Edit Item" : "Add New Item"}</h3>
             <p className="sa-modal-sub">Define item — Item Category, Brand, UOM and Indicative Price.</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
@@ -483,7 +521,7 @@ const ItemList = () => {
               </label>
 
               <label>
-                Indicative Price
+                Indicative Price (₹)
                 <input name="indicativePrice" type="number" min="0" step="0.01" value={form.indicativePrice} onChange={handleChange} placeholder="Numeric price per selected UOM" />
               </label>
 
