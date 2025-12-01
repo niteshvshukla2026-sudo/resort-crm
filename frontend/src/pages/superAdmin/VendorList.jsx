@@ -4,19 +4,17 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// --- 6 dev sample vendors for quick dev/demo (shortened) ---
+// --- small dev sample vendors ---
 const DEV_VENDORS = [
   {
     _id: "dev_vendor_1",
-    code: "FF001",
-    name: "FreshFoods Pvt Ltd",
+    code: "FFP_1234",
+    name: "FreshFoods",
     contactPerson: "Ravi Kumar",
     phone: "9876500011",
     whatsapp: "9876500011",
-    alternatePhone: "",
     email: "sales@freshfoods.com",
     addressLine1: "123 Food St.",
-    addressLine2: "Unit 4",
     city: "Mumbai",
     state: "Maharashtra",
     pincode: "400001",
@@ -25,23 +23,16 @@ const DEV_VENDORS = [
     category: "Food",
     gstNumber: "27AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
-    fssaiNumber: "",
     paymentTerms: "30 Days",
     creditLimit: "50000",
     paymentMode: "Bank Transfer",
-    bankName: "State Bank",
-    accountNumber: "123456789012",
-    ifsc: "SBIN0000001",
-    branch: "Mumbai Main",
-    deliveryTime: "1",
-    minOrderQty: "1",
     status: "Active",
     notes: "Priority supplier",
   },
   {
     _id: "dev_vendor_2",
-    code: "GLB02",
-    name: "Global Supplies",
+    code: "GLB_2345",
+    name: "GlobalSupplies",
     phone: "9876500022",
     email: "contact@globalsupplies.com",
     city: "Goa",
@@ -49,7 +40,6 @@ const DEV_VENDORS = [
     category: "Housekeeping",
     status: "Active",
   },
-  // add more as needed...
 ];
 
 const emptyForm = () => ({
@@ -93,7 +83,7 @@ const VendorList = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [fieldErrors, setFieldErrors] = useState({});
-  const [categories, setCategories] = useState([]); // item categories from master
+  const [categories, setCategories] = useState([]);
 
   // filters
   const [filterName, setFilterName] = useState("");
@@ -106,7 +96,7 @@ const VendorList = () => {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // fetch vendors and categories
+  // --- load vendors and categories ---
   const loadVendors = async () => {
     try {
       setLoading(true);
@@ -127,15 +117,13 @@ const VendorList = () => {
 
   const loadCategories = async () => {
     try {
-      // expecting your item category master endpoint here
       const res = await axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] }));
       const cats = Array.isArray(res.data) ? res.data : [];
-      // Accept either array of strings or array of objects with { name, code }
       const mapped = cats.map((c) => (typeof c === "string" ? c : c.name || c.code || JSON.stringify(c)));
       setCategories(mapped);
     } catch (err) {
       console.warn("Failed to load categories", err);
-      setCategories([]); // fallback empty
+      setCategories([]);
     }
   };
 
@@ -145,6 +133,149 @@ const VendorList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // --- utilities ---
+  const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
+
+  // Strict regexes
+  const regex = {
+    name: /^[A-Za-z ]+$/, // only alphabets and spaces
+    phone: /^\d{10}$/,
+    whatsapp: /^\d{10}$/,
+    alternatePhone: /^\d{10}$/,
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    gst:
+      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, // common GSTIN format
+    pan: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
+    ifsc: /^[A-Z]{4}0[A-Z0-9]{6}$/,
+    pincode: /^[1-9][0-9]{5}$/,
+    accountNumber: /^[0-9]{6,20}$/,
+    integer: /^\d+$/,
+    decimal: /^\d+(\.\d+)?$/,
+    codeAllowed: /^[A-Z0-9_]+$/, // generated code will be uppercase + digits + underscore
+  };
+
+  // Generate vendor code from name: initials of up to 4 words + last 4 digits of timestamp
+  const generateCodeFromName = (name) => {
+    if (!name) return "";
+    const words = name
+      .replace(/[^A-Za-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 4);
+    if (words.length === 0) return `VEND_${String(Date.now()).slice(-4)}`;
+    const initials = words.map((w) => w[0].toUpperCase()).join("");
+    const suffix = String(Date.now()).slice(-4);
+    let base = `${initials}_${suffix}`;
+    // ensure uniqueness among current vendors
+    const existingCodes = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
+    if (!existingCodes.has(base)) return base;
+    // if clash, append random 2-digit
+    return `${initials}_${suffix}${Math.floor(Math.random() * 90 + 10)}`;
+  };
+
+  // ensure code uniqueness (local check) - returns unique uppercase code
+  const ensureUniqueCode = (candidate) => {
+    if (!candidate) return candidate;
+    const up = candidate.toUpperCase();
+    const existing = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
+    if (!existing.has(up)) return up;
+    // append short suffix until unique
+    for (let i = 1; i < 1000; i++) {
+      const tryCode = `${up}_${i}`;
+      if (!existing.has(tryCode)) return tryCode;
+    }
+    return `${up}_${Date.now().toString().slice(-4)}`;
+  };
+
+  // --- validators (strict) ---
+  const validators = {
+    code: (v) => {
+      if (!v) return "Vendor code is required";
+      if (!regex.codeAllowed.test(String(v).toUpperCase())) return "Code may contain only A-Z,0-9 and underscore";
+      return undefined;
+    },
+    name: (v) => {
+      if (!v) return "Vendor name is required";
+      if (!regex.name.test(String(v).trim())) return "Name must contain only letters and spaces";
+      return undefined;
+    },
+    phone: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.phone.test(String(v).trim())) return "Phone must be exactly 10 digits";
+      return undefined;
+    },
+    whatsapp: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.whatsapp.test(String(v).trim())) return "WhatsApp must be exactly 10 digits";
+      return undefined;
+    },
+    alternatePhone: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.alternatePhone.test(String(v).trim())) return "Alternate phone must be exactly 10 digits";
+      return undefined;
+    },
+    email: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.email.test(String(v).trim())) return "Invalid email format";
+      return undefined;
+    },
+    gstNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.gst.test(String(v).trim())) return "GSTIN invalid (must follow 15-char GSTIN pattern)";
+      return undefined;
+    },
+    panNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.pan.test(String(v).trim())) return "PAN invalid (format AAAAA9999A)";
+      return undefined;
+    },
+    ifsc: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.ifsc.test(String(v).trim())) return "IFSC invalid (e.g. SBIN0000001)";
+      return undefined;
+    },
+    pincode: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.pincode.test(String(v).trim())) return "Pincode must be 6 digits and not start with 0";
+      return undefined;
+    },
+    accountNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.accountNumber.test(String(v).trim())) return "Account number must be 6-20 digits";
+      return undefined;
+    },
+    creditLimit: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.decimal.test(String(v).trim())) return "Credit limit must be a number";
+      return undefined;
+    },
+    deliveryTime: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.integer.test(String(v).trim())) return "Delivery time must be whole days (integer)";
+      return undefined;
+    },
+    minOrderQty: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.integer.test(String(v).trim())) return "MOQ must be a whole number";
+      return undefined;
+    },
+    category: (v) => {
+      if (!v) return "Category is required";
+      return undefined;
+    },
+  };
+
+  const validateAll = () => {
+    const newErr = {};
+    Object.keys(validators).forEach((k) => {
+      const msg = validators[k](form[k]);
+      if (msg) newErr[k] = msg;
+    });
+    setFieldErrors(newErr);
+    return Object.keys(newErr).length === 0;
+  };
+
+  // --- form handlers ---
   const openCreateForm = () => {
     setForm(emptyForm());
     setFieldErrors({});
@@ -192,123 +323,55 @@ const VendorList = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // clear error for field as user types
-    setFieldErrors((p) => {
-      const copy = { ...p };
+    // if user edits name and code is empty, auto generate code
+    setForm((p) => {
+      const updated = { ...p, [name]: value };
+      // if name updated and code empty -> generate
+      if (name === "name" && (p.code === "" || p.code === undefined)) {
+        const gen = generateCodeFromName(value);
+        updated.code = ensureUniqueCode(gen);
+      }
+      // if code changed manually, normalize to uppercase and remove spaces
+      if (name === "code") {
+        updated.code = String(value || "").toUpperCase().replace(/\s+/g, "_");
+      }
+      return updated;
+    });
+
+    // clear field error
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
       delete copy[name];
       return copy;
     });
-    setForm((p) => ({ ...p, [name]: value }));
   };
 
-  // validation helpers
-  const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
-
-  const validators = {
-    code: (v) => (!v ? "Vendor code is required" : undefined),
-    name: (v) => (!v ? "Vendor name is required" : undefined),
-    phone: (v) =>
-      !v
-        ? undefined
-        : !/^\d{10}$/.test(String(v).trim())
-        ? "Phone should be 10 digits"
-        : undefined,
-    whatsapp: (v) =>
-      !v
-        ? undefined
-        : !/^\d{10}$/.test(String(v).trim())
-        ? "WhatsApp should be 10 digits"
-        : undefined,
-    email: (v) =>
-      !v
-        ? undefined
-        : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim())
-        ? "Invalid email"
-        : undefined,
-    gstNumber: (v) =>
-      !v
-        ? undefined
-        : !/^[0-9A-Z]{15}$/.test(String(v).trim())
-        ? "GSTIN must be 15 chars (alphanumeric uppercase)"
-        : undefined,
-    panNumber: (v) =>
-      !v
-        ? undefined
-        : !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(String(v).trim())
-        ? "PAN must be 10 chars (AAAAA9999A)"
-        : undefined,
-    ifsc: (v) =>
-      !v
-        ? undefined
-        : !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(v).trim())
-        ? "IFSC invalid (e.g. SBIN0000001)"
-        : undefined,
-    pincode: (v) =>
-      !v
-        ? undefined
-        : !/^[1-9][0-9]{5}$/.test(String(v).trim())
-        ? "Pincode must be 6 digits"
-        : undefined,
-    accountNumber: (v) =>
-      !v
-        ? undefined
-        : !/^[0-9]{6,20}$/.test(String(v).trim())
-        ? "Account number must be 6-20 digits"
-        : undefined,
-    creditLimit: (v) =>
-      !v
-        ? undefined
-        : isNaN(Number(v))
-        ? "Credit limit must be a number"
-        : undefined,
-    deliveryTime: (v) =>
-      !v
-        ? undefined
-        : !/^\d+$/.test(String(v).trim())
-        ? "Delivery time must be whole days number"
-        : undefined,
-    minOrderQty: (v) =>
-      !v
-        ? undefined
-        : !/^\d+$/.test(String(v).trim())
-        ? "MOQ must be a number"
-        : undefined,
-  };
-
-  const validateAll = () => {
-    const keys = Object.keys(validators);
-    const newErr = {};
-    keys.forEach((k) => {
-      const msg = validators[k](form[k]);
-      if (msg) newErr[k] = msg;
+  const handleGenerateCode = () => {
+    const gen = generateCodeFromName(form.name || "");
+    setForm((p) => ({ ...p, code: ensureUniqueCode(gen) }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.code;
+      return copy;
     });
-
-    // additional required fields
-    if (!form.name) newErr.name = "Vendor name is required";
-    if (!form.code) newErr.code = "Vendor code is required";
-    // category should be selected ideally
-    if (!form.category) newErr.category = "Category is required";
-
-    setFieldErrors(newErr);
-    return Object.keys(newErr).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     if (!validateAll()) {
-      setError("Please fix the validation errors");
+      setError("Please fix validation errors.");
       return;
     }
 
     try {
       setSaving(true);
       const payload = { ...form };
-      // remove local-only _id on create
       if (!form._id) delete payload._id;
+      // ensure code uppercase
+      if (payload.code) payload.code = ensureUniqueCode(String(payload.code).toUpperCase());
 
       if (form._id && String(form._id).startsWith("local_")) {
-        // local id created earlier; create on server
         const res = await axios.post(`${API_BASE}/api/vendors`, payload).catch(() => null);
         const created = res?.data || { ...payload, _id: form._id };
         setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? created : x)));
@@ -348,7 +411,7 @@ const VendorList = () => {
     }
   };
 
-  // CSV upload & parsing (supports extended mapping)
+  // CSV upload & parsing (strict mapping still allows import but validations applied on edit/save)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -366,7 +429,6 @@ const VendorList = () => {
 
       const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
       const headerSet = new Set(header);
-      // require at least code and name
       if (!headerSet.has("code") || !headerSet.has("name")) {
         setCsvError("CSV must contain at least: code,name columns");
         setCsvLoading(false);
@@ -388,37 +450,40 @@ const VendorList = () => {
         return;
       }
 
-      const payloads = parsed.map((p) => ({
-        code: p.code || "",
-        name: p.name || "",
-        vendorType: p.vendortype || p.vendor_type || "",
-        category: p.category || "",
-        contactPerson: p.contactperson || p.contact_person || p.contact || "",
-        phone: p.phone || p.contact || "",
-        whatsapp: p.whatsapp || "",
-        alternatePhone: p.alternatephone || p.altphone || p.alt_phone || "",
-        email: p.email || "",
-        addressLine1: p.addressline1 || p.address || p.address_line_1 || "",
-        addressLine2: p.addressline2 || p.address_line_2 || "",
-        city: p.city || "",
-        state: p.state || "",
-        pincode: p.pincode || p.pin || "",
-        country: p.country || "",
-        gstNumber: p.gstnumber || p.gst || "",
-        panNumber: p.pannumber || p.pan || "",
-        fssaiNumber: p.fssainumber || p.fssai || "",
-        paymentTerms: p.paymentterms || p.payment_terms || "",
-        creditLimit: p.creditlimit || p.credit_limit || "",
-        paymentMode: p.paymentmode || p.payment_mode || "",
-        bankName: p.bankname || p.bank_name || "",
-        accountNumber: p.accountnumber || p.account_number || "",
-        ifsc: p.ifsc || "",
-        branch: p.branch || "",
-        deliveryTime: p.deliverytime || p.leadtime || "",
-        minOrderQty: p.minqty || p.min_order_qty || p.min_order_quantity || "",
-        status: p.status || "Active",
-        notes: p.notes || "",
-      }));
+      const payloads = parsed.map((p) => {
+        const nameVal = p.name || "";
+        const codeVal = p.code || generateCodeFromName(nameVal);
+        return {
+          code: ensureUniqueCode(String(codeVal).toUpperCase()),
+          name: nameVal,
+          vendorType: p.vendortype || p.vendor_type || "",
+          category: p.category || "",
+          contactPerson: p.contactperson || p.contact_person || p.contact || "",
+          phone: p.phone || p.contact || "",
+          whatsapp: p.whatsapp || "",
+          alternatePhone: p.alternatephone || "",
+          email: p.email || "",
+          addressLine1: p.address || "",
+          addressLine2: p.addressline2 || "",
+          city: p.city || "",
+          state: p.state || "",
+          pincode: p.pincode || "",
+          country: p.country || "",
+          gstNumber: p.gstnumber || "",
+          panNumber: p.pannumber || "",
+          paymentTerms: p.paymentterms || "",
+          creditLimit: p.creditlimit || "",
+          paymentMode: p.paymentmode || "",
+          bankName: p.bankname || "",
+          accountNumber: p.accountnumber || "",
+          ifsc: p.ifsc || "",
+          branch: p.branch || "",
+          deliveryTime: p.deliverytime || "",
+          minOrderQty: p.minqty || "",
+          status: p.status || "Active",
+          notes: p.notes || "",
+        };
+      });
 
       // optimistic add locally
       const localAdded = payloads.map((pl) => ({ ...pl, _id: `local_${Date.now()}_${Math.floor(Math.random() * 1000)}` }));
@@ -430,7 +495,6 @@ const VendorList = () => {
           try {
             const res = await axios.post(`${API_BASE}/api/vendors`, pl).catch(() => null);
             if (res?.data) {
-              // replace local created by code match
               setVendors((prev) => prev.map((it) => (it.code === pl.code ? res.data : it)));
             }
           } catch (err) {
@@ -452,7 +516,7 @@ const VendorList = () => {
     reader.readAsText(file);
   };
 
-  // Export current filtered list to CSV (extended columns)
+  // export CSV (same extended columns)
   const handleExportCSV = (list) => {
     const cols = [
       "code",
@@ -518,7 +582,6 @@ const VendorList = () => {
     });
   }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
 
-  // unique cities for dropdown filter
   const cities = useMemo(() => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))), [vendors]);
 
   return (
@@ -539,7 +602,7 @@ const VendorList = () => {
                 handleCSVUpload(f);
                 e.target.value = "";
               }}
-              title="Upload CSV (columns: code,name,contactPerson,phone,email,city,... )"
+              title="Upload CSV (columns: code,name,... )"
             />
             {csvLoading ? <span style={{ marginLeft: 6 }}>Uploading...</span> : <span style={{ marginLeft: 6 }}>Upload CSV</span>}
           </label>
@@ -652,21 +715,25 @@ const VendorList = () => {
         <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{form._id ? "Edit Vendor" : "New Vendor"}</h3>
-            <p className="sa-modal-sub">Add or update a supplier used in purchase orders.</p>
+            <p className="sa-modal-sub">Add or update a supplier used in purchase orders. (Strict validations enabled)</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <label style={{ flex: 1 }}>
+                  Vendor Name *
+                  <input name="name" value={form.name} onChange={handleChange} placeholder="Only letters and spaces" />
+                  {fieldErrors.name && <div className="sa-field-error">{fieldErrors.name}</div>}
+                </label>
 
-              <label>
-                Vendor Name *
-                <input name="name" value={form.name} onChange={handleChange} placeholder="FreshFoods Supplier" />
-                {fieldErrors.name && <div className="sa-field-error">{fieldErrors.name}</div>}
-              </label>
-
-              <label>
-                Code *
-                <input name="code" value={form.code} onChange={handleChange} placeholder="FFS" />
-                {fieldErrors.code && <div className="sa-field-error">{fieldErrors.code}</div>}
-              </label>
+                <label style={{ width: 260 }}>
+                  Code *
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input name="code" value={form.code} onChange={handleChange} placeholder="Auto generated from name" />
+                    <button type="button" className="sa-secondary-button" onClick={handleGenerateCode}>Generate</button>
+                  </div>
+                  {fieldErrors.code && <div className="sa-field-error">{fieldErrors.code}</div>}
+                </label>
+              </div>
 
               <label>
                 Vendor Type
@@ -694,24 +761,26 @@ const VendorList = () => {
 
               <label>
                 Contact Person
-                <input name="contactPerson" value={form.contactPerson} onChange={handleChange} placeholder="Name" />
+                <input name="contactPerson" value={form.contactPerson} onChange={handleChange} placeholder="Only letters and spaces" />
+                {form.contactPerson && !/^[A-Za-z ]+$/.test(String(form.contactPerson).trim()) && <div className="sa-field-error">Contact person must be letters and spaces only</div>}
               </label>
 
               <label>
                 Phone
-                <input name="phone" value={form.phone} onChange={handleChange} placeholder="9876543210" />
+                <input name="phone" value={form.phone} onChange={handleChange} placeholder="10 digits" />
                 {fieldErrors.phone && <div className="sa-field-error">{fieldErrors.phone}</div>}
               </label>
 
               <label>
                 WhatsApp
-                <input name="whatsapp" value={form.whatsapp} onChange={handleChange} placeholder="WhatsApp number" />
+                <input name="whatsapp" value={form.whatsapp} onChange={handleChange} placeholder="10 digits" />
                 {fieldErrors.whatsapp && <div className="sa-field-error">{fieldErrors.whatsapp}</div>}
               </label>
 
               <label>
                 Alternate Phone
-                <input name="alternatePhone" value={form.alternatePhone} onChange={handleChange} placeholder="Alternate" />
+                <input name="alternatePhone" value={form.alternatePhone} onChange={handleChange} placeholder="10 digits" />
+                {fieldErrors.alternatePhone && <div className="sa-field-error">{fieldErrors.alternatePhone}</div>}
               </label>
 
               <label>
@@ -722,38 +791,38 @@ const VendorList = () => {
 
               <label>
                 Address Line 1
-                <input name="addressLine1" value={form.addressLine1} onChange={handleChange} placeholder="Street / Building" />
+                <input name="addressLine1" value={form.addressLine1} onChange={handleChange} />
               </label>
 
               <label>
                 Address Line 2
-                <input name="addressLine2" value={form.addressLine2} onChange={handleChange} placeholder="Area / Landmark" />
+                <input name="addressLine2" value={form.addressLine2} onChange={handleChange} />
               </label>
 
               <label>
                 City
-                <input name="city" value={form.city} onChange={handleChange} placeholder="City" />
+                <input name="city" value={form.city} onChange={handleChange} />
               </label>
 
               <label>
                 State
-                <input name="state" value={form.state} onChange={handleChange} placeholder="State" />
+                <input name="state" value={form.state} onChange={handleChange} />
               </label>
 
               <label>
                 Pincode
-                <input name="pincode" value={form.pincode} onChange={handleChange} placeholder="Pincode" />
+                <input name="pincode" value={form.pincode} onChange={handleChange} />
                 {fieldErrors.pincode && <div className="sa-field-error">{fieldErrors.pincode}</div>}
               </label>
 
               <label>
                 Country
-                <input name="country" value={form.country} onChange={handleChange} placeholder="Country" />
+                <input name="country" value={form.country} onChange={handleChange} />
               </label>
 
               <label>
                 GST Number
-                <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="GSTIN (15 chars)" />
+                <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="15 char GSTIN" />
                 {fieldErrors.gstNumber && <div className="sa-field-error">{fieldErrors.gstNumber}</div>}
               </label>
 
@@ -765,7 +834,7 @@ const VendorList = () => {
 
               <label>
                 FSSAI Number
-                <input name="fssaiNumber" value={form.fssaiNumber} onChange={handleChange} placeholder="FSSAI (if applicable)" />
+                <input name="fssaiNumber" value={form.fssaiNumber} onChange={handleChange} />
               </label>
 
               <label>
@@ -781,7 +850,7 @@ const VendorList = () => {
 
               <label>
                 Credit Limit
-                <input name="creditLimit" value={form.creditLimit} onChange={handleChange} placeholder="Credit limit (number)" />
+                <input name="creditLimit" value={form.creditLimit} onChange={handleChange} placeholder="Numeric" />
                 {fieldErrors.creditLimit && <div className="sa-field-error">{fieldErrors.creditLimit}</div>}
               </label>
 
@@ -792,35 +861,35 @@ const VendorList = () => {
 
               <label>
                 Bank Name
-                <input name="bankName" value={form.bankName} onChange={handleChange} placeholder="Bank name" />
+                <input name="bankName" value={form.bankName} onChange={handleChange} />
               </label>
 
               <label>
                 Account Number
-                <input name="accountNumber" value={form.accountNumber} onChange={handleChange} placeholder="Account number" />
+                <input name="accountNumber" value={form.accountNumber} onChange={handleChange} placeholder="6-20 digits" />
                 {fieldErrors.accountNumber && <div className="sa-field-error">{fieldErrors.accountNumber}</div>}
               </label>
 
               <label>
                 IFSC
-                <input name="ifsc" value={form.ifsc} onChange={handleChange} placeholder="IFSC code" />
+                <input name="ifsc" value={form.ifsc} onChange={handleChange} placeholder="IFSC" />
                 {fieldErrors.ifsc && <div className="sa-field-error">{fieldErrors.ifsc}</div>}
               </label>
 
               <label>
                 Branch
-                <input name="branch" value={form.branch} onChange={handleChange} placeholder="Bank branch" />
+                <input name="branch" value={form.branch} onChange={handleChange} />
               </label>
 
               <label>
                 Delivery Time (days)
-                <input name="deliveryTime" value={form.deliveryTime} onChange={handleChange} placeholder="Lead time in days" />
+                <input name="deliveryTime" value={form.deliveryTime} onChange={handleChange} placeholder="Integer days" />
                 {fieldErrors.deliveryTime && <div className="sa-field-error">{fieldErrors.deliveryTime}</div>}
               </label>
 
               <label>
                 Minimum Order Qty
-                <input name="minOrderQty" value={form.minOrderQty} onChange={handleChange} placeholder="MOQ" />
+                <input name="minOrderQty" value={form.minOrderQty} onChange={handleChange} placeholder="Integer" />
                 {fieldErrors.minOrderQty && <div className="sa-field-error">{fieldErrors.minOrderQty}</div>}
               </label>
 
@@ -835,7 +904,7 @@ const VendorList = () => {
 
               <label>
                 Notes
-                <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Internal notes" rows={3} />
+                <textarea name="notes" value={form.notes} onChange={handleChange} rows={3} />
               </label>
 
               {error && <div className="sa-modal-error">{error}</div>}
