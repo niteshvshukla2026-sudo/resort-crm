@@ -13,14 +13,12 @@ const DEV_ITEMS = [
   { _id: "item_spice", name: "Spice Mix", uom: "Kg", itemCategory: "Pantry" },
 ];
 
-/* Dev fallback recipe categories */
 const DEV_RECIPE_CATS = [
   { _id: "rc_cat_1", name: "Lumpsum", code: "LUMP", type: "LUMPSUM" },
   { _id: "rc_cat_2", name: "By Portion", code: "PORT", type: "RECIPE_PORTION" },
   { _id: "rc_cat_3", name: "By Recipe Lumpsum", code: "R_LUMP", type: "RECIPE_LUMPSUM" },
 ];
 
-/* Dev fallback recipes (minimal fields) */
 const DEV_RECIPES = [
   {
     _id: "dev_rcp_1",
@@ -30,7 +28,7 @@ const DEV_RECIPES = [
     type: "LUMPSUM",
     yieldQty: 1,
     yieldUom: "Kg",
-    lines: [{ itemId: "item_rice", qty: 10, uom: "Kg", itemCategory: "Pantry" }],
+    lines: [{ itemId: "item_rice", qty: 10, itemCategory: "Pantry" }],
   },
   {
     _id: "dev_rcp_3",
@@ -41,20 +39,18 @@ const DEV_RECIPES = [
     yieldQty: 50,
     yieldUom: "Nos",
     lines: [
-      { itemId: "item_chicken", qty: 10, uom: "Kg", itemCategory: "Meat" },
-      { itemId: "item_spice", qty: 0.3, uom: "Kg", itemCategory: "Pantry" },
+      { itemId: "item_chicken", qty: 10, itemCategory: "Meat" },
+      { itemId: "item_spice", qty: 0.3, itemCategory: "Pantry" },
     ],
   },
 ];
-
-const UOM_OPTIONS = ["Kg", "Ltr", "Nos"];
 
 const emptyLine = () => ({
   id: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
   itemCategory: "",
   itemId: "",
   qty: "",
-  uom: "",
+  // no uom on line anymore
 });
 
 const RecipeMaster = () => {
@@ -65,17 +61,14 @@ const RecipeMaster = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // filters (minimal)
   const [categoryFilter, setCategoryFilter] = useState("");
   const [searchText, setSearchText] = useState("");
 
-  // modals & form
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null); // null => create
+  const [editing, setEditing] = useState(null);
   const [showView, setShowView] = useState(false);
   const [viewing, setViewing] = useState(null);
 
-  // form state (minimal fields only) - includes yieldQty & yieldUom
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
@@ -90,7 +83,6 @@ const RecipeMaster = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // load data (items, recipe categories, item categories)
   const loadData = async () => {
     try {
       setLoading(true);
@@ -99,33 +91,42 @@ const RecipeMaster = () => {
         axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
         axios.get(`${API_BASE}/api/recipe-categories`).catch(() => ({ data: DEV_RECIPE_CATS })),
-        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: null })), // optional endpoint
+        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: null })),
       ]);
 
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
       const serverItemsRaw = Array.isArray(itemRes.data) ? itemRes.data : DEV_ITEMS;
-      // NORMALIZE items so every item has .uom and .itemCategory
-      const serverItems = serverItemsRaw.map((it) => ({
-        _id: it._id || it.id,
-        id: it.id || it._id,
-        name: it.name || it.title || "",
-        uom: it.uom || it.measurement || it.unit || it.unitOfMeasure || "",
-        itemCategory: it.itemCategory || it.category || it.item_category || it.group || "",
-        ...it,
-      }));
+
+      // normalize items (robust uom mapping kept but not used per-line)
+      const serverItems = serverItemsRaw.map((it) => {
+        const uom =
+          it.uom ||
+          it.measurement ||
+          it.unit ||
+          it.unitOfMeasure ||
+          it.unit_of_measure ||
+          it.uomName ||
+          it.measurementUnit ||
+          "";
+        return {
+          _id: it._id || it.id,
+          id: it.id || it._id,
+          name: it.name || it.title || "",
+          uom,
+          itemCategory: it.itemCategory || it.category || it.item_category || it.group || "",
+          ...it,
+        };
+      });
 
       const serverCats = Array.isArray(catRes.data) ? catRes.data : DEV_RECIPE_CATS;
 
-      // determine item categories: prefer item-categories endpoint, else derive from items, else dev fallback
       let serverItemCats = [];
       if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
         serverItemCats = icatRes.data.map((c) => (typeof c === "string" ? c : c.name || c.code || c._id || c.id));
       } else {
-        // derive unique categories from items
-        serverItemCats = Array.from(new Set((serverItems || DEV_ITEMS).map((it) => (it.itemCategory || it.category || it.item_category || "Uncategorized"))));
+        serverItemCats = Array.from(new Set((serverItems || DEV_ITEMS).map((it) => it.itemCategory || "Uncategorized")));
       }
 
-      // normalize minimal recipe fields and ensure lines include itemCategory if possible
       const normalized = (Array.isArray(serverRecipes) ? serverRecipes : []).map((r) => ({
         _id: r._id || r.id,
         code: r.code || "",
@@ -146,7 +147,6 @@ const RecipeMaster = () => {
                 })(),
               itemId: ln.itemId || ln.item || "",
               qty: ln.qty ?? "",
-              uom: ln.uom || (serverItems.find((it) => it._id === ln.itemId || it.id === ln.itemId)?.uom || ""),
             }))
           : [],
       }));
@@ -176,10 +176,8 @@ const RecipeMaster = () => {
   const getItem = (id) => items.find((it) => it._id === id || it.id === id) || null;
   const getItemName = (id) => (getItem(id) ? getItem(id).name : id);
 
-  // derived
   const categoryOptions = useMemo(() => recipeCategories, [recipeCategories]);
 
-  // filtered recipes (minimal)
   const filteredRecipes = useMemo(() => {
     return recipes.filter((r) => {
       if (categoryFilter && (r.recipeCategoryId || "") !== categoryFilter) return false;
@@ -192,7 +190,6 @@ const RecipeMaster = () => {
     });
   }, [recipes, categoryFilter, searchText]);
 
-  // form helpers
   const updateFormField = (name, value) => setForm((p) => ({ ...p, [name]: value }));
   const updateLine = (idx, field, value) =>
     setForm((p) => {
@@ -204,69 +201,60 @@ const RecipeMaster = () => {
   const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }));
   const removeLine = (idx) => setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
 
-  // helper: items for a given category
   const itemsForCategory = (cat) =>
     items.filter((it) => (it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString());
 
-  // when itemCategory changes in a line, try to auto-select an item if only one item exists in that category
+  // when itemCategory changes: auto-select single item if only one exists in that category; do not set line UOM
   const onLineCategoryChange = (idx, catVal) => {
     updateLine(idx, "itemCategory", catVal);
     updateLine(idx, "itemId", "");
-    updateLine(idx, "uom", "");
+    updateLine(idx, "qty", "");
 
     if (!catVal) return;
 
-    // find items in this category
     const matches = itemsForCategory(catVal);
     if (matches.length === 1) {
-      // auto-select the only item and its uom
       const only = matches[0];
       updateLine(idx, "itemId", only._id || only.id);
-      updateLine(idx, "uom", only.uom || "");
-      // also ensure header yieldUom populates if empty
-      setForm((p) => ({ ...p, yieldUom: p.yieldUom || (only.uom || "") }));
+      // populate header yieldUom from item if header empty (convenience)
+      if (only.uom) setForm((p) => ({ ...p, yieldUom: p.yieldUom || only.uom }));
     }
   };
 
-  // when item selected, set uom from item (if available). Also, propagate to header yieldUom if header empty or auto-enable behaviour.
+  // when item selected: set itemCategory (if available) and optionally update header yieldUom
   const onLineItemChange = (idx, itemId) => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
 
-    // set itemCategory from selected item (keeps things consistent)
     if (it && it.itemCategory) updateLine(idx, "itemCategory", it.itemCategory);
 
-    // auto-fill uom if present on item
+    // header convenience only — we do NOT add uom to the ingredient line
     if (it && it.uom) {
-      updateLine(idx, "uom", it.uom);
-      // populate header yieldUom if empty
       setForm((p) => ({ ...p, yieldUom: p.yieldUom || it.uom }));
-    } else {
-      updateLine(idx, "uom", "");
     }
   };
 
-  // ensure header yieldUom picks up consistent uom across lines (runs when lines change)
   useEffect(() => {
-    const nonEmptyUoms = form.lines.map((l) => l.uom).filter(Boolean);
-    if (nonEmptyUoms.length === 0) return;
-    const allSame = nonEmptyUoms.every((u) => u === nonEmptyUoms[0]);
+    // keep simple: if all lines have same detected item.uom (rare), set header if empty
+    const detected = form.lines
+      .map((ln) => {
+        const it = getItem(ln.itemId);
+        return it?.uom || "";
+      })
+      .filter(Boolean);
+    if (detected.length === 0) return;
+    const allSame = detected.every((d) => d === detected[0]);
     if (allSame) {
-      // if header empty, set to that UOM; or if header equals different value, do not override
-      setForm((p) => ({ ...p, yieldUom: p.yieldUom || nonEmptyUoms[0] }));
-    } else {
-      // if mixed, prefer first value only if header empty
-      setForm((p) => ({ ...p, yieldUom: p.yieldUom || nonEmptyUoms[0] }));
+      setForm((p) => ({ ...p, yieldUom: p.yieldUom || detected[0] }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.lines.map((l) => `${l.itemId}|${l.uom}|${l.qty}`).join("||")]);
+  }, [form.lines.map((l) => l.itemId).join("||")]);
 
   const handleRecipeCategoryChange = (catId) => {
     const cat = getCategoryById(catId);
     setForm((p) => ({ ...p, recipeCategoryId: catId, type: cat ? (cat.type || p.type) : p.type }));
   };
 
-  // open create / edit / view
   const openCreate = () => {
     setEditing(null);
     setForm(initialForm());
@@ -289,7 +277,6 @@ const RecipeMaster = () => {
             itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || ln.item || "",
             qty: ln.qty ?? "",
-            uom: ln.uom || getItem(ln.itemId)?.uom || "",
           }))) ||
         [emptyLine()],
     });
@@ -317,7 +304,6 @@ const RecipeMaster = () => {
             itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || "",
             qty: ln.qty ?? "",
-            uom: ln.uom || getItem(ln.itemId)?.uom || "",
           }))) ||
         [emptyLine()],
     });
@@ -325,7 +311,6 @@ const RecipeMaster = () => {
     setShowForm(true);
   };
 
-  // validation (minimal)
   const validateForm = () => {
     if (!form.code || !form.code.trim()) return "Recipe code required";
     if (!form.name || !form.name.trim()) return "Recipe name required";
@@ -335,15 +320,13 @@ const RecipeMaster = () => {
       if (!ln.itemCategory) return "Each ingredient must have an item category";
       if (!ln.itemId) return "Each ingredient must have an item";
       if (!ln.qty || Number(ln.qty) <= 0) return "Each ingredient must have quantity > 0";
-      if (!ln.uom) return "Each ingredient must have a UOM (Kg/Ltr/Nos)";
-      if (!UOM_OPTIONS.includes(ln.uom)) return "UOM must be one of Kg, Ltr or Nos";
+      // no per-line UOM validation (user asked to remove UOM from ingredient)
     }
     if (form.yieldQty && Number(form.yieldQty) <= 0) return "Yield Qty must be > 0";
     if (form.yieldQty && !form.yieldUom) return "Provide Yield UOM when Yield Qty is set";
     return null;
   };
 
-  // save (minimal payload)
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
@@ -357,7 +340,8 @@ const RecipeMaster = () => {
       type: form.type,
       yieldQty: form.yieldQty ? Number(form.yieldQty) : undefined,
       yieldUom: form.yieldUom || undefined,
-      lines: (form.lines || []).map((ln) => ({ itemId: ln.itemId, qty: Number(ln.qty), uom: ln.uom, itemCategory: ln.itemCategory })),
+      // lines do NOT include uom now
+      lines: (form.lines || []).map((ln) => ({ itemId: ln.itemId, qty: Number(ln.qty), itemCategory: ln.itemCategory })),
     };
 
     try {
@@ -412,7 +396,6 @@ const RecipeMaster = () => {
         </div>
       </div>
 
-      {/* FILTERS */}
       <div className="sa-card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <label>
           Recipe Category
@@ -438,7 +421,6 @@ const RecipeMaster = () => {
 
       {error && <div className="sa-modal-error">{error}</div>}
 
-      {/* LIST */}
       <div className="sa-card">
         {loading ? (
           <div>Loading recipes...</div>
@@ -484,7 +466,6 @@ const RecipeMaster = () => {
         )}
       </div>
 
-      {/* CREATE / EDIT MODAL */}
       {showForm && (
         <div className="sa-modal-backdrop" onClick={() => !saving && (setShowForm(false), setEditing(null))}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
@@ -534,14 +515,7 @@ const RecipeMaster = () => {
 
                 <label>
                   Yield UOM
-                  <select value={form.yieldUom || ""} onChange={(e) => updateFormField("yieldUom", e.target.value)}>
-                    <option value="">-- Select --</option>
-                    {UOM_OPTIONS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+                  <input value={form.yieldUom || ""} onChange={(e) => updateFormField("yieldUom", e.target.value)} placeholder="e.g. Kg / Ltr / Nos" />
                 </label>
               </div>
 
@@ -550,10 +524,9 @@ const RecipeMaster = () => {
                 <table className="sa-table">
                   <thead>
                     <tr>
-                      <th style={{ width: "25%" }}>Item Category</th>
-                      <th style={{ width: "30%" }}>Item</th>
+                      <th style={{ width: "35%" }}>Item Category</th>
+                      <th style={{ width: "45%" }}>Item</th>
                       <th style={{ width: "20%" }}>Qty</th>
-                      <th style={{ width: "15%" }}>UOM</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -572,11 +545,7 @@ const RecipeMaster = () => {
                         </td>
 
                         <td>
-                          <select
-                            value={ln.itemId || ""}
-                            onChange={(e) => onLineItemChange(idx, e.target.value)}
-                            required
-                          >
+                          <select value={ln.itemId || ""} onChange={(e) => onLineItemChange(idx, e.target.value)} required>
                             <option value="">-- Select item --</option>
                             {itemsForCategory(ln.itemCategory).map((it) => (
                               <option key={it._id || it.id} value={it._id || it.id}>
@@ -597,17 +566,6 @@ const RecipeMaster = () => {
                             placeholder="Qty"
                             style={{ width: "100%" }}
                           />
-                        </td>
-
-                        <td>
-                          <select value={ln.uom || ""} onChange={(e) => updateLine(idx, "uom", e.target.value)} required>
-                            <option value="">-- Select --</option>
-                            {UOM_OPTIONS.map((u) => (
-                              <option key={u} value={u}>
-                                {u}
-                              </option>
-                            ))}
-                          </select>
                         </td>
 
                         <td>{form.lines.length > 1 && <button type="button" onClick={() => removeLine(idx)}>Remove</button>}</td>
@@ -636,20 +594,13 @@ const RecipeMaster = () => {
         </div>
       )}
 
-      {/* VIEW MODAL */}
       {showView && viewing && (
         <div className="sa-modal-backdrop" onClick={() => setShowView(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {viewing.code} — {viewing.name}
-            </h3>
-            <p className="sa-modal-sub">
-              Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"} — Type: {viewing.type}
-            </p>
+            <h3>{viewing.code} — {viewing.name}</h3>
+            <p className="sa-modal-sub">Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"} — Type: {viewing.type}</p>
 
-            <p>
-              Yield: {viewing.yieldQty ?? viewing.yield_qty ?? "-"} {viewing.yieldUom ?? viewing.yield_uom ?? ""}
-            </p>
+            <p>Yield: {viewing.yieldQty ?? viewing.yield_qty ?? "-"} {viewing.yieldUom ?? viewing.yield_uom ?? ""}</p>
 
             <h4 style={{ marginTop: 8 }}>Ingredients</h4>
             <table className="sa-table">
@@ -658,7 +609,6 @@ const RecipeMaster = () => {
                   <th>Item</th>
                   <th>Category</th>
                   <th>Qty</th>
-                  <th>UOM</th>
                 </tr>
               </thead>
               <tbody>
@@ -667,26 +617,14 @@ const RecipeMaster = () => {
                     <td>{getItemName(ln.itemId)}</td>
                     <td>{ln.itemCategory || getItem(ln.itemId)?.itemCategory || "-"}</td>
                     <td>{ln.qty}</td>
-                    <td>{ln.uom}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
             <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-              <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>
-                Close
-              </button>
-              <button
-                type="button"
-                className="sa-primary-button"
-                onClick={() => {
-                  setShowView(false);
-                  openEdit(viewing);
-                }}
-              >
-                Edit
-              </button>
+              <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>Close</button>
+              <button type="button" className="sa-primary-button" onClick={() => { setShowView(false); openEdit(viewing); }}>Edit</button>
             </div>
           </div>
         </div>
