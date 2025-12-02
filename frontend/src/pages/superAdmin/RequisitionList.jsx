@@ -200,8 +200,7 @@ const RequisitionList = () => {
     return v ? v.name : vendorRef;
   };
 
-  // --------- FORM helpers (create/edit/duplicate) ----------
-
+  // -------- base empty form used on create ----------
   const baseEmptyForm = {
     type: "INTERNAL",
     resort: "",
@@ -214,19 +213,11 @@ const RequisitionList = () => {
     lines: [line()],
   };
 
+  // --------- FORM helpers (create/edit/duplicate) ----------
+
   const openCreateForm = () => {
     setEditingId(null);
     setForm(baseEmptyForm);
-    setError("");
-    setShowForm(true);
-  };
-
-  const openCreateVendorForm = () => {
-    setEditingId(null);
-    setForm({
-      ...baseEmptyForm,
-      type: "VENDOR",
-    });
     setError("");
     setShowForm(true);
   };
@@ -756,15 +747,7 @@ const RequisitionList = () => {
             type="button"
             onClick={openCreateForm}
           >
-            <i className="ri-add-line"></i> New Internal Requisition
-          </button>
-
-          <button
-            className="sa-secondary-button"
-            type="button"
-            onClick={openCreateVendorForm}
-          >
-            <i className="ri-add-line"></i> New Vendor Requisition
+            <i className="ri-add-line"></i> New Requisition
           </button>
 
           <button
@@ -1334,9 +1317,7 @@ const RequisitionList = () => {
         >
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Create Purchase Order</h3>
-            <p className="sa-modal-sub">
-              Create PO from this requisition.
-            </p>
+            <p className="sa-modal-sub">Create PO from this requisition.</p>
 
             <div className="sa-modal-form">
               <label>
