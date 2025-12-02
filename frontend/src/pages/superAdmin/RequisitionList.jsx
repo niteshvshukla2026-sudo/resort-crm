@@ -13,15 +13,15 @@ const line = () => ({
   remark: "",
 });
 
-// --- SAMPLE DATA (5 sample requisitions) ---
+// --- SAMPLE REQUISITIONS ---
 const DEV_SAMPLES = [
   {
     _id: "sample_req_1",
     requisitionNo: "REQ-2025-001",
     type: "INTERNAL",
-    resort: "Resort A",
-    department: "Dept F&B",
-    store: "Store Cold",
+    resort: "dev_resort_a",
+    fromStore: "dev_store_main",
+    toStore: "dev_store_cold",
     vendor: null,
     status: "PENDING",
     date: new Date().toISOString(),
@@ -30,84 +30,54 @@ const DEV_SAMPLES = [
     _id: "sample_req_2",
     requisitionNo: "REQ-2025-002",
     type: "VENDOR",
-    resort: "Resort A",
+    resort: "dev_resort_a",
     department: null,
-    store: "Store Main",
+    store: "dev_store_main",
     vendor: "FreshFoods Pvt Ltd",
-    status: "PENDING",
-    date: new Date().toISOString(),
-  },
-  {
-    _id: "sample_req_3",
-    requisitionNo: "REQ-2025-003",
-    type: "INTERNAL",
-    resort: "Resort B",
-    department: "Housekeeping",
-    store: "Store Linen",
-    vendor: null,
-    status: "APPROVED",
-    date: new Date().toISOString(),
-  },
-  {
-    _id: "sample_req_4",
-    requisitionNo: "REQ-2025-004",
-    type: "INTERNAL",
-    resort: "Resort B",
-    department: "Maintenance",
-    store: "Store Tools",
-    vendor: null,
-    status: "PENDING",
-    date: new Date().toISOString(),
-  },
-  {
-    _id: "sample_req_5",
-    requisitionNo: "REQ-2025-005",
-    type: "VENDOR",
-    resort: "Resort A",
-    department: null,
-    store: "Store Main",
-    vendor: "Global Supplies",
     status: "PENDING",
     date: new Date().toISOString(),
   },
 ];
 
-// --- DEV ITEMS (built from stores so stockByStore keys match store IDs) ---
-const buildDevItems = (stores) => {
-  if (!Array.isArray(stores) || stores.length === 0) return [];
+// --- DEV RESORTS / STORES / ITEMS (for demo if API empty) ---
+const DEV_RESORTS = [
+  { _id: "dev_resort_a", name: "Demo Resort A" },
+  { _id: "dev_resort_b", name: "Demo Resort B" },
+];
 
-  const ids = stores.map((s) => s._id || s.id || s.name);
-  const s1 = ids[0];
-  const s2 = ids[1] || ids[0];
-  const s3 = ids[2] || ids[0];
+const DEV_STORES = [
+  { _id: "dev_store_main", name: "Main Store", resort: "dev_resort_a" },
+  { _id: "dev_store_cold", name: "Cold Store", resort: "dev_resort_a" },
+  { _id: "dev_store_hk", name: "HK Store", resort: "dev_resort_b" },
+];
 
-  return [
-    {
-      _id: "dev_item_1",
-      name: "Rice 5kg Bag",
-      stockByStore: {
-        [s1]: 40,
-        [s2]: 15,
-      },
+const DEV_ITEMS = [
+  {
+    _id: "dev_item_1",
+    name: "Wheat Flour 25kg",
+    stockByStore: {
+      dev_store_main: 120,
+      dev_store_cold: 40,
+      dev_store_hk: 10,
     },
-    {
-      _id: "dev_item_2",
-      name: "Sunflower Oil 1L",
-      stockByStore: {
-        [s1]: 25,
-        [s3]: 8,
-      },
+  },
+  {
+    _id: "dev_item_2",
+    name: "Sunflower Oil 5L",
+    stockByStore: {
+      dev_store_main: 80,
+      dev_store_cold: 5,
     },
-    {
-      _id: "dev_item_3",
-      name: "Toilet Paper Roll",
-      stockByStore: {
-        [s2]: 60,
-        [s3]: 30,
-      },
+  },
+  {
+    _id: "dev_item_3",
+    name: "Room Linen Set",
+    stockByStore: {
+      dev_store_hk: 200,
+      dev_store_main: 20,
     },
-  ];
-};
+  },
+];
 
 const RequisitionList = () => {
   const [requisitions, setRequisitions] = useState([]);
@@ -180,30 +150,68 @@ const RequisitionList = () => {
           axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: [] })),
         ]);
 
+      // requisitions + samples
       const serverReqs = Array.isArray(reqRes.data) ? reqRes.data : [];
-      const existingIds = new Set(serverReqs.map((r) => r._id));
-      const samplesToAdd = DEV_SAMPLES.filter((s) => !existingIds.has(s._id));
+      const existingReqIds = new Set(serverReqs.map((r) => r._id));
+      const samplesToAdd = DEV_SAMPLES.filter(
+        (s) => !existingReqIds.has(s._id)
+      );
       setRequisitions([...serverReqs, ...samplesToAdd]);
 
-      const resortData = Array.isArray(resortRes.data) ? resortRes.data : [];
-      const deptData = Array.isArray(deptRes.data) ? deptRes.data : [];
-      const storeData = Array.isArray(storeRes.data) ? storeRes.data : [];
-      const itemData = Array.isArray(itemRes.data) ? itemRes.data : [];
-      const vendorData = Array.isArray(vendorRes.data) ? vendorRes.data : [];
+      // resorts
+      const serverResorts = Array.isArray(resortRes.data)
+        ? resortRes.data
+        : [];
+      const resortIds = new Set(
+        serverResorts.map((r) => r._id || r.id || r.name)
+      );
+      const resortsMerged = [
+        ...serverResorts,
+        ...DEV_RESORTS.filter(
+          (d) => !resortIds.has(d._id) && !resortIds.has(d.name)
+        ),
+      ];
+      setResorts(resortsMerged);
 
-      setResorts(resortData);
-      setDepartments(deptData);
-      setStores(storeData);
-      setVendors(vendorData);
+      // departments (no dummy for now)
+      setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
 
-      // merge dev items with server items (avoid duplicate ids)
-      const devItems = buildDevItems(storeData);
-      const itemIds = new Set(itemData.map((i) => i._id || i.id));
-      const devToAdd = devItems.filter((d) => !itemIds.has(d._id));
-      setItems([...itemData, ...devToAdd]);
+      // stores + dev stores
+      const serverStores = Array.isArray(storeRes.data) ? storeRes.data : [];
+      const storeIds = new Set(
+        serverStores.map((s) => s._id || s.id || s.code || s.name)
+      );
+      const storesMerged = [
+        ...serverStores,
+        ...DEV_STORES.filter(
+          (d) => !storeIds.has(d._id) && !storeIds.has(d.name)
+        ),
+      ];
+      setStores(storesMerged);
+
+      // items + dev items
+      const serverItems = Array.isArray(itemRes.data) ? itemRes.data : [];
+      const itemIds = new Set(
+        serverItems.map((it) => it._id || it.id || it.code || it.name)
+      );
+      const itemsMerged = [
+        ...serverItems,
+        ...DEV_ITEMS.filter(
+          (d) => !itemIds.has(d._id) && !itemIds.has(d.name)
+        ),
+      ];
+      setItems(itemsMerged);
+
+      // vendors (no dummy abhi)
+      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
     } catch (err) {
       console.error("load error", err);
       setError(err.response?.data?.message || "Failed to load requisitions");
+      // FULL fallback if everything fails
+      setResorts(DEV_RESORTS);
+      setStores(DEV_STORES);
+      setItems(DEV_ITEMS);
+      setRequisitions(DEV_SAMPLES);
     } finally {
       setLoading(false);
     }
@@ -226,24 +234,21 @@ const RequisitionList = () => {
   const getDepartmentName = (deptRef) => {
     if (!deptRef) return "-";
     const d = departments.find(
-      (x) =>
-        x._id === deptRef || x.id === deptRef || x.name === deptRef
+      (x) => x._id === deptRef || x.id === deptRef || x.name === deptRef
     );
     return d ? d.name : deptRef;
   };
   const getStoreName = (storeRef) => {
     if (!storeRef) return "-";
     const s = stores.find(
-      (x) =>
-        x._id === storeRef || x.id === storeRef || x.name === storeRef
+      (x) => x._id === storeRef || x.id === storeRef || x.name === storeRef
     );
     return s ? s.name : storeRef;
   };
   const getVendorName = (vendorRef) => {
     if (!vendorRef) return "-";
     const v = vendors.find(
-      (x) =>
-        x._id === vendorRef || x.id === vendorRef || x.name === vendorRef
+      (x) => x._id === vendorRef || x.id === vendorRef || x.name === vendorRef
     );
     return v ? v.name : vendorRef;
   };
@@ -436,9 +441,7 @@ const RequisitionList = () => {
       setEditingId(null);
     } catch (err) {
       console.error("save requisition error", err);
-      setError(
-        err.response?.data?.message || "Failed to save requisition"
-      );
+      setError(err.response?.data?.message || "Failed to save requisition");
     } finally {
       setSaving(false);
     }
@@ -457,9 +460,7 @@ const RequisitionList = () => {
         });
     } catch (err) {
       console.error("delete error", err);
-      setError(
-        err.response?.data?.message || "Failed to delete requisition"
-      );
+      setError(err.response?.data?.message || "Failed to delete requisition");
       loadData();
     }
   };
@@ -485,9 +486,7 @@ const RequisitionList = () => {
         );
     } catch (err) {
       console.error("approve error", err);
-      setError(
-        err.response?.data?.message || "Failed to approve requisition"
-      );
+      setError(err.response?.data?.message || "Failed to approve requisition");
     }
   };
 
@@ -539,9 +538,7 @@ const RequisitionList = () => {
         );
     } catch (err) {
       console.error("reject error", err);
-      setError(
-        err.response?.data?.message || "Failed to reject requisition"
-      );
+      setError(err.response?.data?.message || "Failed to reject requisition");
     }
   };
 
@@ -682,6 +679,60 @@ const RequisitionList = () => {
   // View requisition
   const handleView = (req) => {
     navigate(`/super-admin/requisition/${req._id}`);
+  };
+
+  // ------ CURRENT STOCK RENDER HELPER (with tooltip) --------
+  const renderCurrentStock = (ln) => {
+    const it = items.find((x) => x._id === ln.item || x.id === ln.item);
+    if (!it) return "-";
+
+    const stockMap = it.stockByStore || {};
+
+    // figure out resort based on selected store
+    let resortId = null;
+    if (form.type === "INTERNAL" && form.fromStore) {
+      const fromStoreObj = stores.find(
+        (s) => (s._id || s.id) === form.fromStore
+      );
+      resortId = fromStoreObj?.resort || null;
+    } else if (form.type === "VENDOR" && form.store) {
+      const storeObj = stores.find((s) => (s._id || s.id) === form.store);
+      resortId = storeObj?.resort || null;
+    }
+
+    let storeIdsToUse;
+    if (resortId) {
+      storeIdsToUse = stores
+        .filter((s) => s.resort === resortId)
+        .map((s) => s._id || s.id);
+    } else {
+      storeIdsToUse = Object.keys(stockMap);
+    }
+
+    if (!storeIdsToUse || storeIdsToUse.length === 0) {
+      storeIdsToUse = Object.keys(stockMap);
+    }
+
+    const rows = storeIdsToUse.map((id) => {
+      const storeObj = stores.find((s) => (s._id || s.id) === id);
+      const name = storeObj?.name || id;
+      const qtyRaw = stockMap[id];
+      const qty = qtyRaw == null ? 0 : Number(qtyRaw);
+      return { name, qty: isNaN(qty) ? 0 : qty };
+    });
+
+    const total = rows.reduce((sum, r) => sum + r.qty, 0);
+    if (!rows.length) return "-";
+
+    const tooltip = rows
+      .map((r) => `${r.name}: ${r.qty}`)
+      .join("\n");
+
+    return (
+      <span title={tooltip} style={{ cursor: "help" }}>
+        {total}
+      </span>
+    );
   };
 
   // FILTERING LOGIC (client-side)
@@ -1254,76 +1305,7 @@ const RequisitionList = () => {
                         </td>
 
                         <td style={{ textAlign: "center" }}>
-                          {(() => {
-                            const it = items.find(
-                              (x) => x._id === ln.item || x.id === ln.item
-                            );
-                            if (!it) return "-";
-
-                            const stockMap = it.stockByStore || {};
-
-                            // INTERNAL: show total across all stores of that resort
-                            if (form.type === "INTERNAL") {
-                              const fromStoreObj = stores.find(
-                                (s) =>
-                                  (s._id || s.id) === form.fromStore
-                              );
-                              const resortId = fromStoreObj?.resort;
-                              if (!resortId) {
-                                const anyStock =
-                                  Object.values(stockMap)[0];
-                                return anyStock ?? "-";
-                              }
-
-                              const resortStores = stores.filter(
-                                (s) => s.resort === resortId
-                              );
-                              if (!resortStores.length) {
-                                const anyStock =
-                                  Object.values(stockMap)[0];
-                                return anyStock ?? "-";
-                              }
-
-                              let total = 0;
-                              const lines = [];
-
-                              resortStores.forEach((s) => {
-                                const sid = s._id || s.id;
-                                const qty = Number(
-                                  stockMap[sid] ?? 0
-                                );
-                                total += qty;
-                                lines.push(`${s.name}: ${qty}`);
-                              });
-
-                              const storesWithStock = lines.filter(
-                                (l) => !l.endsWith(": 0")
-                              ).length;
-
-                              const tooltip = [
-                                `${storesWithStock} store(s)`,
-                                ...lines,
-                              ].join("\n");
-
-                              return (
-                                <span
-                                  title={tooltip}
-                                  style={{ cursor: "help" }}
-                                >
-                                  {total}
-                                </span>
-                              );
-                            }
-
-                            // VENDOR: current store stock only
-                            const sourceStoreId = form.store;
-                            if (sourceStoreId)
-                              return stockMap[sourceStoreId] ?? "-";
-
-                            const anyStock =
-                              Object.values(stockMap)[0];
-                            return anyStock ?? "-";
-                          })()}
+                          {renderCurrentStock(ln)}
                         </td>
 
                         <td>
