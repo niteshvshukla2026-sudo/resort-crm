@@ -1208,21 +1208,73 @@ const RequisitionList = () => {
                         <td style={{ textAlign: "center" }}>
                           {(() => {
                             const it = items.find(
-                              (x) =>
-                                x._id === ln.item || x.id === ln.item
+                              (x) => x._id === ln.item || x.id === ln.item
                             );
                             if (!it) return "-";
 
                             const stockMap = it.stockByStore || {};
-                            const sourceStoreId =
-                              form.type === "INTERNAL"
-                                ? form.fromStore
-                                : form.store;
 
+                            // INTERNAL: show total across all stores of that resort
+                            if (form.type === "INTERNAL") {
+                              // find resort from fromStore
+                              const fromStoreObj = stores.find(
+                                (s) =>
+                                  (s._id || s.id) === form.fromStore
+                              );
+                              const resortId = fromStoreObj?.resort;
+                              if (!resortId) {
+                                const anyStock =
+                                  Object.values(stockMap)[0];
+                                return anyStock ?? "-";
+                              }
+
+                              const resortStores = stores.filter(
+                                (s) => s.resort === resortId
+                              );
+                              if (!resortStores.length) {
+                                const anyStock =
+                                  Object.values(stockMap)[0];
+                                return anyStock ?? "-";
+                              }
+
+                              let total = 0;
+                              const lines = [];
+
+                              resortStores.forEach((s) => {
+                                const sid = s._id || s.id;
+                                const qty = Number(
+                                  stockMap[sid] ?? 0
+                                );
+                                total += qty;
+                                lines.push(`${s.name}: ${qty}`);
+                              });
+
+                              const storesWithStock = lines.filter(
+                                (l) => !l.endsWith(": 0")
+                              ).length;
+
+                              const tooltip = [
+                                `${storesWithStock} store(s)`,
+                                ...lines,
+                              ].join("\n");
+
+                              return (
+                                <span
+                                  title={tooltip}
+                                  style={{ cursor: "help" }}
+                                >
+                                  {total}
+                                </span>
+                              );
+                            }
+
+                            // VENDOR: keep old behavior - current store stock
+                            const sourceStoreId = form.store;
                             if (sourceStoreId)
                               return stockMap[sourceStoreId] ?? "-";
 
-                            const anyStock = Object.values(stockMap)[0];
+                            const anyStock =
+                              Object.values(stockMap)[0];
                             return anyStock ?? "-";
                           })()}
                         </td>
@@ -1418,7 +1470,10 @@ const RequisitionList = () => {
                 <input
                   value={grnModal.receivedBy}
                   onChange={(e) =>
-                    setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))
+                    setGrnModal((p) => ({
+                      ...p,
+                      receivedBy: e.target.value,
+                    }))
                   }
                 />
               </label>
