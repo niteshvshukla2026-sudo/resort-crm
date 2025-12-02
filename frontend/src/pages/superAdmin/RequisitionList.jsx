@@ -72,6 +72,43 @@ const DEV_SAMPLES = [
   },
 ];
 
+// --- DEV ITEMS (built from stores so stockByStore keys match store IDs) ---
+const buildDevItems = (stores) => {
+  if (!Array.isArray(stores) || stores.length === 0) return [];
+
+  const ids = stores.map((s) => s._id || s.id || s.name);
+  const s1 = ids[0];
+  const s2 = ids[1] || ids[0];
+  const s3 = ids[2] || ids[0];
+
+  return [
+    {
+      _id: "dev_item_1",
+      name: "Rice 5kg Bag",
+      stockByStore: {
+        [s1]: 40,
+        [s2]: 15,
+      },
+    },
+    {
+      _id: "dev_item_2",
+      name: "Sunflower Oil 1L",
+      stockByStore: {
+        [s1]: 25,
+        [s3]: 8,
+      },
+    },
+    {
+      _id: "dev_item_3",
+      name: "Toilet Paper Roll",
+      stockByStore: {
+        [s2]: 60,
+        [s3]: 30,
+      },
+    },
+  ];
+};
+
 const RequisitionList = () => {
   const [requisitions, setRequisitions] = useState([]);
   const [resorts, setResorts] = useState([]);
@@ -148,11 +185,22 @@ const RequisitionList = () => {
       const samplesToAdd = DEV_SAMPLES.filter((s) => !existingIds.has(s._id));
       setRequisitions([...serverReqs, ...samplesToAdd]);
 
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
-      setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
-      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
+      const resortData = Array.isArray(resortRes.data) ? resortRes.data : [];
+      const deptData = Array.isArray(deptRes.data) ? deptRes.data : [];
+      const storeData = Array.isArray(storeRes.data) ? storeRes.data : [];
+      const itemData = Array.isArray(itemRes.data) ? itemRes.data : [];
+      const vendorData = Array.isArray(vendorRes.data) ? vendorRes.data : [];
+
+      setResorts(resortData);
+      setDepartments(deptData);
+      setStores(storeData);
+      setVendors(vendorData);
+
+      // merge dev items with server items (avoid duplicate ids)
+      const devItems = buildDevItems(storeData);
+      const itemIds = new Set(itemData.map((i) => i._id || i.id));
+      const devToAdd = devItems.filter((d) => !itemIds.has(d._id));
+      setItems([...itemData, ...devToAdd]);
     } catch (err) {
       console.error("load error", err);
       setError(err.response?.data?.message || "Failed to load requisitions");
@@ -1216,7 +1264,6 @@ const RequisitionList = () => {
 
                             // INTERNAL: show total across all stores of that resort
                             if (form.type === "INTERNAL") {
-                              // find resort from fromStore
                               const fromStoreObj = stores.find(
                                 (s) =>
                                   (s._id || s.id) === form.fromStore
@@ -1268,7 +1315,7 @@ const RequisitionList = () => {
                               );
                             }
 
-                            // VENDOR: keep old behavior - current store stock
+                            // VENDOR: current store stock only
                             const sourceStoreId = form.store;
                             if (sourceStoreId)
                               return stockMap[sourceStoreId] ?? "-";
@@ -1470,10 +1517,7 @@ const RequisitionList = () => {
                 <input
                   value={grnModal.receivedBy}
                   onChange={(e) =>
-                    setGrnModal((p) => ({
-                      ...p,
-                      receivedBy: e.target.value,
-                    }))
+                    setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))
                   }
                 />
               </label>
