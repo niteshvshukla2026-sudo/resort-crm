@@ -3,79 +3,42 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
 
-// row template
-const line = () => ({
+// helper to create a new line
+const newLine = () => ({
   lineId: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
   item: "",
   qty: 1,
   remark: "",
 });
 
-// --- SAMPLE REQUISITIONS ---
+// Dev fallback data (kept small)
 const DEV_SAMPLES = [
   {
     _id: "sample_req_1",
     requisitionNo: "REQ-2025-001",
     type: "INTERNAL",
-    resort: "dev_resort_a",
-    fromStore: "dev_store_main",
-    toStore: "dev_store_cold",
+    resort: "Demo Resort A",
+    fromStore: "Main Store",
+    toStore: "Cold Store",
     vendor: null,
     status: "PENDING",
     date: new Date().toISOString(),
+    lines: [],
   },
   {
     _id: "sample_req_2",
     requisitionNo: "REQ-2025-002",
     type: "VENDOR",
-    resort: "dev_resort_a",
+    resort: "Demo Resort A",
     department: null,
-    store: "dev_store_main",
+    store: "Main Store",
     vendor: "FreshFoods Pvt Ltd",
     status: "PENDING",
     date: new Date().toISOString(),
-  },
-];
-
-// --- DEV RESORTS / STORES / ITEMS (for demo if API empty) ---
-const DEV_RESORTS = [
-  { _id: "dev_resort_a", name: "Demo Resort A" },
-  { _id: "dev_resort_b", name: "Demo Resort B" },
-];
-
-const DEV_STORES = [
-  { _id: "dev_store_main", name: "Main Store", resort: "dev_resort_a" },
-  { _id: "dev_store_cold", name: "Cold Store", resort: "dev_resort_a" },
-  { _id: "dev_store_hk", name: "HK Store", resort: "dev_resort_b" },
-];
-
-const DEV_ITEMS = [
-  {
-    _id: "dev_item_1",
-    name: "Wheat Flour 25kg",
-    stockByStore: {
-      dev_store_main: 120,
-      dev_store_cold: 40,
-      dev_store_hk: 10,
-    },
-  },
-  {
-    _id: "dev_item_2",
-    name: "Sunflower Oil 5L",
-    stockByStore: {
-      dev_store_main: 80,
-      dev_store_cold: 5,
-    },
-  },
-  {
-    _id: "dev_item_3",
-    name: "Room Linen Set",
-    stockByStore: {
-      dev_store_hk: 200,
-      dev_store_main: 20,
-    },
+    lines: [],
   },
 ];
 
@@ -91,9 +54,9 @@ const RequisitionList = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // modal/form states
+  // form/modal state
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null); // edit existing req id or null for create
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
     type: "INTERNAL",
     resort: "",
@@ -103,10 +66,10 @@ const RequisitionList = () => {
     store: "",
     vendor: "",
     requiredBy: "",
-    lines: [line()],
+    lines: [newLine()],
   });
 
-  // PO modal
+  // PO modal state
   const [poModal, setPoModal] = useState({
     open: false,
     req: null,
@@ -115,7 +78,7 @@ const RequisitionList = () => {
     notes: "",
   });
 
-  // GRN modal
+  // GRN modal state
   const [grnModal, setGrnModal] = useState({
     open: false,
     req: null,
@@ -125,92 +88,58 @@ const RequisitionList = () => {
     notes: "",
   });
 
-  // FILTER STATES
+  // filters
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [resortFilter, setResortFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [actionFilter, setActionFilter] = useState("ALL"); // NeedsPO, NeedsGRN, HasPO, HasGRN
+  const [actionFilter, setActionFilter] = useState("ALL");
   const [searchText, setSearchText] = useState("");
 
   const navigate = useNavigate();
 
-  // Load table and master data
+  // If you need auth, set default header:
+  // axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+  // load data
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reqRes, resortRes, deptRes, storeRes, itemRes, vendorRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/api/requisitions`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/api/resorts`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/api/departments`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: [] })),
-        ]);
+      const [
+        reqRes,
+        resortRes,
+        deptRes,
+        storeRes,
+        itemRes,
+        vendorRes,
+      ] = await Promise.all([
+        axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
+      ]);
 
-      // requisitions + samples
       const serverReqs = Array.isArray(reqRes.data) ? reqRes.data : [];
       const existingReqIds = new Set(serverReqs.map((r) => r._id));
-      const samplesToAdd = DEV_SAMPLES.filter(
-        (s) => !existingReqIds.has(s._id)
-      );
+      const samplesToAdd = DEV_SAMPLES.filter((s) => !existingReqIds.has(s._id));
       setRequisitions([...serverReqs, ...samplesToAdd]);
 
-      // resorts
-      const serverResorts = Array.isArray(resortRes.data)
-        ? resortRes.data
-        : [];
-      const resortIds = new Set(
-        serverResorts.map((r) => r._id || r.id || r.name)
-      );
-      const resortsMerged = [
-        ...serverResorts,
-        ...DEV_RESORTS.filter(
-          (d) => !resortIds.has(d._id) && !resortIds.has(d.name)
-        ),
-      ];
-      setResorts(resortsMerged);
-
-      // departments (no dummy for now)
+      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
       setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
-
-      // stores + dev stores
-      const serverStores = Array.isArray(storeRes.data) ? storeRes.data : [];
-      const storeIds = new Set(
-        serverStores.map((s) => s._id || s.id || s.code || s.name)
-      );
-      const storesMerged = [
-        ...serverStores,
-        ...DEV_STORES.filter(
-          (d) => !storeIds.has(d._id) && !storeIds.has(d.name)
-        ),
-      ];
-      setStores(storesMerged);
-
-      // items + dev items
-      const serverItems = Array.isArray(itemRes.data) ? itemRes.data : [];
-      const itemIds = new Set(
-        serverItems.map((it) => it._id || it.id || it.code || it.name)
-      );
-      const itemsMerged = [
-        ...serverItems,
-        ...DEV_ITEMS.filter(
-          (d) => !itemIds.has(d._id) && !itemIds.has(d.name)
-        ),
-      ];
-      setItems(itemsMerged);
-
-      // vendors (no dummy abhi)
+      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
+      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
       setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
     } catch (err) {
       console.error("load error", err);
-      setError(err.response?.data?.message || "Failed to load requisitions");
-      // FULL fallback if everything fails
-      setResorts(DEV_RESORTS);
-      setStores(DEV_STORES);
-      setItems(DEV_ITEMS);
+      setError("Failed to load requisitions. Using demo data.");
+      setResorts([]);
+      setDepartments([]);
+      setStores([]);
+      setItems([]);
+      setVendors([]);
       setRequisitions(DEV_SAMPLES);
     } finally {
       setLoading(false);
@@ -219,41 +148,24 @@ const RequisitionList = () => {
 
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, []);
 
-  // name helpers
-  const getResortName = (resortRef) => {
-    if (!resortRef) return "-";
-    const r = resorts.find(
-      (x) =>
-        x._id === resortRef || x.id === resortRef || x.name === resortRef
+  // helpers to get names (works with either objectId or plain string)
+  const lookupName = (list, ref) => {
+    if (!ref) return "-";
+    const found = list.find(
+      (x) => x._id === ref || x.id === ref || x.name === ref || x.code === ref
     );
-    return r ? r.name : resortRef;
-  };
-  const getDepartmentName = (deptRef) => {
-    if (!deptRef) return "-";
-    const d = departments.find(
-      (x) => x._id === deptRef || x.id === deptRef || x.name === deptRef
-    );
-    return d ? d.name : deptRef;
-  };
-  const getStoreName = (storeRef) => {
-    if (!storeRef) return "-";
-    const s = stores.find(
-      (x) => x._id === storeRef || x.id === storeRef || x.name === storeRef
-    );
-    return s ? s.name : storeRef;
-  };
-  const getVendorName = (vendorRef) => {
-    if (!vendorRef) return "-";
-    const v = vendors.find(
-      (x) => x._id === vendorRef || x.id === vendorRef || x.name === vendorRef
-    );
-    return v ? v.name : vendorRef;
+    return found ? found.name || found.code || ref : ref;
   };
 
-  // -------- base empty form used on create ----------
+  const getResortName = (r) => lookupName(resorts, r);
+  const getDepartmentName = (d) => lookupName(departments, d);
+  const getStoreName = (s) => lookupName(stores, s);
+  const getVendorName = (v) => lookupName(vendors, v);
+
+  // form helpers
   const baseEmptyForm = {
     type: "INTERNAL",
     resort: "",
@@ -263,10 +175,8 @@ const RequisitionList = () => {
     store: "",
     vendor: "",
     requiredBy: "",
-    lines: [line()],
+    lines: [newLine()],
   };
-
-  // --------- FORM helpers (create/edit/duplicate) ----------
 
   const openCreateForm = () => {
     setEditingId(null);
@@ -276,17 +186,15 @@ const RequisitionList = () => {
   };
 
   const openEditForm = (req) => {
-    const isInternal = (req.type || "INTERNAL") === "INTERNAL";
-
     setEditingId(req._id);
     setForm({
       type: req.type || "INTERNAL",
       resort: req.resort || "",
       department: req.department || "",
-      fromStore: isInternal ? req.fromStore || "" : "",
-      toStore: isInternal ? req.toStore || req.store || "" : "",
-      store: !isInternal ? req.store || "" : "",
-      vendor: !isInternal ? req.vendor || "" : "",
+      fromStore: req.fromStore || req.fromStore || "",
+      toStore: req.toStore || req.store || "",
+      store: req.store || "",
+      vendor: req.vendor || "",
       requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
       lines:
         (req.lines &&
@@ -296,23 +204,23 @@ const RequisitionList = () => {
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
-          }))) || [line()],
+          }))) ||
+        [newLine()],
     });
     setError("");
     setShowForm(true);
   };
 
   const openDuplicateAsCreate = (req) => {
-    const isInternal = (req.type || "INTERNAL") === "INTERNAL";
     setEditingId(null);
     setForm({
       type: req.type || "INTERNAL",
       resort: req.resort || "",
       department: req.department || "",
-      fromStore: isInternal ? req.fromStore || "" : "",
-      toStore: isInternal ? req.toStore || req.store || "" : "",
-      store: !isInternal ? req.store || "" : "",
-      vendor: !isInternal ? req.vendor || "" : "",
+      fromStore: req.fromStore || "",
+      toStore: req.toStore || req.store || "",
+      store: req.store || "",
+      vendor: req.vendor || "",
       requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
       lines:
         (req.lines &&
@@ -322,7 +230,8 @@ const RequisitionList = () => {
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
-          }))) || [line()],
+          }))) ||
+        [newLine()],
     });
     setError("");
     setShowForm(true);
@@ -331,7 +240,6 @@ const RequisitionList = () => {
   const updateForm = (e) => {
     const { name, value } = e.target;
     if (name === "type") {
-      // switch type: reset store/vendor/department/fromStore/toStore
       setForm((p) => ({
         ...p,
         type: value,
@@ -354,15 +262,11 @@ const RequisitionList = () => {
     });
   };
 
-  const addLine = () =>
-    setForm((p) => ({ ...p, lines: [...p.lines, line()] }));
+  const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, newLine()] }));
   const removeLine = (idx) =>
-    setForm((p) => ({
-      ...p,
-      lines: p.lines.filter((_, i) => i !== idx),
-    }));
+    setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
 
-  // ------------ Create / Edit submission -----------
+  // submit create / update requisition
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -370,35 +274,28 @@ const RequisitionList = () => {
     if (!form.type) return setError("Select requisition type");
 
     if (form.type === "INTERNAL") {
-      if (!form.fromStore)
-        return setError("Select From Store for internal requisition");
-      if (!form.toStore)
-        return setError("Select To Store for internal requisition");
+      if (!form.fromStore) return setError("Select From Store for internal requisition");
+      if (!form.toStore) return setError("Select To Store for internal requisition");
     } else {
       if (!form.vendor) return setError("Select vendor for vendor requisition");
-      if (!form.store)
-        return setError("Select store to receive goods for vendor requisition");
+      if (!form.store) return setError("Select store to receive goods for vendor requisition");
     }
 
-    if (!form.lines || form.lines.length === 0)
-      return setError("Add at least one item");
+    if (!form.lines || form.lines.length === 0) return setError("Add at least one item");
 
     for (const ln of form.lines) {
       if (!ln.item) return setError("Each line must have an item selected");
-      if (!ln.qty || Number(ln.qty) <= 0)
-        return setError("Each line must have quantity > 0");
+      if (!ln.qty || Number(ln.qty) <= 0) return setError("Each line must have quantity > 0");
     }
 
-    // derive resort from selected store (if possible)
+    // derive resort from selected store if not selected
     let derivedResort = form.resort || undefined;
     if (form.type === "INTERNAL") {
-      const fromStoreObj = stores.find(
-        (s) => (s._id || s.id) === form.fromStore
-      );
-      if (fromStoreObj?.resort) derivedResort = fromStoreObj.resort;
+      const from = stores.find((s) => (s._id || s.id) === form.fromStore);
+      if (from?.resort) derivedResort = from.resort;
     } else {
-      const storeObj = stores.find((s) => (s._id || s.id) === form.store);
-      if (storeObj?.resort) derivedResort = storeObj.resort;
+      const st = stores.find((s) => (s._id || s.id) === form.store);
+      if (st?.resort) derivedResort = st.resort;
     }
 
     try {
@@ -406,15 +303,11 @@ const RequisitionList = () => {
       const payload = {
         type: form.type,
         resort: derivedResort,
-        // internal: fromStore/toStore; vendor: store + vendor
         fromStore: form.type === "INTERNAL" ? form.fromStore : undefined,
         toStore: form.type === "INTERNAL" ? form.toStore : undefined,
-        department: undefined,
+        department: form.department || undefined,
         vendor: form.type === "VENDOR" ? form.vendor || undefined : undefined,
-        store:
-          form.type === "VENDOR"
-            ? form.store || undefined
-            : form.toStore || undefined, // for compatibility, store = destination
+        store: form.type === "VENDOR" ? form.store || undefined : form.toStore || undefined,
         requiredBy: form.requiredBy || undefined,
         lines: form.lines.map((x) => ({
           item: x.item,
@@ -425,15 +318,10 @@ const RequisitionList = () => {
 
       let res;
       if (editingId) {
-        res = await axios.put(
-          `${API_BASE}/api/requisitions/${editingId}`,
-          payload
-        );
-        setRequisitions((p) =>
-          p.map((r) => (r._id === editingId ? res.data : r))
-        );
+        res = await axios.put(`${API_BASE}/requisitions/${editingId}`, payload);
+        setRequisitions((p) => p.map((r) => (r._id === editingId ? res.data : r)));
       } else {
-        res = await axios.post(`${API_BASE}/api/requisitions`, payload);
+        res = await axios.post(`${API_BASE}/requisitions`, payload);
         setRequisitions((p) => [res.data, ...p]);
       }
 
@@ -447,17 +335,12 @@ const RequisitionList = () => {
     }
   };
 
-  // Delete
+  // delete requisition
   const handleDelete = async (req) => {
-    if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`))
-      return;
+    if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`)) return;
     try {
       setRequisitions((p) => p.filter((r) => r._id !== req._id));
-      await axios
-        .delete(`${API_BASE}/api/requisitions/${req._id}`)
-        .catch(() => {
-          throw new Error("delete failed");
-        });
+      await axios.delete(`${API_BASE}/requisitions/${req._id}`);
     } catch (err) {
       console.error("delete error", err);
       setError(err.response?.data?.message || "Failed to delete requisition");
@@ -465,84 +348,46 @@ const RequisitionList = () => {
     }
   };
 
-  // Approve
+  // approve / hold / reject
   const handleApprove = async (req) => {
     if (req.status === "APPROVED") return;
-    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`))
-      return;
+    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
     try {
-      const res = await axios
-        .post(`${API_BASE}/api/requisitions/${req._id}/approve`)
-        .catch(() => null);
-      if (res && res.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "APPROVED" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/approve`);
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "APPROVED" } : r)));
     } catch (err) {
       console.error("approve error", err);
       setError(err.response?.data?.message || "Failed to approve requisition");
     }
   };
 
-  // Hold
   const handleHold = async (req) => {
-    if (
-      !window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)
-    )
-      return;
+    if (!window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)) return;
     try {
-      const res = await axios
-        .post(`${API_BASE}/api/requisitions/${req._id}/hold`)
-        .catch(() => null);
-      if (res && res.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "ON_HOLD" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/hold`);
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "ON_HOLD" } : r)));
     } catch (err) {
       console.error("hold error", err);
-      setError(
-        err.response?.data?.message || "Failed to put requisition on hold"
-      );
+      setError(err.response?.data?.message || "Failed to put requisition on hold");
     }
   };
 
-  // Reject
   const handleReject = async (req) => {
     const reason = window.prompt("Enter rejection reason (optional):", "");
-    if (reason === null) return; // cancel
+    if (reason === null) return;
     try {
-      const res = await axios
-        .post(`${API_BASE}/api/requisitions/${req._id}/reject`, { reason })
-        .catch(() => null);
-      if (res && res.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "REJECTED" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/reject`, { reason });
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "REJECTED" } : r)));
     } catch (err) {
       console.error("reject error", err);
       setError(err.response?.data?.message || "Failed to reject requisition");
     }
   };
 
-  // Create Purchase Order (open modal)
+  // PO modal functions
   const openCreatePO = (req) => {
     setPoModal({
       open: true,
@@ -558,40 +403,33 @@ const RequisitionList = () => {
     if (!poNo) return setError("PO No. is required");
     try {
       setSaving(true);
+      // Build items payload from requisition lines
+      const itemsPayload = (req.lines || []).map((ln) => ({
+        item: ln.item?._id || ln.item,
+        qty: ln.qty,
+        rate: ln.expectedRate || ln.rate || undefined,
+      }));
+
       const payload = {
         poNo,
         vendor: vendor || undefined,
         notes: notes || undefined,
+        items: itemsPayload,
       };
-      const res = await axios
-        .post(`${API_BASE}/api/requisitions/${req._id}/create-po`, payload)
-        .catch(() => null);
 
-      if (res && res.data) {
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-        const createdPo = res.data.po || {};
-        const poIdOrNo = createdPo._id || createdPo.poNo || payload.poNo;
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-po`, payload);
+      if (res?.data?.requisition) {
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
+        const createdPo = res.data.po || res.data;
+        const poIdOrNo = createdPo?._id || createdPo?.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id
-              ? { ...r, status: "PO_CREATED", po: { poNo } }
-              : r
-          )
-        );
+        // fallback: optimistic update
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { poNo } } : r)));
         navigate(`/super-admin/po/${poNo}`);
       }
 
-      setPoModal({
-        open: false,
-        req: null,
-        poNo: "",
-        vendor: "",
-        notes: "",
-      });
+      setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" });
     } catch (err) {
       console.error("create po error", err);
       setError(err.response?.data?.message || "Failed to create PO");
@@ -600,7 +438,7 @@ const RequisitionList = () => {
     }
   };
 
-  // Create GRN (open modal)
+  // GRN modal functions
   const openCreateGRN = (req) => {
     setGrnModal({
       open: true,
@@ -617,31 +455,29 @@ const RequisitionList = () => {
     if (!grnNo) return setError("GRN No. is required");
     try {
       setSaving(true);
+      // Build items payload from requisition lines (receiver can accept partial — UI currently not granting edits; using full qty)
+      const itemsPayload = (req.lines || []).map((ln) => ({
+        item: ln.item?._id || ln.item,
+        qtyReceived: ln.qty,
+      }));
+
       const payload = {
         grnNo,
         receivedBy: receivedBy || undefined,
         receivedDate,
         notes: notes || undefined,
+        items: itemsPayload,
+        store: req.toStore || req.store || undefined,
       };
-      const res = await axios
-        .post(`${API_BASE}/api/requisitions/${req._id}/create-grn`, payload)
-        .catch(() => null);
 
-      if (res && res.data) {
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-        const createdGrn = res.data.grn || {};
-        const grnIdOrNo = createdGrn._id || createdGrn.grnNo || payload.grnNo;
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
+      if (res?.data?.requisition) {
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
+        const createdGrn = res.data.grn || res.data;
+        const grnIdOrNo = createdGrn?._id || createdGrn?.code || grnNo;
         navigate(`/super-admin/grn/${grnIdOrNo}`);
       } else {
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id
-              ? { ...r, status: "GRN_CREATED", grn: { grnNo } }
-              : r
-          )
-        );
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "GRN_CREATED", grn: { grnNo } } : r)));
         navigate(`/super-admin/grn/${grnNo}`);
       }
 
@@ -661,73 +497,41 @@ const RequisitionList = () => {
     }
   };
 
-  // View PO / GRN navigation helpers
+  // navigation helpers
   const viewPO = (po) => {
     if (!po) return;
-    const idOrNo = po._id || po.poNo;
+    const idOrNo = po._id || po.code;
     if (!idOrNo) return;
     navigate(`/super-admin/po/${idOrNo}`);
   };
 
   const viewGRN = (grn) => {
     if (!grn) return;
-    const idOrNo = grn._id || grn.grnNo;
+    const idOrNo = grn._id || grn.code;
     if (!idOrNo) return;
     navigate(`/super-admin/grn/${idOrNo}`);
   };
 
-  // View requisition
   const handleView = (req) => {
     navigate(`/super-admin/requisition/${req._id}`);
   };
 
-  // ------ CURRENT STOCK RENDER HELPER (with tooltip) --------
+  // current stock renderer (small tooltip)
   const renderCurrentStock = (ln) => {
     const it = items.find((x) => x._id === ln.item || x.id === ln.item);
     if (!it) return "-";
-
     const stockMap = it.stockByStore || {};
-
-    // figure out resort based on selected store
-    let resortId = null;
-    if (form.type === "INTERNAL" && form.fromStore) {
-      const fromStoreObj = stores.find(
-        (s) => (s._id || s.id) === form.fromStore
-      );
-      resortId = fromStoreObj?.resort || null;
-    } else if (form.type === "VENDOR" && form.store) {
-      const storeObj = stores.find((s) => (s._id || s.id) === form.store);
-      resortId = storeObj?.resort || null;
-    }
-
-    let storeIdsToUse;
-    if (resortId) {
-      storeIdsToUse = stores
-        .filter((s) => s.resort === resortId)
-        .map((s) => s._id || s.id);
-    } else {
-      storeIdsToUse = Object.keys(stockMap);
-    }
-
-    if (!storeIdsToUse || storeIdsToUse.length === 0) {
-      storeIdsToUse = Object.keys(stockMap);
-    }
-
-    const rows = storeIdsToUse.map((id) => {
-      const storeObj = stores.find((s) => (s._id || s.id) === id);
-      const name = storeObj?.name || id;
-      const qtyRaw = stockMap[id];
-      const qty = qtyRaw == null ? 0 : Number(qtyRaw);
-      return { name, qty: isNaN(qty) ? 0 : qty };
+    // pick stores depending on selected resort or fallback all
+    const storeIds = Object.keys(stockMap);
+    if (!storeIds.length) return "-";
+    const rows = storeIds.map((id) => {
+      const s = stores.find((st) => (st._id || st.id) === id);
+      const name = s?.name || id;
+      const qty = Number(stockMap[id] || 0);
+      return { name, qty };
     });
-
     const total = rows.reduce((sum, r) => sum + r.qty, 0);
-    if (!rows.length) return "-";
-
-    const tooltip = rows
-      .map((r) => `${r.name}: ${r.qty}`)
-      .join("\n");
-
+    const tooltip = rows.map((r) => `${r.name}: ${r.qty}`).join("\n");
     return (
       <span title={tooltip} style={{ cursor: "help" }}>
         {total}
@@ -735,40 +539,20 @@ const RequisitionList = () => {
     );
   };
 
-  // FILTERING LOGIC (client-side)
+  // filtering
   const applyFilters = () => {
     return requisitions.filter((r) => {
-      // STATUS
       if (statusFilter !== "ALL") {
-        if (
-          (r.status || "PENDING").toUpperCase() !==
-          statusFilter.toUpperCase()
-        )
-          return false;
+        if ((r.status || "PENDING").toUpperCase() !== statusFilter.toUpperCase()) return false;
       }
-
-      // TYPE
       if (typeFilter !== "ALL") {
-        if (
-          (r.type || "INTERNAL").toUpperCase() !==
-          typeFilter.toUpperCase()
-        )
-          return false;
+        if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
       }
-
-      // RESORT
       if (resortFilter) {
         const val = r.resort || r.resortName || r.resortRef || r.resort;
         if (!val) return false;
-        if (
-          !String(val)
-            .toLowerCase()
-            .includes(String(resortFilter).toLowerCase())
-        )
-          return false;
+        if (!String(val).toLowerCase().includes(String(resortFilter).toLowerCase())) return false;
       }
-
-      // DATE RANGE
       if (dateFrom) {
         const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
         const from = new Date(dateFrom).setHours(0, 0, 0, 0);
@@ -779,8 +563,6 @@ const RequisitionList = () => {
         const to = new Date(dateTo).setHours(0, 0, 0, 0);
         if (!rd || rd > to) return false;
       }
-
-      // ACTION FILTER
       if (actionFilter !== "ALL") {
         const hasPO = !!r.po;
         const hasGRN = !!r.grn;
@@ -789,28 +571,17 @@ const RequisitionList = () => {
         if (actionFilter === "HasPO" && !hasPO) return false;
         if (actionFilter === "HasGRN" && !hasGRN) return false;
       }
-
-      // SEARCH
       if (searchText && searchText.trim()) {
         const q = searchText.trim().toLowerCase();
-        const fields = [
-          r.requisitionNo,
-          r.department,
-          r.store,
-          r.vendor,
-          r.resort,
-        ];
+        const fields = [r.requisitionNo, r.department, r.store, r.vendor, r.resort];
         const joined = fields.filter(Boolean).join(" ").toLowerCase();
         if (!joined.includes(q)) return false;
       }
-
       return true;
     });
   };
 
   const filteredList = applyFilters();
-
-  // Reset filters
   const clearFilters = () => {
     setStatusFilter("ALL");
     setTypeFilter("ALL");
@@ -821,19 +592,10 @@ const RequisitionList = () => {
     setSearchText("");
   };
 
-  // small inline styles for action icons
-  const actionStyle = {
-    display: "inline-block",
-    marginLeft: 6,
-    cursor: "pointer",
-    padding: "6px",
-    borderRadius: 6,
-    position: "relative",
-  };
+  const actionStyle = { display: "inline-block", marginLeft: 6, cursor: "pointer", padding: 6, borderRadius: 6, position: "relative" };
 
   return (
     <div className="sa-page">
-      {/* HEADER */}
       <div className="sa-page-header" style={{ alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <h2>Requisitions</h2>
@@ -841,39 +603,20 @@ const RequisitionList = () => {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="sa-primary-button"
-            type="button"
-            onClick={openCreateForm}
-          >
+          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
             <i className="ri-add-line"></i> New Requisition
           </button>
 
-          <button
-            type="button"
-            className="sa-secondary-button"
-            onClick={() => {
-              loadData();
-              clearFilters();
-            }}
-          >
+          <button type="button" className="sa-secondary-button" onClick={() => { loadData(); clearFilters(); }}>
             Refresh
           </button>
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div
-        className="sa-card"
-        style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}
-      >
+      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         <label style={{ fontSize: "0.85rem" }}>
           Status
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="PENDING">Pending</option>
             <option value="APPROVED">Approved</option>
@@ -886,11 +629,7 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Type
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="INTERNAL">Internal</option>
             <option value="VENDOR">Vendor</option>
@@ -899,55 +638,27 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Resort
-          <select
-            value={resortFilter}
-            onChange={(e) => setResortFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="">All Resorts</option>
             {resorts.length > 0
-              ? resorts.map((r) => (
-                  <option key={r._id || r.id} value={r._id || r.name || r.id}>
-                    {r.name}
-                  </option>
-                ))
-              : Array.from(new Set(requisitions.map((x) => x.resort))).map(
-                  (name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  )
-                )}
+              ? resorts.map((r) => <option key={r._id || r.id} value={r._id || r.name || r.id}>{r.name}</option>)
+              : Array.from(new Set(requisitions.map((x) => x.resort))).map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Date from
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            style={{ marginLeft: 6 }}
-          />
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ marginLeft: 6 }} />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Date to
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            style={{ marginLeft: 6 }}
-          />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ marginLeft: 6 }} />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Action
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="NeedsPO">Needs PO</option>
             <option value="NeedsGRN">Needs GRN</option>
@@ -958,37 +669,22 @@ const RequisitionList = () => {
 
         <label style={{ flex: 1, minWidth: 220 }}>
           Search
-          <input
-            placeholder="Requisition no / dept / store / vendor"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ marginLeft: 8, width: "80%" }}
-          />
+          <input placeholder="Requisition no / dept / store / vendor" value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ marginLeft: 8, width: "80%" }} />
         </label>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button className="sa-secondary-button" onClick={clearFilters}>
-            Clear
-          </button>
+          <button className="sa-secondary-button" onClick={clearFilters}>Clear</button>
         </div>
       </div>
 
-      {/* Error */}
       {error && <div className="sa-modal-error">{error}</div>}
 
-      {/* LIST */}
       <div className="sa-card">
         {loading ? (
           <div>Loading requisitions...</div>
         ) : (
           <>
-            <div
-              style={{
-                marginBottom: 8,
-                color: "#6b7280",
-                fontSize: "0.9rem",
-              }}
-            >
+            <div style={{ marginBottom: 8, color: "#6b7280", fontSize: "0.9rem" }}>
               Showing {filteredList.length} of {requisitions.length} requisitions
             </div>
 
@@ -1004,7 +700,6 @@ const RequisitionList = () => {
                   <th>Actions</th>
                 </tr>
               </thead>
-
               <tbody>
                 {filteredList.map((r) => (
                   <tr key={r._id}>
@@ -1019,8 +714,7 @@ const RequisitionList = () => {
                         </>
                       ) : r.fromStore || r.toStore ? (
                         <>
-                          {getStoreName(r.fromStore)} →{" "}
-                          {getStoreName(r.toStore || r.store)}
+                          {getStoreName(r.fromStore)} → {getStoreName(r.toStore || r.store)}
                         </>
                       ) : getDepartmentName(r.department) !== "-" ? (
                         getDepartmentName(r.department)
@@ -1031,120 +725,31 @@ const RequisitionList = () => {
                     <td>{r.status || "PENDING"}</td>
                     <td>{r.date ? r.date.slice(0, 10) : "-"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {/* VIEW */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleView(r)}
-                        title="View"
-                      >
-                        <i className="ri-eye-line" />
-                      </span>
+                      <span style={actionStyle} onClick={() => handleView(r)} title="View"><i className="ri-eye-line" /></span>
+                      <span style={actionStyle} onClick={() => openDuplicateAsCreate(r)} title="Create (Duplicate)"><i className="ri-file-copy-line" /></span>
+                      <span style={actionStyle} onClick={() => openEditForm(r)} title="Edit"><i className="ri-edit-line" /></span>
 
-                      {/* DUPLICATE */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => openDuplicateAsCreate(r)}
-                        title="Create (Duplicate)"
-                      >
-                        <i className="ri-file-copy-line" />
-                      </span>
-
-                      {/* EDIT */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => openEditForm(r)}
-                        title="Edit"
-                      >
-                        <i className="ri-edit-line" />
-                      </span>
-
-                      {/* APPROVE */}
-                      <span
-                        style={{
-                          ...actionStyle,
-                          background:
-                            r.status === "APPROVED"
-                              ? "#052e16"
-                              : "transparent",
-                        }}
-                        onClick={() => handleApprove(r)}
-                        title={
-                          r.status === "APPROVED"
-                            ? "Already approved"
-                            : "Approve"
-                        }
-                      >
+                      <span style={{ ...actionStyle, background: r.status === "APPROVED" ? "#052e16" : "transparent" }} onClick={() => handleApprove(r)} title={r.status === "APPROVED" ? "Already approved" : "Approve"}>
                         <i className="ri-checkbox-circle-line" />
                       </span>
 
-                      {/* HOLD */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleHold(r)}
-                        title="Hold"
-                      >
-                        <i className="ri-pause-line" />
-                      </span>
+                      <span style={actionStyle} onClick={() => handleHold(r)} title="Hold"><i className="ri-pause-line" /></span>
 
-                      {/* REJECT */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleReject(r)}
-                        title="Reject"
-                      >
-                        <i className="ri-close-circle-line" />
-                      </span>
+                      <span style={actionStyle} onClick={() => handleReject(r)} title="Reject"><i className="ri-close-circle-line" /></span>
 
-                      {/* CREATE PO / VIEW PO */}
                       {r.po ? (
-                        <span
-                          style={actionStyle}
-                          title="View PO"
-                          onClick={() => viewPO(r.po)}
-                        >
-                          <i className="ri-file-paper-line" />
-                        </span>
+                        <span style={actionStyle} title="View PO" onClick={() => viewPO(r.po)}><i className="ri-file-paper-line" /></span>
                       ) : (
-                        !r.grn && (
-                          <span
-                            style={actionStyle}
-                            onClick={() => openCreatePO(r)}
-                            title="Create Purchase Order (PO)"
-                          >
-                            <i className="ri-shopping-cart-line" />
-                          </span>
-                        )
+                        !r.grn && <span style={actionStyle} onClick={() => openCreatePO(r)} title="Create Purchase Order (PO)"><i className="ri-shopping-cart-line" /></span>
                       )}
 
-                      {/* CREATE GRN / VIEW GRN */}
                       {r.grn ? (
-                        <span
-                          style={actionStyle}
-                          title="View GRN"
-                          onClick={() => viewGRN(r.grn)}
-                        >
-                          <i className="ri-inbox-line" />
-                        </span>
+                        <span style={actionStyle} title="View GRN" onClick={() => viewGRN(r.grn)}><i className="ri-inbox-line" /></span>
                       ) : (
-                        !r.po && (
-                          <span
-                            style={actionStyle}
-                            onClick={() => openCreateGRN(r)}
-                            title="Create GRN"
-                          >
-                            <i className="ri-add-box-line" />
-                          </span>
-                        )
+                        !r.po && <span style={actionStyle} onClick={() => openCreateGRN(r)} title="Create GRN"><i className="ri-add-box-line" /></span>
                       )}
 
-                      {/* DELETE */}
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleDelete(r)}
-                        title="Delete"
-                      >
-                        <i className="ri-delete-bin-6-line" />
-                      </span>
+                      <span style={actionStyle} onClick={() => handleDelete(r)} title="Delete"><i className="ri-delete-bin-6-line" /></span>
                     </td>
                   </tr>
                 ))}
@@ -1154,33 +759,19 @@ const RequisitionList = () => {
         )}
       </div>
 
-      {/* MODAL (Create/Edit) */}
+      {/* Create / Edit Modal */}
       {showForm && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={() => !saving && setShowForm(false)}
-        >
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editingId ? "Edit Requisition" : "Create Requisition"}</h3>
-            <p className="sa-modal-sub">
-              Fill the following details to raise a requisition.
-            </p>
+            <p className="sa-modal-sub">Fill the following details to raise a requisition.</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
                 Requisition Type
-                <select
-                  name="type"
-                  value={form.type}
-                  onChange={updateForm}
-                  required
-                >
-                  <option value="INTERNAL">
-                    Internal (Store → Store transfer)
-                  </option>
-                  <option value="VENDOR">
-                    Vendor (Direct purchase from vendor)
-                  </option>
+                <select name="type" value={form.type} onChange={updateForm} required>
+                  <option value="INTERNAL">Internal (Store → Store transfer)</option>
+                  <option value="VENDOR">Vendor (Direct purchase from vendor)</option>
                 </select>
               </label>
 
@@ -1188,35 +779,17 @@ const RequisitionList = () => {
                 <>
                   <label>
                     From Store
-                    <select
-                      name="fromStore"
-                      value={form.fromStore}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="fromStore" value={form.fromStore} onChange={updateForm} required>
                       <option value="">-- Select From Store --</option>
-                      {stores.map((s) => (
-                        <option key={s._id || s.id} value={s._id || s.id}>
-                          {s.name}
-                        </option>
-                      ))}
+                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
                     </select>
                   </label>
 
                   <label>
                     To Store
-                    <select
-                      name="toStore"
-                      value={form.toStore}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="toStore" value={form.toStore} onChange={updateForm} required>
                       <option value="">-- Select To Store --</option>
-                      {stores.map((s) => (
-                        <option key={s._id || s.id} value={s._id || s.id}>
-                          {s.name}
-                        </option>
-                      ))}
+                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
                     </select>
                   </label>
                 </>
@@ -1224,35 +797,17 @@ const RequisitionList = () => {
                 <>
                   <label>
                     Vendor
-                    <select
-                      name="vendor"
-                      value={form.vendor}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="vendor" value={form.vendor} onChange={updateForm} required>
                       <option value="">-- Select Vendor --</option>
-                      {vendors.map((v) => (
-                        <option key={v._id || v.id} value={v._id || v.id}>
-                          {v.name}
-                        </option>
-                      ))}
+                      {vendors.map((v) => <option key={v._id || v.id} value={v._id || v.id}>{v.name}</option>)}
                     </select>
                   </label>
 
                   <label>
                     Store (to receive goods)
-                    <select
-                      name="store"
-                      value={form.store}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="store" value={form.store} onChange={updateForm} required>
                       <option value="">-- Select Store --</option>
-                      {stores.map((s) => (
-                        <option key={s._id || s.id} value={s._id || s.id}>
-                          {s.name}
-                        </option>
-                      ))}
+                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
                     </select>
                   </label>
                 </>
@@ -1260,15 +815,10 @@ const RequisitionList = () => {
 
               <label>
                 Required On
-                <input
-                  type="date"
-                  name="requiredBy"
-                  value={form.requiredBy}
-                  onChange={updateForm}
-                />
+                <input type="date" name="requiredBy" value={form.requiredBy} onChange={updateForm} />
               </label>
 
-              {/* ITEMS TABLE */}
+              {/* items table */}
               <div style={{ marginTop: 10 }}>
                 <table className="sa-table">
                   <thead>
@@ -1280,63 +830,25 @@ const RequisitionList = () => {
                       <th></th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {form.lines.map((ln, idx) => (
                       <tr key={ln.lineId}>
                         <td>
-                          <select
-                            value={ln.item}
-                            onChange={(e) =>
-                              updateLine(idx, "item", e.target.value)
-                            }
-                            required
-                          >
+                          <select value={ln.item} onChange={(e) => updateLine(idx, "item", e.target.value)} required>
                             <option value="">-- Select Item --</option>
-                            {items.map((it) => (
-                              <option
-                                key={it._id || it.id}
-                                value={it._id || it.id}
-                              >
-                                {it.name}
-                              </option>
-                            ))}
+                            {items.map((it) => <option key={it._id || it.id} value={it._id || it.id}>{it.name}</option>)}
                           </select>
                         </td>
-
-                        <td style={{ textAlign: "center" }}>
-                          {renderCurrentStock(ln)}
-                        </td>
-
+                        <td style={{ textAlign: "center" }}>{renderCurrentStock(ln)}</td>
                         <td>
-                          <input
-                            type="number"
-                            min="1"
-                            value={ln.qty}
-                            onChange={(e) =>
-                              updateLine(idx, "qty", e.target.value)
-                            }
-                            required
-                          />
+                          <input type="number" min="1" value={ln.qty} onChange={(e) => updateLine(idx, "qty", e.target.value)} required />
                         </td>
-
                         <td>
-                          <input
-                            value={ln.remark}
-                            onChange={(e) =>
-                              updateLine(idx, "remark", e.target.value)
-                            }
-                          />
+                          <input value={ln.remark} onChange={(e) => updateLine(idx, "remark", e.target.value)} />
                         </td>
-
                         <td>
                           {form.lines.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeLine(idx)}
-                            >
-                              Remove
-                            </button>
+                            <button type="button" onClick={() => removeLine(idx)}>Remove</button>
                           )}
                         </td>
                       </tr>
@@ -1344,37 +856,14 @@ const RequisitionList = () => {
                   </tbody>
                 </table>
 
-                <button
-                  type="button"
-                  onClick={addLine}
-                  style={{ marginTop: 5 }}
-                >
-                  + Add Line
-                </button>
+                <button type="button" onClick={addLine} style={{ marginTop: 5 }}>+ Add Line</button>
               </div>
 
               {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button
-                  type="button"
-                  className="sa-secondary-button"
-                  onClick={() => !saving && setShowForm(false)}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="sa-primary-button"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingId
-                    ? "Update Requisition"
-                    : "Save Requisition"}
-                </button>
+                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>Cancel</button>
+                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : editingId ? "Update Requisition" : "Save Requisition"}</button>
               </div>
             </form>
           </div>
@@ -1383,19 +872,7 @@ const RequisitionList = () => {
 
       {/* PO Modal */}
       {poModal.open && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={() =>
-            !saving &&
-            setPoModal({
-              open: false,
-              req: null,
-              poNo: "",
-              vendor: "",
-              notes: "",
-            })
-          }
-        >
+        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" })}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Create Purchase Order</h3>
             <p className="sa-modal-sub">Create PO from this requisition.</p>
@@ -1403,58 +880,22 @@ const RequisitionList = () => {
             <div className="sa-modal-form">
               <label>
                 PO No.
-                <input
-                  value={poModal.poNo}
-                  onChange={(e) =>
-                    setPoModal((p) => ({ ...p, poNo: e.target.value }))
-                  }
-                />
+                <input value={poModal.poNo} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} />
               </label>
 
               <label>
                 Vendor
-                <input
-                  value={poModal.vendor}
-                  onChange={(e) =>
-                    setPoModal((p) => ({ ...p, vendor: e.target.value }))
-                  }
-                />
+                <input value={poModal.vendor} onChange={(e) => setPoModal((p) => ({ ...p, vendor: e.target.value }))} />
               </label>
 
               <label>
                 Notes (optional)
-                <textarea
-                  value={poModal.notes}
-                  onChange={(e) =>
-                    setPoModal((p) => ({ ...p, notes: e.target.value }))
-                  }
-                />
+                <textarea value={poModal.notes} onChange={(e) => setPoModal((p) => ({ ...p, notes: e.target.value }))} />
               </label>
 
               <div className="sa-modal-actions">
-                <button
-                  type="button"
-                  className="sa-secondary-button"
-                  onClick={() =>
-                    setPoModal({
-                      open: false,
-                      req: null,
-                      poNo: "",
-                      vendor: "",
-                      notes: "",
-                    })
-                  }
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="sa-primary-button"
-                  onClick={submitCreatePO}
-                  disabled={saving}
-                >
-                  {saving ? "Creating..." : "Create PO"}
-                </button>
+                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" })}>Cancel</button>
+                <button type="button" className="sa-primary-button" onClick={submitCreatePO} disabled={saving}>{saving ? "Creating..." : "Create PO"}</button>
               </div>
             </div>
           </div>
@@ -1463,96 +904,35 @@ const RequisitionList = () => {
 
       {/* GRN Modal */}
       {grnModal.open && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={() =>
-            !saving &&
-            setGrnModal({
-              open: false,
-              req: null,
-              grnNo: "",
-              receivedBy: "",
-              receivedDate: new Date().toISOString().slice(0, 10),
-              notes: "",
-            })
-          }
-        >
+        <div className="sa-modal-backdrop" onClick={() => !saving && setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0, 10), notes: "" })}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Create GRN</h3>
-            <p className="sa-modal-sub">
-              Record goods received against PO / requisition.
-            </p>
+            <p className="sa-modal-sub">Record goods received against PO / requisition.</p>
 
             <div className="sa-modal-form">
               <label>
                 GRN No.
-                <input
-                  value={grnModal.grnNo}
-                  onChange={(e) =>
-                    setGrnModal((p) => ({ ...p, grnNo: e.target.value }))
-                  }
-                />
+                <input value={grnModal.grnNo} onChange={(e) => setGrnModal((p) => ({ ...p, grnNo: e.target.value }))} />
               </label>
 
               <label>
                 Received By
-                <input
-                  value={grnModal.receivedBy}
-                  onChange={(e) =>
-                    setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))
-                  }
-                />
+                <input value={grnModal.receivedBy} onChange={(e) => setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))} />
               </label>
 
               <label>
                 Received Date
-                <input
-                  type="date"
-                  value={grnModal.receivedDate}
-                  onChange={(e) =>
-                    setGrnModal((p) => ({
-                      ...p,
-                      receivedDate: e.target.value,
-                    }))
-                  }
-                />
+                <input type="date" value={grnModal.receivedDate} onChange={(e) => setGrnModal((p) => ({ ...p, receivedDate: e.target.value }))} />
               </label>
 
               <label>
                 Notes (optional)
-                <textarea
-                  value={grnModal.notes}
-                  onChange={(e) =>
-                    setGrnModal((p) => ({ ...p, notes: e.target.value }))
-                  }
-                />
+                <textarea value={grnModal.notes} onChange={(e) => setGrnModal((p) => ({ ...p, notes: e.target.value }))} />
               </label>
 
               <div className="sa-modal-actions">
-                <button
-                  type="button"
-                  className="sa-secondary-button"
-                  onClick={() =>
-                    setGrnModal({
-                      open: false,
-                      req: null,
-                      grnNo: "",
-                      receivedBy: "",
-                      receivedDate: new Date().toISOString().slice(0, 10),
-                      notes: "",
-                    })
-                  }
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="sa-primary-button"
-                  onClick={submitCreateGRN}
-                  disabled={saving}
-                >
-                  {saving ? "Creating..." : "Create GRN"}
-                </button>
+                <button type="button" className="sa-secondary-button" onClick={() => setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0, 10), notes: "" })}>Cancel</button>
+                <button type="button" className="sa-primary-button" onClick={submitCreateGRN} disabled={saving}>{saving ? "Creating..." : "Create GRN"}</button>
               </div>
             </div>
           </div>
