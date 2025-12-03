@@ -68,17 +68,14 @@ const RequisitionList = () => {
     lines: [newLine()],
   });
 
-  // PO modal state (enhanced full PO form)
+  // PO modal state (updated to use requisition values)
   const [poModal, setPoModal] = useState({
     open: false,
     req: null,
     poNo: "",
-    vendor: "",
-    resort: "",
-    deliveryStore: "",
+    // vendor/deliveryStore/resort removed from editable inputs; derived from req
     poDate: new Date().toISOString().slice(0, 10),
     items: [],
-    notes: "",
     subTotal: 0,
     taxPercent: 0,
     taxAmount: 0,
@@ -105,9 +102,6 @@ const RequisitionList = () => {
   const [searchText, setSearchText] = useState("");
 
   const navigate = useNavigate();
-
-  // If you need auth, set default header:
-  // axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
   // load data
   const loadData = async () => {
@@ -388,11 +382,11 @@ const RequisitionList = () => {
     }
   };
 
-  // ------------------ PO modal (enhanced) ------------------
+  // ------------------ PO modal (updated per your request) ------------------
 
-  // open PO modal and prefill using requisition
+  // open PO modal and prefill using requisition (items auto-fetched)
   const openCreatePO = (req) => {
-    // map requisition lines to PO item rows
+    // map requisition lines to PO item rows (auto-fetched)
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
@@ -415,13 +409,9 @@ const RequisitionList = () => {
     setPoModal({
       open: true,
       req,
-      poNo: `PO-${Date.now()}`, // can be left for backend to override if needed
-      vendor: req.vendor || "",
-      resort: req.resort || (stores.find(s => (s._id || s.id) === (req.toStore || req.store))?.resort) || "",
-      deliveryStore: req.toStore || req.store || "",
+      poNo: `PO-${Date.now()}`, // can let backend override if desired
       poDate: new Date().toISOString().slice(0, 10),
       items: itemsPayload,
-      notes: "",
       subTotal: sub,
       taxPercent: 0,
       taxAmount: 0,
@@ -429,18 +419,23 @@ const RequisitionList = () => {
     });
   };
 
-  // submit PO to backend
+  // submit PO to backend; vendor/deliverTo derived from requisition
   const submitCreatePO = async () => {
-    const { req, poNo, vendor, notes, items: poItems, resort, deliveryStore, poDate, taxPercent } = poModal;
+    const { req, poNo, items: poItems, poDate, taxPercent } = poModal;
     if (!poNo) return setError("PO No. is required");
-    if (!vendor) return setError("Vendor is required");
-    if (!resort) return setError("Resort is required");
-    if (!deliveryStore) return setError("Delivery store is required");
+    // vendor and delivery store are taken from requisition
+    const vendorId = req.vendor || undefined;
+    const deliverTo = req.toStore || req.store || undefined;
+    const resortId = req.resort || undefined;
+
+    if (!vendorId) return setError("Requisition has no vendor assigned (cannot create PO)");
+    if (!deliverTo) return setError("Requisition has no destination store (cannot create PO)");
+
     if (!poItems || poItems.length === 0) return setError("PO must have at least one item");
 
     // validate each item
     for (const it of poItems) {
-      if (!it.item) return setError("Each PO line must have an item selected");
+      if (!it.item) return setError("Each PO line must have an item id");
       if (!it.qty || Number(it.qty) <= 0) return setError("Each PO line qty must be > 0");
       if (it.rate == null || Number(it.rate) < 0) return setError("Each PO line rate must be >= 0");
     }
@@ -460,11 +455,10 @@ const RequisitionList = () => {
 
       const payload = {
         poNo,
-        vendor,
-        resort,
-        deliverTo: deliveryStore,
+        vendor: vendorId,
+        resort: resortId,
+        deliverTo,
         poDate,
-        notes: notes || undefined,
         items: itemsPayload,
         subTotal,
         taxPercent: taxPercent || 0,
@@ -479,19 +473,19 @@ const RequisitionList = () => {
         setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
         const createdPo = res.data.po;
         const poIdOrNo = (createdPo && (createdPo._id || createdPo.code)) || poNo;
-        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else if (res?.data) {
         // fallback if API returns po object
         const createdPo = res.data;
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { code: createdPo.code || poNo, _id: createdPo._id } } : r)));
-        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         const poIdOrNo = createdPo._id || createdPo.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
         // optimistic fallback
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { poNo } } : r)));
-        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poNo}`);
       }
     } catch (err) {
@@ -933,12 +927,12 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* PO Modal (full form) */}
+      {/* PO Modal (updated: no resort/vendor/store/notes inputs; items auto from requisition) */}
       {poModal.open && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [], notes: "" })}>
+        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", items: [] })}>
           <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Create Purchase Order</h3>
-            <p className="sa-modal-sub">Create PO from this requisition. Edit rates/qty before submitting.</p>
+            <p className="sa-modal-sub">This PO will be created from the selected requisition. Vendor and delivery store are taken from the requisition.</p>
 
             <div className="sa-modal-form">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -952,43 +946,31 @@ const RequisitionList = () => {
                   <input value={poModal.poNo || ""} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} placeholder="PO-YYYY-XXX" />
                 </label>
 
+                {/* Show vendor (read-only) */}
                 <label>
-                  Vendor
-                  <select value={poModal.vendor || ""} onChange={(e) => setPoModal((p) => ({ ...p, vendor: e.target.value }))}>
-                    <option value="">-- Select Vendor --</option>
-                    {vendors.map((v) => <option key={v._id || v.id} value={v._id || v.id}>{v.name}</option>)}
-                  </select>
+                  Vendor (from requisition)
+                  <input value={getVendorName(poModal.req?.vendor) || ""} readOnly />
                 </label>
 
+                {/* Show resort (read-only) */}
                 <label>
-                  Resort
-                  <select value={poModal.resort || ""} onChange={(e) => setPoModal((p) => ({ ...p, resort: e.target.value }))}>
-                    <option value="">-- Select Resort --</option>
-                    {resorts.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{r.name}</option>)}
-                  </select>
+                  Resort (from requisition)
+                  <input value={getResortName(poModal.req?.resort) || ""} readOnly />
                 </label>
 
+                {/* Show delivery store (read-only) */}
                 <label>
-                  Delivery Store
-                  <select value={poModal.deliveryStore || ""} onChange={(e) => setPoModal((p) => ({ ...p, deliveryStore: e.target.value }))}>
-                    <option value="">-- Select Store --</option>
-                    {stores.filter(s => s.resort === (poModal.resort || poModal.req?.resort)).map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
-                    {stores.filter(s => !s.resort).map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
-                  </select>
+                  Delivery Store (from requisition)
+                  <input value={getStoreName(poModal.req?.toStore || poModal.req?.store) || ""} readOnly />
                 </label>
 
                 <label>
                   PO Date
                   <input type="date" value={poModal.poDate || new Date().toISOString().slice(0,10)} onChange={(e)=>setPoModal(p=>({...p, poDate: e.target.value}))} />
                 </label>
-
-                <label style={{ gridColumn: "1 / -1" }}>
-                  Notes
-                  <textarea value={poModal.notes || ""} onChange={(e)=>setPoModal(p=>({...p, notes: e.target.value}))} />
-                </label>
               </div>
 
-              {/* Items table */}
+              {/* Items table (auto-fetched from requisition) */}
               <div style={{ marginTop: 12 }}>
                 <table className="sa-table" style={{ width: "100%" }}>
                   <thead>
@@ -1008,19 +990,12 @@ const RequisitionList = () => {
                         </td>
 
                         <td>
-                          <input type="number" min="0" value={ln.qty} onChange={(e) => {
-                            const v = Number(e.target.value||0);
-                            setPoModal(p => {
-                              const newItems = [...(p.items||[])];
-                              newItems[idx] = { ...newItems[idx], qty: v, amount: Number((v * Number(newItems[idx].rate || 0)).toFixed(2)) };
-                              const sub = newItems.reduce((s,i)=>s + Number(i.amount||0), 0);
-                              const tax = (p.taxPercent || 0) / 100 * sub;
-                              return { ...p, items: newItems, subTotal: sub, taxAmount: tax, total: sub + tax };
-                            });
-                          }} />
+                          {/* keep qty visible but read-only to reflect requisition amount */}
+                          <input type="number" min="0" value={ln.qty} readOnly />
                         </td>
 
                         <td>
+                          {/* allow editing rate if you want to adjust before creating PO */}
                           <input type="number" min="0" value={ln.rate} onChange={(e) => {
                             const v = Number(e.target.value||0);
                             setPoModal(p => {
@@ -1074,7 +1049,7 @@ const RequisitionList = () => {
 
               {/* actions */}
               <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] })}>Cancel</button>
+                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", items: [] })}>Cancel</button>
                 <button type="button" className="sa-primary-button" onClick={submitCreatePO} disabled={saving}>{saving ? "Creating..." : "Create PO"}</button>
               </div>
             </div>
