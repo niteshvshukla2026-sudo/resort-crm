@@ -13,7 +13,7 @@ const newLine = () => ({
   remark: "",
 });
 
-// Dev fallback data
+// Dev fallback data (minimal)
 const DEV_SAMPLES = [
   {
     _id: "sample_req_1",
@@ -25,7 +25,10 @@ const DEV_SAMPLES = [
     vendor: null,
     status: "PENDING",
     date: new Date().toISOString(),
-    lines: [],
+    lines: [
+      { lineId: "ln1", item: "dev_item_1", qty: 10, remark: "" },
+      { lineId: "ln2", item: "dev_item_2", qty: 5, remark: "" },
+    ],
   },
   {
     _id: "sample_req_2",
@@ -34,10 +37,12 @@ const DEV_SAMPLES = [
     resort: "Demo Resort A",
     department: null,
     store: "Main Store",
-    vendor: "FreshFoods Pvt Ltd",
+    vendor: "dev_vendor_1",
     status: "PENDING",
     date: new Date().toISOString(),
-    lines: [],
+    lines: [
+      { lineId: "ln3", item: "dev_item_3", qty: 2, remark: "urgent" },
+    ],
   },
 ];
 
@@ -53,7 +58,7 @@ const RequisitionList = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // form/modal state
+  // Requisition form
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
@@ -68,12 +73,11 @@ const RequisitionList = () => {
     lines: [newLine()],
   });
 
-  // PO modal state (updated to use requisition values)
+  // PO modal state (items auto from requisition; vendor/resort/store derived)
   const [poModal, setPoModal] = useState({
     open: false,
     req: null,
     poNo: "",
-    // vendor/deliveryStore/resort removed from editable inputs; derived from req
     poDate: new Date().toISOString().slice(0, 10),
     items: [],
     subTotal: 0,
@@ -82,14 +86,14 @@ const RequisitionList = () => {
     total: 0,
   });
 
-  // GRN modal state
+  // GRN modal state (new: matches PO approach — items auto from requisition)
   const [grnModal, setGrnModal] = useState({
     open: false,
     req: null,
     grnNo: "",
     receivedBy: "",
     receivedDate: new Date().toISOString().slice(0, 10),
-    notes: "",
+    items: [], // { lineId, item, itemName, qtyRequested, qtyReceived, remark }
   });
 
   // filters
@@ -146,7 +150,7 @@ const RequisitionList = () => {
     // eslint-disable-next-line
   }, []);
 
-  // helpers to get names (works with either objectId or plain string)
+  // lookup helpers
   const lookupName = (list, ref) => {
     if (!ref) return "-";
     const found = list.find(
@@ -154,13 +158,13 @@ const RequisitionList = () => {
     );
     return found ? found.name || found.code || ref : ref;
   };
-
   const getResortName = (r) => lookupName(resorts, r);
   const getDepartmentName = (d) => lookupName(departments, d);
   const getStoreName = (s) => lookupName(stores, s);
   const getVendorName = (v) => lookupName(vendors, v);
+  const getItemName = (itId) => lookupName(items, itId);
 
-  // form helpers
+  // Requisition form helpers (unchanged)
   const baseEmptyForm = {
     type: "INTERNAL",
     resort: "",
@@ -186,7 +190,7 @@ const RequisitionList = () => {
       type: req.type || "INTERNAL",
       resort: req.resort || "",
       department: req.department || "",
-      fromStore: req.fromStore || req.fromStore || "",
+      fromStore: req.fromStore || "",
       toStore: req.toStore || req.store || "",
       store: req.store || "",
       vendor: req.vendor || "",
@@ -261,7 +265,7 @@ const RequisitionList = () => {
   const removeLine = (idx) =>
     setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
 
-  // submit create / update requisition
+  // create/update requisition
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -330,7 +334,7 @@ const RequisitionList = () => {
     }
   };
 
-  // delete requisition
+  // delete
   const handleDelete = async (req) => {
     if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`)) return;
     try {
@@ -343,7 +347,7 @@ const RequisitionList = () => {
     }
   };
 
-  // approve / hold / reject
+  // approve / hold / reject (unchanged)
   const handleApprove = async (req) => {
     if (req.status === "APPROVED") return;
     if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
@@ -382,11 +386,9 @@ const RequisitionList = () => {
     }
   };
 
-  // ------------------ PO modal (updated per your request) ------------------
-
-  // open PO modal and prefill using requisition (items auto-fetched)
+  // ------------------ PO modal (unchanged from last) ------------------
   const openCreatePO = (req) => {
-    // map requisition lines to PO item rows (auto-fetched)
+    // map requisition lines to PO item rows
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
@@ -409,7 +411,7 @@ const RequisitionList = () => {
     setPoModal({
       open: true,
       req,
-      poNo: `PO-${Date.now()}`, // can let backend override if desired
+      poNo: `PO-${Date.now()}`,
       poDate: new Date().toISOString().slice(0, 10),
       items: itemsPayload,
       subTotal: sub,
@@ -419,21 +421,17 @@ const RequisitionList = () => {
     });
   };
 
-  // submit PO to backend; vendor/deliverTo derived from requisition
   const submitCreatePO = async () => {
     const { req, poNo, items: poItems, poDate, taxPercent } = poModal;
     if (!poNo) return setError("PO No. is required");
-    // vendor and delivery store are taken from requisition
     const vendorId = req.vendor || undefined;
     const deliverTo = req.toStore || req.store || undefined;
     const resortId = req.resort || undefined;
 
     if (!vendorId) return setError("Requisition has no vendor assigned (cannot create PO)");
     if (!deliverTo) return setError("Requisition has no destination store (cannot create PO)");
-
     if (!poItems || poItems.length === 0) return setError("PO must have at least one item");
 
-    // validate each item
     for (const it of poItems) {
       if (!it.item) return setError("Each PO line must have an item id");
       if (!it.qty || Number(it.qty) <= 0) return setError("Each PO line qty must be > 0");
@@ -442,7 +440,6 @@ const RequisitionList = () => {
 
     try {
       setSaving(true);
-      // recalc amounts & totals
       const itemsPayload = poItems.map(it => {
         const qty = Number(it.qty);
         const rate = Number(it.rate);
@@ -469,21 +466,18 @@ const RequisitionList = () => {
       const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-po`, payload);
 
       if (res?.data?.requisition) {
-        // backend returns updated requisition
         setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
         const createdPo = res.data.po;
         const poIdOrNo = (createdPo && (createdPo._id || createdPo.code)) || poNo;
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else if (res?.data) {
-        // fallback if API returns po object
         const createdPo = res.data;
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { code: createdPo.code || poNo, _id: createdPo._id } } : r)));
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         const poIdOrNo = createdPo._id || createdPo.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
-        // optimistic fallback
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { poNo } } : r)));
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poNo}`);
@@ -496,57 +490,96 @@ const RequisitionList = () => {
     }
   };
 
-  // ------------------ GRN modal (existing) ------------------
+  // ------------------ GRN modal (NEW, full form) ------------------
 
+  // Open GRN modal: ONLY allowed when no PO exists on requisition (per your rule)
   const openCreateGRN = (req) => {
+    // If req has PO, we should not open (UI already prevents). But guard here:
+    if (req.po) {
+      setError("This requisition already has a PO — create GRN from PO page instead.");
+      return;
+    }
+
+    // Map requisition lines to grn rows
+    const itemsPayload = (req.lines || []).map((ln) => {
+      const itemId = ln.item?._id || ln.item;
+      const itemObj = items.find((it) => (it._id || it.id) === itemId);
+      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const qtyRequested = ln.qty || 0;
+      return {
+        lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
+        item: itemId,
+        itemName: name,
+        qtyRequested,
+        qtyReceived: qtyRequested, // default to full received; user can adjust
+        remark: ln.remark || "",
+      };
+    });
+
     setGrnModal({
       open: true,
       req,
       grnNo: `GRN-${Date.now()}`,
       receivedBy: "",
       receivedDate: new Date().toISOString().slice(0, 10),
-      notes: "",
+      items: itemsPayload,
     });
   };
 
+  // Update received qty / remark per line
+  const updateGrnLine = (idx, field, value) => {
+    setGrnModal((p) => {
+      const list = [...(p.items || [])];
+      list[idx] = { ...list[idx], [field]: value };
+      return { ...p, items: list };
+    });
+  };
+
+  // Submit GRN
   const submitCreateGRN = async () => {
-    const { req, grnNo, receivedBy, receivedDate, notes } = grnModal;
+    const { req, grnNo, receivedBy, receivedDate, items: grnItems } = grnModal;
     if (!grnNo) return setError("GRN No. is required");
+    if (!grnItems || grnItems.length === 0) return setError("GRN must include at least one item");
+
+    // vendor/po check: if PO exists we don't allow creating GRN from requisition (UI blocks)
+    if (req.po) return setError("PO exists for this requisition — create GRN from PO instead.");
+
+    // validate items
+    for (const it of grnItems) {
+      if (!it.item) return setError("Each GRN line must have an item");
+      if (it.qtyReceived == null || Number(it.qtyReceived) < 0) return setError("Each GRN line received qty must be >= 0");
+    }
+
     try {
       setSaving(true);
-      const itemsPayload = (req.lines || []).map((ln) => ({
-        item: ln.item?._id || ln.item,
-        qtyReceived: ln.qty,
+      const itemsPayload = grnItems.map(it => ({
+        item: it.item,
+        qtyRequested: Number(it.qtyRequested || 0),
+        qtyReceived: Number(it.qtyReceived || 0),
+        remark: it.remark || ""
       }));
 
       const payload = {
         grnNo,
         receivedBy: receivedBy || undefined,
         receivedDate,
-        notes: notes || undefined,
         items: itemsPayload,
         store: req.toStore || req.store || undefined,
       };
 
       const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
+
       if (res?.data?.requisition) {
         setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
         const createdGrn = res.data.grn || res.data;
         const grnIdOrNo = createdGrn?._id || createdGrn?.code || grnNo;
+        setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] });
         navigate(`/super-admin/grn/${grnIdOrNo}`);
       } else {
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "GRN_CREATED", grn: { grnNo } } : r)));
+        setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] });
         navigate(`/super-admin/grn/${grnNo}`);
       }
-
-      setGrnModal({
-        open: false,
-        req: null,
-        grnNo: "",
-        receivedBy: "",
-        receivedDate: new Date().toISOString().slice(0, 10),
-        notes: "",
-      });
     } catch (err) {
       console.error("create grn error", err);
       setError(err.response?.data?.message || "Failed to create GRN");
@@ -574,7 +607,7 @@ const RequisitionList = () => {
     navigate(`/super-admin/requisition/${req._id}`);
   };
 
-  // current stock renderer (small tooltip)
+  // current stock helper
   const renderCurrentStock = (ln) => {
     const it = items.find((x) => x._id === ln.item || x.id === ln.item);
     if (!it) return "-";
@@ -650,6 +683,7 @@ const RequisitionList = () => {
   };
 
   const actionStyle = { display: "inline-block", marginLeft: 6, cursor: "pointer", padding: 6, borderRadius: 6, position: "relative" };
+  const disabledActionStyle = { ...actionStyle, opacity: 0.4, cursor: "not-allowed" };
 
   return (
     <div className="sa-page">
@@ -794,16 +828,25 @@ const RequisitionList = () => {
 
                       <span style={actionStyle} onClick={() => handleReject(r)} title="Reject"><i className="ri-close-circle-line" /></span>
 
+                      {/* PO create/view */}
                       {r.po ? (
                         <span style={actionStyle} title="View PO" onClick={() => viewPO(r.po)}><i className="ri-file-paper-line" /></span>
                       ) : (
                         !r.grn && <span style={actionStyle} onClick={() => openCreatePO(r)} title="Create Purchase Order (PO)"><i className="ri-shopping-cart-line" /></span>
                       )}
 
+                      {/* GRN create/view:
+                          - If requisition has PO => show disabled (cannot create GRN from requisition)
+                          - If no PO => allow create GRN from requisition (as before)
+                      */}
                       {r.grn ? (
                         <span style={actionStyle} title="View GRN" onClick={() => viewGRN(r.grn)}><i className="ri-inbox-line" /></span>
+                      ) : r.po ? (
+                        // disabled GRN because PO exists
+                        <span style={disabledActionStyle} title="PO created — cannot create GRN from requisition (create GRN from PO page)"><i className="ri-inbox-line" /></span>
                       ) : (
-                        !r.po && <span style={actionStyle} onClick={() => openCreateGRN(r)} title="Create GRN"><i className="ri-add-box-line" /></span>
+                        // no PO & no GRN => allow create GRN
+                        <span style={actionStyle} onClick={() => openCreateGRN(r)} title="Create GRN"><i className="ri-add-box-line" /></span>
                       )}
 
                       <span style={actionStyle} onClick={() => handleDelete(r)} title="Delete"><i className="ri-delete-bin-6-line" /></span>
@@ -816,7 +859,7 @@ const RequisitionList = () => {
         )}
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Create / Edit Requisition Modal (unchanged) */}
       {showForm && (
         <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
@@ -875,7 +918,7 @@ const RequisitionList = () => {
                 <input type="date" name="requiredBy" value={form.requiredBy} onChange={updateForm} />
               </label>
 
-              {/* items table */}
+              {/* items */}
               <div style={{ marginTop: 10 }}>
                 <table className="sa-table">
                   <thead>
@@ -927,7 +970,7 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* PO Modal (updated: no resort/vendor/store/notes inputs; items auto from requisition) */}
+      {/* PO Modal (unchanged) */}
       {poModal.open && (
         <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", items: [] })}>
           <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
@@ -946,19 +989,16 @@ const RequisitionList = () => {
                   <input value={poModal.poNo || ""} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} placeholder="PO-YYYY-XXX" />
                 </label>
 
-                {/* Show vendor (read-only) */}
                 <label>
                   Vendor (from requisition)
                   <input value={getVendorName(poModal.req?.vendor) || ""} readOnly />
                 </label>
 
-                {/* Show resort (read-only) */}
                 <label>
                   Resort (from requisition)
                   <input value={getResortName(poModal.req?.resort) || ""} readOnly />
                 </label>
 
-                {/* Show delivery store (read-only) */}
                 <label>
                   Delivery Store (from requisition)
                   <input value={getStoreName(poModal.req?.toStore || poModal.req?.store) || ""} readOnly />
@@ -970,7 +1010,7 @@ const RequisitionList = () => {
                 </label>
               </div>
 
-              {/* Items table (auto-fetched from requisition) */}
+              {/* Items table */}
               <div style={{ marginTop: 12 }}>
                 <table className="sa-table" style={{ width: "100%" }}>
                   <thead>
@@ -985,17 +1025,9 @@ const RequisitionList = () => {
                   <tbody>
                     {(poModal.items || []).map((ln, idx) => (
                       <tr key={ln.lineId || idx}>
+                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
+                        <td><input type="number" min="0" value={ln.qty} readOnly /></td>
                         <td>
-                          <div>{ln.itemName || (items.find(it => (it._id||it.id) === ln.item)?.name) || ln.item}</div>
-                        </td>
-
-                        <td>
-                          {/* keep qty visible but read-only to reflect requisition amount */}
-                          <input type="number" min="0" value={ln.qty} readOnly />
-                        </td>
-
-                        <td>
-                          {/* allow editing rate if you want to adjust before creating PO */}
                           <input type="number" min="0" value={ln.rate} onChange={(e) => {
                             const v = Number(e.target.value||0);
                             setPoModal(p => {
@@ -1007,21 +1039,15 @@ const RequisitionList = () => {
                             });
                           }} />
                         </td>
-
-                        <td>
-                          <div>{Number(ln.amount || 0).toFixed(2)}</div>
-                        </td>
-
-                        <td>
-                          <input value={ln.remark || ""} onChange={(e) => {
-                            const v = e.target.value;
-                            setPoModal(p => {
-                              const newItems = [...(p.items||[])];
-                              newItems[idx] = { ...newItems[idx], remark: v };
-                              return { ...p, items: newItems };
-                            });
-                          }} />
-                        </td>
+                        <td>{Number(ln.amount || 0).toFixed(2)}</td>
+                        <td><input value={ln.remark || ""} onChange={(e)=> {
+                          const v = e.target.value;
+                          setPoModal(p => {
+                            const newItems = [...(p.items||[])];
+                            newItems[idx] = { ...newItems[idx], remark: v };
+                            return { ...p, items: newItems };
+                          });
+                        }} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1058,36 +1084,82 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* GRN Modal */}
+      {/* GRN Modal (new full form) */}
       {grnModal.open && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0, 10), notes: "" })}>
-          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sa-modal-backdrop" onClick={() => !saving && setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] })}>
+          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Create GRN</h3>
-            <p className="sa-modal-sub">Record goods received against PO / requisition.</p>
+            <p className="sa-modal-sub">Record goods received against the selected requisition. Vendor/store are taken from the requisition.</p>
 
             <div className="sa-modal-form">
-              <label>
-                GRN No.
-                <input value={grnModal.grnNo} onChange={(e) => setGrnModal((p) => ({ ...p, grnNo: e.target.value }))} />
-              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label>
+                  Approved Requisition (read-only)
+                  <input value={grnModal.req?.requisitionNo || grnModal.req?._id || ""} readOnly />
+                </label>
 
-              <label>
-                Received By
-                <input value={grnModal.receivedBy} onChange={(e) => setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))} />
-              </label>
+                <label>
+                  GRN No.
+                  <input value={grnModal.grnNo || ""} onChange={(e) => setGrnModal(p => ({ ...p, grnNo: e.target.value }))} />
+                </label>
 
-              <label>
-                Received Date
-                <input type="date" value={grnModal.receivedDate} onChange={(e) => setGrnModal((p) => ({ ...p, receivedDate: e.target.value }))} />
-              </label>
+                <label>
+                  Received By
+                  <input value={grnModal.receivedBy || ""} onChange={(e) => setGrnModal(p => ({ ...p, receivedBy: e.target.value }))} />
+                </label>
 
-              <label>
-                Notes (optional)
-                <textarea value={grnModal.notes} onChange={(e) => setGrnModal((p) => ({ ...p, notes: e.target.value }))} />
-              </label>
+                <label>
+                  Received Date
+                  <input type="date" value={grnModal.receivedDate || new Date().toISOString().slice(0,10)} onChange={(e) => setGrnModal(p => ({ ...p, receivedDate: e.target.value }))} />
+                </label>
 
-              <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0, 10), notes: "" })}>Cancel</button>
+                <label>
+                  Vendor (from requisition)
+                  <input value={getVendorName(grnModal.req?.vendor) || ""} readOnly />
+                </label>
+
+                <label>
+                  Store (from requisition)
+                  <input value={getStoreName(grnModal.req?.toStore || grnModal.req?.store) || ""} readOnly />
+                </label>
+              </div>
+
+              {/* Items table: requested qty read-only; received qty editable */}
+              <div style={{ marginTop: 12 }}>
+                <table className="sa-table" style={{ width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "45%" }}>Item</th>
+                      <th style={{ width: "12%" }}>Requested Qty</th>
+                      <th style={{ width: "12%" }}>Received Qty</th>
+                      <th style={{ width: "12%" }}>Balance</th>
+                      <th style={{ width: "19%" }}>Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(grnModal.items || []).map((ln, idx) => (
+                      <tr key={ln.lineId || idx}>
+                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
+                        <td><input type="number" min="0" value={ln.qtyRequested} readOnly /></td>
+                        <td>
+                          <input type="number" min="0" value={ln.qtyReceived} onChange={(e) => {
+                            const v = Number(e.target.value || 0);
+                            updateGrnLine(idx, "qtyReceived", v);
+                          }} />
+                        </td>
+                        <td>{Number((ln.qtyRequested || 0) - (ln.qtyReceived || 0)).toFixed(2)}</td>
+                        <td>
+                          <input value={ln.remark || ""} onChange={(e) => updateGrnLine(idx, "remark", e.target.value)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* actions */}
+              <div className="sa-modal-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="sa-secondary-button" onClick={() => setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] })}>Cancel</button>
                 <button type="button" className="sa-primary-button" onClick={submitCreateGRN} disabled={saving}>{saving ? "Creating..." : "Create GRN"}</button>
               </div>
             </div>
