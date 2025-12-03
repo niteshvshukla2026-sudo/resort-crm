@@ -3,8 +3,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
+const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
 
 // helper to create a new line
 const newLine = () => ({
@@ -14,7 +13,7 @@ const newLine = () => ({
   remark: "",
 });
 
-// Dev fallback data (kept small)
+// Dev fallback data
 const DEV_SAMPLES = [
   {
     _id: "sample_req_1",
@@ -69,13 +68,21 @@ const RequisitionList = () => {
     lines: [newLine()],
   });
 
-  // PO modal state
+  // PO modal state (enhanced full PO form)
   const [poModal, setPoModal] = useState({
     open: false,
     req: null,
     poNo: "",
     vendor: "",
+    resort: "",
+    deliveryStore: "",
+    poDate: new Date().toISOString().slice(0, 10),
+    items: [],
     notes: "",
+    subTotal: 0,
+    taxPercent: 0,
+    taxAmount: 0,
+    total: 0,
   });
 
   // GRN modal state
@@ -106,21 +113,15 @@ const RequisitionList = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [
-        reqRes,
-        resortRes,
-        deptRes,
-        storeRes,
-        itemRes,
-        vendorRes,
-      ] = await Promise.all([
-        axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
-      ]);
+      const [reqRes, resortRes, deptRes, storeRes, itemRes, vendorRes] =
+        await Promise.all([
+          axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
+        ]);
 
       const serverReqs = Array.isArray(reqRes.data) ? reqRes.data : [];
       const existingReqIds = new Set(serverReqs.map((r) => r._id));
@@ -387,49 +388,112 @@ const RequisitionList = () => {
     }
   };
 
-  // PO modal functions
+  // ------------------ PO modal (enhanced) ------------------
+
+  // open PO modal and prefill using requisition
   const openCreatePO = (req) => {
+    // map requisition lines to PO item rows
+    const itemsPayload = (req.lines || []).map((ln) => {
+      const itemId = ln.item?._id || ln.item;
+      const itemObj = items.find((it) => (it._id || it.id) === itemId);
+      const rate = ln.expectedRate || ln.rate || (itemObj?.indicativePrice || 0);
+      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const qtyVal = ln.qty || 0;
+      return {
+        lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
+        item: itemId,
+        itemName: name,
+        qty: qtyVal,
+        rate,
+        amount: Number((qtyVal * rate).toFixed(2)),
+        remark: ln.remark || "",
+      };
+    });
+
+    const sub = itemsPayload.reduce((s, i) => s + Number(i.amount || 0), 0);
+
     setPoModal({
       open: true,
       req,
-      poNo: `PO-${Date.now()}`,
+      poNo: `PO-${Date.now()}`, // can be left for backend to override if needed
       vendor: req.vendor || "",
+      resort: req.resort || (stores.find(s => (s._id || s.id) === (req.toStore || req.store))?.resort) || "",
+      deliveryStore: req.toStore || req.store || "",
+      poDate: new Date().toISOString().slice(0, 10),
+      items: itemsPayload,
       notes: "",
+      subTotal: sub,
+      taxPercent: 0,
+      taxAmount: 0,
+      total: sub,
     });
   };
 
+  // submit PO to backend
   const submitCreatePO = async () => {
-    const { req, poNo, vendor, notes } = poModal;
+    const { req, poNo, vendor, notes, items: poItems, resort, deliveryStore, poDate, taxPercent } = poModal;
     if (!poNo) return setError("PO No. is required");
+    if (!vendor) return setError("Vendor is required");
+    if (!resort) return setError("Resort is required");
+    if (!deliveryStore) return setError("Delivery store is required");
+    if (!poItems || poItems.length === 0) return setError("PO must have at least one item");
+
+    // validate each item
+    for (const it of poItems) {
+      if (!it.item) return setError("Each PO line must have an item selected");
+      if (!it.qty || Number(it.qty) <= 0) return setError("Each PO line qty must be > 0");
+      if (it.rate == null || Number(it.rate) < 0) return setError("Each PO line rate must be >= 0");
+    }
+
     try {
       setSaving(true);
-      // Build items payload from requisition lines
-      const itemsPayload = (req.lines || []).map((ln) => ({
-        item: ln.item?._id || ln.item,
-        qty: ln.qty,
-        rate: ln.expectedRate || ln.rate || undefined,
-      }));
+      // recalc amounts & totals
+      const itemsPayload = poItems.map(it => {
+        const qty = Number(it.qty);
+        const rate = Number(it.rate);
+        const amount = qty * rate;
+        return { item: it.item, qty, rate, amount, remark: it.remark || "" };
+      });
+      const subTotal = itemsPayload.reduce((s,i)=>s + i.amount, 0);
+      const taxAmt = Number(((taxPercent || 0) / 100) * subTotal);
+      const total = subTotal + taxAmt;
 
       const payload = {
         poNo,
-        vendor: vendor || undefined,
+        vendor,
+        resort,
+        deliverTo: deliveryStore,
+        poDate,
         notes: notes || undefined,
         items: itemsPayload,
+        subTotal,
+        taxPercent: taxPercent || 0,
+        taxAmount: taxAmt,
+        total
       };
 
       const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-po`, payload);
+
       if (res?.data?.requisition) {
+        // backend returns updated requisition
         setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
-        const createdPo = res.data.po || res.data;
-        const poIdOrNo = createdPo?._id || createdPo?.code || poNo;
+        const createdPo = res.data.po;
+        const poIdOrNo = (createdPo && (createdPo._id || createdPo.code)) || poNo;
+        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
+        navigate(`/super-admin/po/${poIdOrNo}`);
+      } else if (res?.data) {
+        // fallback if API returns po object
+        const createdPo = res.data;
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { code: createdPo.code || poNo, _id: createdPo._id } } : r)));
+        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
+        const poIdOrNo = createdPo._id || createdPo.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
-        // fallback: optimistic update
+        // optimistic fallback
         setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { poNo } } : r)));
+        setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] });
         navigate(`/super-admin/po/${poNo}`);
       }
-
-      setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" });
     } catch (err) {
       console.error("create po error", err);
       setError(err.response?.data?.message || "Failed to create PO");
@@ -438,7 +502,8 @@ const RequisitionList = () => {
     }
   };
 
-  // GRN modal functions
+  // ------------------ GRN modal (existing) ------------------
+
   const openCreateGRN = (req) => {
     setGrnModal({
       open: true,
@@ -455,7 +520,6 @@ const RequisitionList = () => {
     if (!grnNo) return setError("GRN No. is required");
     try {
       setSaving(true);
-      // Build items payload from requisition lines (receiver can accept partial — UI currently not granting edits; using full qty)
       const itemsPayload = (req.lines || []).map((ln) => ({
         item: ln.item?._id || ln.item,
         qtyReceived: ln.qty,
@@ -521,7 +585,6 @@ const RequisitionList = () => {
     const it = items.find((x) => x._id === ln.item || x.id === ln.item);
     if (!it) return "-";
     const stockMap = it.stockByStore || {};
-    // pick stores depending on selected resort or fallback all
     const storeIds = Object.keys(stockMap);
     if (!storeIds.length) return "-";
     const rows = storeIds.map((id) => {
@@ -870,34 +933,152 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* PO Modal */}
+      {/* PO Modal (full form) */}
       {poModal.open && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" })}>
-          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [], notes: "" })}>
+          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Create Purchase Order</h3>
-            <p className="sa-modal-sub">Create PO from this requisition.</p>
+            <p className="sa-modal-sub">Create PO from this requisition. Edit rates/qty before submitting.</p>
 
             <div className="sa-modal-form">
-              <label>
-                PO No.
-                <input value={poModal.poNo} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} />
-              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label>
+                  Approved Requisition (read-only)
+                  <input value={poModal.req?.requisitionNo || poModal.req?._id || ""} readOnly />
+                </label>
 
-              <label>
-                Vendor
-                <input value={poModal.vendor} onChange={(e) => setPoModal((p) => ({ ...p, vendor: e.target.value }))} />
-              </label>
+                <label>
+                  PO No.
+                  <input value={poModal.poNo || ""} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} placeholder="PO-YYYY-XXX" />
+                </label>
 
-              <label>
-                Notes (optional)
-                <textarea value={poModal.notes} onChange={(e) => setPoModal((p) => ({ ...p, notes: e.target.value }))} />
-              </label>
+                <label>
+                  Vendor
+                  <select value={poModal.vendor || ""} onChange={(e) => setPoModal((p) => ({ ...p, vendor: e.target.value }))}>
+                    <option value="">-- Select Vendor --</option>
+                    {vendors.map((v) => <option key={v._id || v.id} value={v._id || v.id}>{v.name}</option>)}
+                  </select>
+                </label>
 
-              <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", vendor: "", notes: "" })}>Cancel</button>
+                <label>
+                  Resort
+                  <select value={poModal.resort || ""} onChange={(e) => setPoModal((p) => ({ ...p, resort: e.target.value }))}>
+                    <option value="">-- Select Resort --</option>
+                    {resorts.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{r.name}</option>)}
+                  </select>
+                </label>
+
+                <label>
+                  Delivery Store
+                  <select value={poModal.deliveryStore || ""} onChange={(e) => setPoModal((p) => ({ ...p, deliveryStore: e.target.value }))}>
+                    <option value="">-- Select Store --</option>
+                    {stores.filter(s => s.resort === (poModal.resort || poModal.req?.resort)).map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
+                    {stores.filter(s => !s.resort).map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+
+                <label>
+                  PO Date
+                  <input type="date" value={poModal.poDate || new Date().toISOString().slice(0,10)} onChange={(e)=>setPoModal(p=>({...p, poDate: e.target.value}))} />
+                </label>
+
+                <label style={{ gridColumn: "1 / -1" }}>
+                  Notes
+                  <textarea value={poModal.notes || ""} onChange={(e)=>setPoModal(p=>({...p, notes: e.target.value}))} />
+                </label>
+              </div>
+
+              {/* Items table */}
+              <div style={{ marginTop: 12 }}>
+                <table className="sa-table" style={{ width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "45%" }}>Item</th>
+                      <th style={{ width: "12%" }}>Qty</th>
+                      <th style={{ width: "12%" }}>Rate</th>
+                      <th style={{ width: "12%" }}>Amount</th>
+                      <th style={{ width: "19%" }}>Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(poModal.items || []).map((ln, idx) => (
+                      <tr key={ln.lineId || idx}>
+                        <td>
+                          <div>{ln.itemName || (items.find(it => (it._id||it.id) === ln.item)?.name) || ln.item}</div>
+                        </td>
+
+                        <td>
+                          <input type="number" min="0" value={ln.qty} onChange={(e) => {
+                            const v = Number(e.target.value||0);
+                            setPoModal(p => {
+                              const newItems = [...(p.items||[])];
+                              newItems[idx] = { ...newItems[idx], qty: v, amount: Number((v * Number(newItems[idx].rate || 0)).toFixed(2)) };
+                              const sub = newItems.reduce((s,i)=>s + Number(i.amount||0), 0);
+                              const tax = (p.taxPercent || 0) / 100 * sub;
+                              return { ...p, items: newItems, subTotal: sub, taxAmount: tax, total: sub + tax };
+                            });
+                          }} />
+                        </td>
+
+                        <td>
+                          <input type="number" min="0" value={ln.rate} onChange={(e) => {
+                            const v = Number(e.target.value||0);
+                            setPoModal(p => {
+                              const newItems = [...(p.items||[])];
+                              newItems[idx] = { ...newItems[idx], rate: v, amount: Number((v * Number(newItems[idx].qty || 0)).toFixed(2)) };
+                              const sub = newItems.reduce((s,i)=>s + Number(i.amount||0), 0);
+                              const tax = (p.taxPercent || 0) / 100 * sub;
+                              return { ...p, items: newItems, subTotal: sub, taxAmount: tax, total: sub + tax };
+                            });
+                          }} />
+                        </td>
+
+                        <td>
+                          <div>{Number(ln.amount || 0).toFixed(2)}</div>
+                        </td>
+
+                        <td>
+                          <input value={ln.remark || ""} onChange={(e) => {
+                            const v = e.target.value;
+                            setPoModal(p => {
+                              const newItems = [...(p.items||[])];
+                              newItems[idx] = { ...newItems[idx], remark: v };
+                              return { ...p, items: newItems };
+                            });
+                          }} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* totals */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 12 }}>
+                <div style={{ width: 360, textAlign: "right" }}>
+                  <div style={{ marginBottom: 6 }}>Subtotal: <strong>{(poModal.subTotal || 0).toFixed(2)}</strong></div>
+                  <div style={{ marginBottom: 6 }}>
+                    Tax % <input type="number" min="0" value={poModal.taxPercent || 0} onChange={(e)=> {
+                      const tp = Number(e.target.value||0);
+                      setPoModal(p => {
+                        const st = p.items?.reduce((s,i)=>s + Number(i.amount || 0), 0) || 0;
+                        const taxAmt = (tp/100)*st;
+                        return { ...p, taxPercent: tp, taxAmount: taxAmt, subTotal: st, total: st + taxAmt };
+                      });
+                    }} style={{ width: 70, marginLeft: 8 }} />
+                  </div>
+                  <div style={{ marginBottom: 6 }}>Tax Amount: <strong>{(poModal.taxAmount || 0).toFixed(2)}</strong></div>
+                  <div style={{ marginTop: 8, fontSize: "1.05rem" }}>Total: <strong>{(poModal.total || poModal.subTotal || 0).toFixed(2)}</strong></div>
+                </div>
+              </div>
+
+              {/* actions */}
+              <div className="sa-modal-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", vendor: "", items: [] })}>Cancel</button>
                 <button type="button" className="sa-primary-button" onClick={submitCreatePO} disabled={saving}>{saving ? "Creating..." : "Create PO"}</button>
               </div>
             </div>
+
           </div>
         </div>
       )}
@@ -942,6 +1123,7 @@ const RequisitionList = () => {
       <style>{`
         td .action-btn .tooltip { display:none; }
         td .action-btn:hover .tooltip { display:block; }
+        .sa-modal.large { max-height: 85vh; overflow: auto; }
       `}</style>
     </div>
   );
