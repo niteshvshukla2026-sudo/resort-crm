@@ -21,12 +21,14 @@ const DEV_VENDORS = [
     country: "India",
     vendorType: "Company",
     category: "Food",
+    categories: ["Food"],
     gstNumber: "27AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
     paymentTerms: "30 Days",
     creditLimit: "50000",
     paymentMode: "Bank Transfer",
     status: "Active",
+    resorts: ["resort_a"],
     notes: "Priority supplier",
   },
   {
@@ -38,7 +40,9 @@ const DEV_VENDORS = [
     city: "Goa",
     vendorType: "Distributor",
     category: "Housekeeping",
+    categories: ["Housekeeping"],
     status: "Active",
+    resorts: [],
   },
 ];
 
@@ -47,7 +51,8 @@ const emptyForm = () => ({
   code: "",
   name: "",
   vendorType: "",
-  category: "",
+  categories: [], // multi-select
+  resorts: [], // multi-select: resort ids
   contactPerson: "",
   phone: "",
   whatsapp: "",
@@ -84,6 +89,7 @@ const VendorList = () => {
   const [form, setForm] = useState(emptyForm());
   const [fieldErrors, setFieldErrors] = useState({});
   const [categories, setCategories] = useState([]);
+  const [resorts, setResorts] = useState([]);
 
   // filters
   const [filterName, setFilterName] = useState("");
@@ -96,7 +102,7 @@ const VendorList = () => {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // --- load vendors and categories ---
+  // --- load vendors, categories, resorts ---
   const loadVendors = async () => {
     try {
       setLoading(true);
@@ -104,8 +110,20 @@ const VendorList = () => {
       const res = await axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: [] }));
       const serverVendors = Array.isArray(res.data) ? res.data : [];
       const existingIdsOrCodes = new Set(serverVendors.map((v) => v._id || v.id || v.code));
-      const toAdd = DEV_VENDORS.filter((s) => !existingIdsOrCodes.has(s._id) && !existingIdsOrCodes.has(s.code));
-      setVendors([...serverVendors, ...toAdd]);
+      const toAdd = DEV_VENDORS.filter(
+        (s) => !existingIdsOrCodes.has(s._id) && !existingIdsOrCodes.has(s.code)
+      );
+      // ensure each vendor has categories/resorts fields
+      const normalized = serverVendors.map((v) => ({
+        ...v,
+        categories: v.categories && Array.isArray(v.categories)
+          ? v.categories
+          : v.category
+          ? [v.category]
+          : [],
+        resorts: v.resorts && Array.isArray(v.resorts) ? v.resorts : v.resort ? [v.resort] : [],
+      }));
+      setVendors([...normalized, ...toAdd]);
     } catch (err) {
       console.error("load vendors error", err);
       setError("Failed to load vendors; using sample data");
@@ -127,9 +145,31 @@ const VendorList = () => {
     }
   };
 
+  const loadResorts = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/resorts`).catch(() => ({ data: [] }));
+      const list = Array.isArray(res.data)
+        ? res.data.map((r) => ({ id: r._id || r.id || r.code || r.name, name: r.name || r.code || r._id }))
+        : [];
+      // fallback minimal demo (if none)
+      const fallback = [
+        { id: "resort_a", name: "Demo Resort A" },
+        { id: "resort_b", name: "Demo Resort B" },
+      ];
+      setResorts(list.length ? list : fallback);
+    } catch (err) {
+      console.warn("Failed to load resorts", err);
+      setResorts([
+        { id: "resort_a", name: "Demo Resort A" },
+        { id: "resort_b", name: "Demo Resort B" },
+      ]);
+    }
+  };
+
   useEffect(() => {
     loadVendors();
     loadCategories();
+    loadResorts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -170,20 +210,16 @@ const VendorList = () => {
     const initials = words.map((w) => w[0].toUpperCase()).join("");
     const suffix = String(Date.now()).slice(-4);
     let base = `${initials}_${suffix}`;
-    // ensure uniqueness among current vendors
     const existingCodes = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
     if (!existingCodes.has(base)) return base;
-    // if clash, append random 2-digit
     return `${initials}_${suffix}${Math.floor(Math.random() * 90 + 10)}`;
   };
 
-  // ensure code uniqueness (local check) - returns unique uppercase code
   const ensureUniqueCode = (candidate) => {
     if (!candidate) return candidate;
     const up = candidate.toUpperCase();
     const existing = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
     if (!existing.has(up)) return up;
-    // append short suffix until unique
     for (let i = 1; i < 1000; i++) {
       const tryCode = `${up}_${i}`;
       if (!existing.has(tryCode)) return tryCode;
@@ -264,7 +300,8 @@ const VendorList = () => {
       return undefined;
     },
     category: (v) => {
-      if (!v) return "Category is required";
+      // v is expected to be array for categories
+      if (!v || !Array.isArray(v) || v.length === 0) return "At least one category is required";
       return undefined;
     },
   };
@@ -272,7 +309,8 @@ const VendorList = () => {
   const validateAll = () => {
     const newErr = {};
     Object.keys(validators).forEach((k) => {
-      const msg = validators[k](form[k]);
+      const value = k === "category" ? form.categories : form[k];
+      const msg = validators[k](value);
       if (msg) newErr[k] = msg;
     });
     setFieldErrors(newErr);
@@ -293,7 +331,8 @@ const VendorList = () => {
       code: v.code || "",
       name: v.name || "",
       vendorType: v.vendorType || "",
-      category: v.category || "",
+      categories: v.categories && Array.isArray(v.categories) ? v.categories : v.category ? [v.category] : [],
+      resorts: v.resorts && Array.isArray(v.resorts) ? v.resorts : v.resort ? [v.resort] : [],
       contactPerson: v.contactPerson || "",
       phone: v.phone || "",
       whatsapp: v.whatsapp || "",
@@ -371,6 +410,33 @@ const VendorList = () => {
     });
   };
 
+  // toggle category checkbox
+  const toggleCategory = (cat) => {
+    setForm((p) => {
+      const set = new Set(p.categories || []);
+      if (set.has(cat)) set.delete(cat);
+      else set.add(cat);
+      const updated = { ...p, categories: Array.from(set) };
+      // clear category error if any
+      setFieldErrors((prev) => {
+        const c = { ...prev };
+        delete c.category;
+        return c;
+      });
+      return updated;
+    });
+  };
+
+  // toggle resort checkbox
+  const toggleResort = (resId) => {
+    setForm((p) => {
+      const set = new Set(p.resorts || []);
+      if (set.has(resId)) set.delete(resId);
+      else set.add(resId);
+      return { ...p, resorts: Array.from(set) };
+    });
+  };
+
   // paste handlers for extra safety
   const handlePasteLetters = (ev, fieldName) => {
     ev.preventDefault();
@@ -435,24 +501,37 @@ const VendorList = () => {
 
     try {
       setSaving(true);
-      const payload = { ...form };
-      if (!form._id) delete payload._id;
-      if (payload.code) payload.code = ensureUniqueCode(String(payload.code).toUpperCase());
+      const payload = {
+        ...form,
+        categories: form.categories || [],
+        resorts: form.resorts || [],
+      };
 
-      if (form._id && String(form._id).startsWith("local_")) {
-        const res = await axios.post(`${API_BASE}/api/vendors`, payload).catch(() => null);
-        const created = res?.data || { ...payload, _id: form._id };
-        setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? created : x)));
-      } else if (form._id) {
+      // keep a single category for backward compatibility (first one)
+      if (!payload.category && payload.categories && payload.categories.length) {
+        payload.category = payload.categories[0];
+      }
+
+      if (!payload.code) delete payload.code;
+      if (form._id) {
+        // update
         const res = await axios.put(`${API_BASE}/api/vendors/${form._id}`, payload).catch(() => null);
         if (res?.data) {
-          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? res.data : x)));
+          const updated = { ...res.data, categories: res.data.categories || (res.data.category ? [res.data.category] : []), resorts: res.data.resorts || (res.data.resort ? [res.data.resort] : []) };
+          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? updated : x)));
         } else {
-          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? { ...x, ...payload } : x)));
+          // optimistic local update
+          const updated = { ...(vendors.find((x) => x._id === form._id) || {}), ...payload };
+          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? updated : x)));
         }
       } else {
+        // create
+        payload.code = ensureUniqueCode(String(payload.code || "").toUpperCase());
         const res = await axios.post(`${API_BASE}/api/vendors`, payload).catch(() => null);
         const created = res?.data || { ...payload, _id: `local_${Date.now()}` };
+        // normalize
+        created.categories = created.categories || (created.category ? [created.category] : []);
+        created.resorts = created.resorts || (created.resort ? [created.resort] : []);
         setVendors((p) => [created, ...p]);
       }
 
@@ -479,7 +558,7 @@ const VendorList = () => {
     }
   };
 
-  // CSV upload & parsing (strict mapping still allows import but validations applied on edit/save)
+  // CSV upload & parsing (multi categories/resorts supported as semicolon/comma separated)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -521,11 +600,19 @@ const VendorList = () => {
       const payloads = parsed.map((p) => {
         const nameVal = p.name || "";
         const codeVal = p.code || generateCodeFromName(nameVal);
+        // categories may be "Food;Housekeeping" or "Food,Housekeeping"
+        const catsRaw = p.categories || p.category || "";
+        const cats = catsRaw ? catsRaw.split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+        const resortsRaw = p.resorts || p.resort || "";
+        const rlist = resortsRaw ? resortsRaw.split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+
         return {
           code: ensureUniqueCode(String(codeVal).toUpperCase()),
           name: nameVal,
           vendorType: p.vendortype || p.vendor_type || "",
-          category: p.category || "",
+          categories: cats,
+          category: cats.length ? cats[0] : "",
+          resorts: rlist,
           contactPerson: p.contactperson || p.contact_person || p.contact || "",
           phone: p.phone || p.contact || "",
           whatsapp: p.whatsapp || "",
@@ -584,13 +671,14 @@ const VendorList = () => {
     reader.readAsText(file);
   };
 
-  // export CSV (same extended columns)
+  // export CSV (categories & resorts exported as semicolon separated strings)
   const handleExportCSV = (list) => {
     const cols = [
       "code",
       "name",
       "vendorType",
-      "category",
+      "categories",
+      "resorts",
       "contactPerson",
       "phone",
       "whatsapp",
@@ -617,17 +705,23 @@ const VendorList = () => {
       "status",
       "notes",
     ];
-    const rows = [cols.join(",")].concat(
-      list.map((v) =>
+    const rows = [
+      cols.join(","),
+      ...list.map((v) =>
         cols
           .map((c) => {
-            const s = String(v[c] ?? "");
-            if (s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-            return s;
+            const value =
+              c === "categories"
+                ? (Array.isArray(v.categories) ? v.categories.join(";") : v.categories || v.category || "")
+                : c === "resorts"
+                ? (Array.isArray(v.resorts) ? v.resorts.join(";") : v.resorts || v.resort || "")
+                : String(v[c] ?? "");
+            if (value.includes(",") || value.includes("\n")) return `"${value.replace(/"/g, '""')}"`;
+            return value;
           })
           .join(",")
-      )
-    );
+      ),
+    ];
     const csv = rows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -651,6 +745,12 @@ const VendorList = () => {
   }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
 
   const cities = useMemo(() => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))), [vendors]);
+
+  // small helper to lookup resort name by id
+  const findResortName = (id) => {
+    const r = resorts.find((x) => x.id === id || x._id === id || x.id === String(id));
+    return r ? r.name : id;
+  };
 
   return (
     <div className="sa-page">
@@ -739,6 +839,8 @@ const VendorList = () => {
                 <th>Contact</th>
                 <th>Email</th>
                 <th>City</th>
+                <th>Categories</th>
+                <th>Resorts</th>
                 <th>GST</th>
                 <th>Payment Terms</th>
                 <th>Status</th>
@@ -757,6 +859,8 @@ const VendorList = () => {
                   </td>
                   <td>{v.email}</td>
                   <td>{v.city}</td>
+                  <td>{(Array.isArray(v.categories) ? v.categories.join(", ") : v.category || "")}</td>
+                  <td>{(Array.isArray(v.resorts) ? v.resorts.map(findResortName).join(", ") : (v.resort ? findResortName(v.resort) : ""))}</td>
                   <td>{v.gstNumber}</td>
                   <td>{v.paymentTerms}</td>
                   <td>{v.status}</td>
@@ -781,7 +885,7 @@ const VendorList = () => {
       {/* Modal: create/edit */}
       {showForm && (
         <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
-          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>{form._id ? "Edit Vendor" : "New Vendor"}</h3>
             <p className="sa-modal-sub">Add or update a supplier used in purchase orders. (Strict validations enabled)</p>
 
@@ -832,17 +936,35 @@ const VendorList = () => {
                 </select>
               </label>
 
+              {/* Categories (multi-select checkboxes) */}
               <label>
-                Category * (from Item Category master)
-                <select name="category" value={form.category} onChange={handleChange}>
-                  <option value="">Select category</option>
+                Categories * (select one or more)
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                   {categories.length === 0 ? (
-                    <option value="">(no categories)</option>
+                    <div style={{ color: "#9ca3af" }}>(no categories)</div>
                   ) : (
-                    categories.map((c) => <option key={c} value={c}>{c}</option>)
+                    categories.map((c) => (
+                      <label key={c} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="checkbox" checked={form.categories.includes(c)} onChange={() => toggleCategory(c)} />
+                        <span>{c}</span>
+                      </label>
+                    ))
                   )}
-                </select>
+                </div>
                 {fieldErrors.category && <div className="sa-field-error">{fieldErrors.category}</div>}
+              </label>
+
+              {/* Resorts (multi-select checkboxes) */}
+              <label>
+                Resorts (which this vendor supplies) — select one or more
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                  {resorts.map((r) => (
+                    <label key={r.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input type="checkbox" checked={(form.resorts || []).includes(r.id)} onChange={() => toggleResort(r.id)} />
+                      <span>{r.name}</span>
+                    </label>
+                  ))}
+                </div>
               </label>
 
               <label>
