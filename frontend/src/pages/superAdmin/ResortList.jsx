@@ -1,4 +1,6 @@
 // src/pages/superAdmin/ResortList.jsx
+// UPDATED: hard-coded Maharashtra locations + full field validation (inline errors)
+
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
@@ -13,7 +15,7 @@ const DEV_RESORTS = [
     address: "Beach Road, Goa",
     locationZone: "Goa",
     ownerName: "Ramesh Kumar",
-    ownerContact: "+91-9876543210",
+    ownerContact: "+919876543210",
     ownerEmail: "ramesh@example.com",
     ownerResdAddress: "House 12, Goa",
     ownerOffAddress: "Office Address",
@@ -26,15 +28,6 @@ const DEV_RESORTS = [
     renewalDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString().slice(0,10),
     isActive: true,
   },
-  { _id: "dev_res_2", name: "Coral Cove", code: "CC", address: "Port Lane", locationZone: "Andaman", ownerName: "Asha", ownerContact: "+91-8888888888", ownerEmail: "asha@example.com", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 20, tieUpCategory: "Marketed", qualityCategory: "4-Star", locationCategory: "Offbeat", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_3", name: "Palm Grove", code: "PG", address: "Hill Road", locationZone: "Kerala", ownerName: "Vijay", ownerContact: "+91-7777777777", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 15, tieUpCategory: "Owned", qualityCategory: "3-Star", locationCategory: "Offbeat", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_4", name: "Hillside Retreat", code: "HR", address: "Top Hill", locationZone: "Ooty", ownerName: "Suresh", ownerContact: "+91-6666666666", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 10, tieUpCategory: "Commissionable", qualityCategory: "4-Star", locationCategory: "Mainstream", fssaiNumber: "FSSAIX", fssaiStatus: "expired", renewalDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString().slice(0,10), isActive: false },
-  { _id: "dev_res_5", name: "Sunset Point", code: "SP", address: "Sunset Blvd", locationZone: "Goa", ownerName: "Anita", ownerContact: "+91-5555555555", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 25, tieUpCategory: "Managed", qualityCategory: "5-Star", locationCategory: "Mainstream", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_6", name: "Lagoon View", code: "LV", address: "Lagoon St", locationZone: "Lakshadweep", ownerName: "Kumar", ownerContact: "+91-4444444444", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 12, tieUpCategory: "Marketed", qualityCategory: "4-Star", locationCategory: "Offbeat", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_7", name: "Riverbend Inn", code: "RI", address: "River Lane", locationZone: "Assam", ownerName: "Rita", ownerContact: "+91-3333333333", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 8, tieUpCategory: "Owned", qualityCategory: "3-Star", locationCategory: "Offbeat", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: false },
-  { _id: "dev_res_8", name: "Forest Whisper", code: "FW", address: "Forest Road", locationZone: "Coorg", ownerName: "Vikram", ownerContact: "+91-2222222222", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 30, tieUpCategory: "Commissionable", qualityCategory: "4-Star", locationCategory: "Offbeat", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_9", name: "Dunes Hotel", code: "DH", address: "Desert Rd", locationZone: "Rajasthan", ownerName: "Pankaj", ownerContact: "+91-1111111111", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 50, tieUpCategory: "Managed", qualityCategory: "5-Star", locationCategory: "Mainstream", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
-  { _id: "dev_res_10", name: "Crystal Sands", code: "CS", address: "Sands Ave", locationZone: "Pondicherry", ownerName: "Geeta", ownerContact: "+91-9999999999", ownerEmail: "", ownerResdAddress: "", ownerOffAddress: "", noOfKeys: 18, tieUpCategory: "Marketed", qualityCategory: "4-Star", locationCategory: "Mainstream", fssaiNumber: "", fssaiStatus: "", renewalDate: "", isActive: true },
 ];
 
 const emptyForm = () => ({
@@ -54,7 +47,7 @@ const emptyForm = () => ({
   locationCategory: "",
   fssaiNumber: "",
   fssaiStatus: "",
-  renewalDate: "", // will be dd/mm/yyyy string for display
+  renewalDate: "",
   isActive: true,
 });
 
@@ -105,12 +98,9 @@ const MAHA_CITIES = [
   "Alibaug",
   "Matheran",
   "Panchgani",
-  "Tapi (Suratgarh)",
-  "Siddharthnagar",
   "Dapoli",
   "Devgad",
   "Chiplun",
-  "Satara",
   "Baramati",
   "Shirdi",
   "Malegaon",
@@ -123,7 +113,6 @@ const pad = (n) => String(n).padStart(2, "0");
 
 const formatISOToDDMMYYYY = (iso) => {
   if (!iso) return "";
-  // allow iso like "2025-12-31" or full ISO with time
   const d = new Date(iso);
   if (isNaN(d)) return "";
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -135,10 +124,8 @@ const parseDDMMYYYYToISO = (s) => {
   if (parts.length !== 3) return "";
   const [dd, mm, yyyy] = parts.map((p) => p.trim());
   if (!dd || !mm || !yyyy) return "";
-  // basic sanity check
   const day = Number(dd), month = Number(mm), year = Number(yyyy);
   if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return "";
-  // Construct ISO yyyy-mm-dd
   return `${year}-${pad(month)}-${pad(day)}`;
 };
 
@@ -167,6 +154,77 @@ const ResortList = () => {
   const [filterTieUpCategory, setFilterTieUpCategory] = useState("");
   const [filterQualityCategory, setFilterQualityCategory] = useState("");
   const [filterLocationCategory, setFilterLocationCategory] = useState("");
+
+  // validation state
+  const [formErrors, setFormErrors] = useState({});
+
+  const validators = {
+    name: (v) => {
+      if (!v || !v.trim()) return "Resort name is required";
+      if (!/^[A-Za-z\s]+$/.test(v)) return "Only letters and spaces allowed";
+      if (v.trim().length < 2) return "Too short";
+      return "";
+    },
+    code: (v) => {
+      if (!v || !v.trim()) return "Code required";
+      return "";
+    },
+    address: (v) => {
+      if (!v || !v.trim()) return "Address is required";
+      return "";
+    },
+    locationZone: (v) => {
+      if (!v || !v.trim()) return "Location/Zone is required";
+      return "";
+    },
+    ownerName: (v) => {
+      if (!v || !v.trim()) return "Owner name is required";
+      if (!/^[A-Za-z\s]+$/.test(v)) return "Only letters and spaces allowed";
+      return "";
+    },
+    ownerContact: (v) => {
+      const digits = (v || "").replace(/\D/g, "");
+      if (!digits) return "Owner contact is required";
+      if (!/^\d{10}$/.test(digits)) return "Phone must be 10 digits";
+      return "";
+    },
+    ownerEmail: (v) => {
+      if (!v) return "";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Invalid email";
+      return "";
+    },
+    noOfKeys: (v) => {
+      if (v === undefined || v === null || v === "") return "";
+      if (!/^\d+$/.test(String(v))) return "Only numbers allowed";
+      return "";
+    },
+    fssaiNumber: (v) => {
+      if (!v) return "";
+      if (!/^[A-Za-z0-9\-\/]+$/.test(v)) return "Invalid FSSAI number";
+      return "";
+    },
+    renewalDate: (v) => {
+      if (!v) return "";
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return "Use DD/MM/YYYY";
+      return "";
+    }
+  };
+
+  const validateField = (name, value) => {
+    const fn = validators[name];
+    if (!fn) return "";
+    return fn(value);
+  };
+
+  const validateAll = (data) => {
+    const keys = Object.keys(validators);
+    const errors = {};
+    keys.forEach((k) => {
+      const err = validateField(k, data[k]);
+      if (err) errors[k] = err;
+    });
+    return errors;
+  };
 
   // Load resorts from server and merge with dev samples (no duplicates)
   const loadResorts = async () => {
@@ -223,7 +281,6 @@ const ResortList = () => {
     if (!form.renewalDate) return;
     const rDate = parseDDMMYYYYToDate(form.renewalDate);
     if (!rDate) return;
-    // compare only date part (midnight)
     const today = new Date();
     const todayMid = new Date(today.toDateString());
     const status = rDate < todayMid ? "expired" : "active";
@@ -248,67 +305,57 @@ const ResortList = () => {
     });
   }, [resorts, filterName, filterCode, filterLocationZone, filterStatus, filterTieUpCategory, filterQualityCategory, filterLocationCategory]);
 
-  // form handlers
-  const openCreateForm = () => {
-    setForm(emptyForm());
-    setError("");
-    setShowForm(true);
-  };
-
-  const openEditForm = (r) => {
-    setForm({
-      _id: r._id || r.id,
-      name: r.name || "",
-      code: r.code || generateCodeFromName(r.name || ""),
-      address: r.address || "",
-      locationZone: r.locationZone || "",
-      ownerName: r.ownerName || "",
-      ownerContact: r.ownerContact || "",
-      ownerEmail: r.ownerEmail || "",
-      ownerResdAddress: r.ownerResdAddress || "",
-      ownerOffAddress: r.ownerOffAddress || "",
-      noOfKeys: r.noOfKeys || "",
-      tieUpCategory: r.tieUpCategory || "",
-      qualityCategory: r.qualityCategory || "",
-      locationCategory: r.locationCategory || "",
-      fssaiNumber: r.fssaiNumber || "",
-      fssaiStatus: r.fssaiStatus || "",
-      // convert ISO stored renewalDate -> dd/mm/yyyy for display
-      renewalDate: r.renewalDate ? formatISOToDDMMYYYY(r.renewalDate) : "",
-      isActive: r.isActive !== false,
-    });
-    setError("");
-    setShowForm(true);
-  };
-
-  const openView = (r) => {
-    setViewItem(r);
-    setShowView(true);
-  };
-
+  // form handlers (sanitization + immediate per-field validation)
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let nextValue = type === "checkbox" ? checked : value;
+
+    if (name === "ownerContact") {
+      nextValue = (nextValue || "").replace(/\D/g, "").slice(0, 10);
+    }
+
+    if (name === "noOfKeys") {
+      nextValue = (nextValue || "").replace(/[^0-9]/g, "");
+    }
+
+    if (name === "name" || name === "ownerName") {
+      nextValue = (nextValue || "").replace(/[^A-Za-z\s]/g, "");
+    }
+
     setForm((p) => {
-      const next = { ...p, [name]: type === "checkbox" ? checked : value };
+      const next = { ...p, [name]: nextValue };
       if (name === "name") {
-        const auto = generateCodeFromName(value);
+        const auto = generateCodeFromName(nextValue);
         if (!p.code || p.code === generateCodeFromName(p.name || "")) {
           next.code = auto;
         }
       }
       return next;
     });
+
+    const err = validateField(name, nextValue);
+    setFormErrors((prev) => ({ ...prev, [name]: err }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (!form.name?.trim()) return setError("Resort Name is required");
-    if (!form.address?.trim()) return setError("Address is required");
-    if (!form.locationZone?.trim()) return setError("Location / Zone is required");
-    if (!form.ownerName?.trim()) return setError("Owner Name is required");
-    if (!form.ownerContact?.trim()) return setError("Owner Contact is required");
+    const allErrors = validateAll(form);
+    if (!form.name?.trim()) allErrors.name = allErrors.name || "Resort Name is required";
+    if (!form.address?.trim()) allErrors.address = allErrors.address || "Address is required";
+    if (!form.locationZone?.trim()) allErrors.locationZone = allErrors.locationZone || "Location / Zone is required";
+    if (!form.ownerName?.trim()) allErrors.ownerName = allErrors.ownerName || "Owner Name is required";
+    if (!form.ownerContact?.trim()) allErrors.ownerContact = allErrors.ownerContact || "Owner Contact is required";
+
+    Object.keys(allErrors).forEach((k) => { if (!allErrors[k]) delete allErrors[k]; });
+
+    setFormErrors(allErrors);
+
+    if (Object.keys(allErrors).length > 0) {
+      setError("Please fix the highlighted fields");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -328,7 +375,6 @@ const ResortList = () => {
         locationCategory: form.locationCategory || undefined,
         fssaiNumber: form.fssaiNumber || undefined,
         fssaiStatus: form.fssaiStatus || undefined,
-        // convert displayed dd/mm/yyyy back to ISO (yyyy-mm-dd) for storage/payload
         renewalDate: form.renewalDate ? parseDDMMYYYYToISO(form.renewalDate) : undefined,
         isActive: !!form.isActive,
       };
@@ -348,6 +394,7 @@ const ResortList = () => {
 
       setShowForm(false);
       setForm(emptyForm());
+      setFormErrors({});
     } catch (err) {
       console.error("save resort error", err);
       setError(err.response?.data?.message || "Failed to save resort");
@@ -386,7 +433,6 @@ const ResortList = () => {
     const rows = [cols.join(",")].concat(list.map((r) => cols.map((c) => {
       let v = r[c];
       if (c === "isActive") v = r.isActive === false ? "false" : "true";
-      // if renewalDate exists and looks like ISO, format to dd/mm/yyyy for export readability
       if (c === "renewalDate" && v) {
         v = formatISOToDDMMYYYY(v);
       }
@@ -417,7 +463,7 @@ const ResortList = () => {
             Download
           </button>
 
-          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
+          <button className="sa-primary-button" type="button" onClick={() => { setForm(emptyForm()); setFormErrors({}); setShowForm(true); }}>
             <i className="ri-add-line" /> New Resort
           </button>
         </div>
@@ -455,7 +501,6 @@ const ResortList = () => {
 
         <label>
           Location/Zone
-          {/* searchable dropdown using datalist for Maharashtra cities */}
           <input list="maha-cities" value={filterLocationZone} onChange={(e) => setFilterLocationZone(e.target.value)} placeholder="Type or select city/place" style={{ marginLeft: 8 }} />
         </label>
 
@@ -548,12 +593,34 @@ const ResortList = () => {
                       </span>
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {/* Actions: View / Edit / Delete (icons) */}
-                      <button title="View" className="sa-icon-button" onClick={() => openView(r)} style={{ marginRight: 6 }}>
+                      <button title="View" className="sa-icon-button" onClick={() => { setViewItem(r); setShowView(true); }} style={{ marginRight: 6 }}>
                         <i className="ri-eye-line" />
                       </button>
 
-                      <button title="Edit" className="sa-icon-button" onClick={() => openEditForm(r)} style={{ marginRight: 6 }}>
+                      <button title="Edit" className="sa-icon-button" onClick={() => {
+                        setForm({
+                          _id: r._id,
+                          name: r.name || "",
+                          code: r.code || generateCodeFromName(r.name),
+                          address: r.address || "",
+                          locationZone: r.locationZone || "",
+                          ownerName: r.ownerName || "",
+                          ownerContact: r.ownerContact || "",
+                          ownerEmail: r.ownerEmail || "",
+                          ownerResdAddress: r.ownerResdAddress || "",
+                          ownerOffAddress: r.ownerOffAddress || "",
+                          noOfKeys: r.noOfKeys || "",
+                          tieUpCategory: r.tieUpCategory || "",
+                          qualityCategory: r.qualityCategory || "",
+                          locationCategory: r.locationCategory || "",
+                          fssaiNumber: r.fssaiNumber || "",
+                          fssaiStatus: r.fssaiStatus || "",
+                          renewalDate: r.renewalDate ? formatISOToDDMMYYYY(r.renewalDate) : "",
+                          isActive: r.isActive !== false,
+                        });
+                        setFormErrors({});
+                        setShowForm(true);
+                      }} style={{ marginRight: 6 }}>
                         <i className="ri-edit-line" />
                       </button>
 
@@ -594,40 +661,46 @@ const ResortList = () => {
             >
               <label>
                 Resort Name *
-                <input name="name" value={form.name} onChange={handleFormChange} placeholder="Resort Name" required />
+                <input name="name" value={form.name} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, name: validateField('name', form.name) }))} placeholder="Resort Name" required />
+                {formErrors.name && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.name}</small>}
               </label>
 
               <label>
                 Code (auto)
                 <input name="code" value={form.code} onChange={handleFormChange} placeholder="Auto-generated code" />
+                {formErrors.code && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.code}</small>}
                 <small style={{display:"block", color:"#6b7280"}}>Auto-generated from name; you may override.</small>
               </label>
 
               <label>
                 Address *
-                <textarea name="address" value={form.address} onChange={handleFormChange} placeholder="Street, area, pin" required />
+                <textarea name="address" value={form.address} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, address: validateField('address', form.address) }))} placeholder="Street, area, pin" required />
+                {formErrors.address && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.address}</small>}
               </label>
 
               <label>
                 Location / Zone *
-                {/* datalist gives a searchable dropdown experience */}
-                <input list="maha-cities" name="locationZone" value={form.locationZone} onChange={handleFormChange} placeholder="e.g. Mumbai / Pune / Lonavala" required />
+                <input list="maha-cities" name="locationZone" value={form.locationZone} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, locationZone: validateField('locationZone', form.locationZone) }))} placeholder="e.g. Mumbai / Pune / Lonavala" required />
+                {formErrors.locationZone && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.locationZone}</small>}
                 <small style={{display:"block", color:"#6b7280"}}>Select from Maharashtra cities or type any other place.</small>
               </label>
 
               <label>
                 Owner Name *
-                <input name="ownerName" value={form.ownerName} onChange={handleFormChange} placeholder="Owner full name" required />
+                <input name="ownerName" value={form.ownerName} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, ownerName: validateField('ownerName', form.ownerName) }))} placeholder="Owner full name" required />
+                {formErrors.ownerName && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.ownerName}</small>}
               </label>
 
               <label>
                 Owner Contact *
-                <input name="ownerContact" value={form.ownerContact} onChange={handleFormChange} placeholder="+91-XXXXXXXXXX" required />
+                <input name="ownerContact" value={form.ownerContact} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, ownerContact: validateField('ownerContact', form.ownerContact) }))} placeholder="10-digit phone" inputMode="numeric" maxLength={10} required />
+                {formErrors.ownerContact && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.ownerContact}</small>}
               </label>
 
               <label>
                 Owner Email
-                <input type="email" name="ownerEmail" value={form.ownerEmail} onChange={handleFormChange} placeholder="owner@example.com" />
+                <input type="email" name="ownerEmail" value={form.ownerEmail} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, ownerEmail: validateField('ownerEmail', form.ownerEmail) }))} placeholder="owner@example.com" />
+                {formErrors.ownerEmail && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.ownerEmail}</small>}
               </label>
 
               <label>
@@ -642,7 +715,8 @@ const ResortList = () => {
 
               <label>
                 No of Keys
-                <input type="number" name="noOfKeys" min="0" value={form.noOfKeys} onChange={handleFormChange} placeholder="e.g. 20" />
+                <input type="number" name="noOfKeys" min="0" value={form.noOfKeys} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, noOfKeys: validateField('noOfKeys', form.noOfKeys) }))} placeholder="e.g. 20" />
+                {formErrors.noOfKeys && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.noOfKeys}</small>}
               </label>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
@@ -673,7 +747,8 @@ const ResortList = () => {
 
               <label>
                 FSSAI License Number
-                <input name="fssaiNumber" value={form.fssaiNumber} onChange={handleFormChange} placeholder="FSSAI / license no" />
+                <input name="fssaiNumber" value={form.fssaiNumber} onChange={handleFormChange} onBlur={() => setFormErrors(prev => ({ ...prev, fssaiNumber: validateField('fssaiNumber', form.fssaiNumber) }))} placeholder="FSSAI / license no" />
+                {formErrors.fssaiNumber && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.fssaiNumber}</small>}
               </label>
 
               <label>
@@ -689,13 +764,14 @@ const ResortList = () => {
 
               <label>
                 Renewal Date (dd/mm/yyyy)
-                {/* switched to text input to accept dd/mm/yyyy */}
                 <input
                   name="renewalDate"
                   value={form.renewalDate}
                   onChange={handleFormChange}
+                  onBlur={() => setFormErrors(prev => ({ ...prev, renewalDate: validateField('renewalDate', form.renewalDate) }))}
                   placeholder="dd/mm/yyyy"
                 />
+                {formErrors.renewalDate && <small style={{ color: "#b91c1c", display: "block" }}>{formErrors.renewalDate}</small>}
                 <small style={{ display: "block", color: "#6b7280" }}>Enter date as DD/MM/YYYY. Status will auto-update based on this date.</small>
               </label>
 
@@ -794,7 +870,7 @@ const ResortList = () => {
 
             <div className="sa-modal-actions" style={{ marginTop: 12 }}>
               <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>Close</button>
-              <button type="button" className="sa-primary-button" onClick={() => { setShowView(false); openEditForm(viewItem); }}>Edit</button>
+              <button type="button" className="sa-primary-button" onClick={() => { setShowView(false); setShowForm(true); }}>Edit</button>
             </div>
           </div>
         </div>
