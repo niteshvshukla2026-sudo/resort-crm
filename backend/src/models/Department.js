@@ -1,14 +1,12 @@
+// backend/src/models/department.model.js
 import mongoose from "mongoose";
 
-const departmentSchema = new mongoose.Schema(
-  {
-    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
-    name: { type: String, required: true },
-    code: { type: String },
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true }
-);
+const DepartmentSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  code: { type: String, required: true, trim: true, index: true, unique: true },
+}, { timestamps: true });
 
-const Department = mongoose.model("Department", departmentSchema);
-export default Department;
+// ensure unique code lowercase index as well (optional)
+// DepartmentSchema.index({ code: 1 }, { unique: true });
+
+export default mongoose.model("Department", DepartmentSchema);
