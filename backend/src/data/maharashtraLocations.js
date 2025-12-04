@@ -1,0 +1,38 @@
+// src/data/maharashtraLocations.js
+const MAHARASHTRA_LOCATIONS = [
+  { district: "Mumbai City", cities: ["Mumbai"] },
+  { district: "Mumbai Suburban", cities: ["Mumbai Suburban", "Bandra", "Andheri", "Borivali", "Kandivali"] },
+  { district: "Thane", cities: ["Thane", "Kalyan", "Dombivli", "Bhiwandi", "Ulhasnagar", "Badlapur"] },
+  { district: "Palghar", cities: ["Palghar", "Dahanu", "Vasai", "Pen"] },
+  { district: "Raigad", cities: ["Alibaug", "Panvel", "Karjat", "Mahad", "Shrivardhan"] },
+  { district: "Ratnagiri", cities: ["Ratnagiri", "Chiplun", "Dapoli", "Guhagar"] },
+  { district: "Sindhudurg", cities: ["Sawantwadi", "Kudal", "Devgad", "Vengurla"] },
+  { district: "Pune", cities: ["Pune", "Pune Cantonment", "Baramati", "Pimpri-Chinchwad", "Hadapsar"] },
+  { district: "Satara", cities: ["Satara", "Wai", "Karad", "Phaltan"] },
+  { district: "Sangli", cities: ["Sangli", "Miraj", "Kavathemahankal", "Jaysingpur"] },
+  { district: "Kolhapur", cities: ["Kolhapur", "Ichalkaranji", "Kagal"] },
+  { district: "Solapur", cities: ["Solapur", "Akkalkot", "Pandharpur"] },
+  { district: "Nashik", cities: ["Nashik", "Igatpuri", "Trimbak", "Sinnar", "Malegaon"] },
+  { district: "Dhule", cities: ["Dhule", "Shirpur", "Dondaicha"] },
+  { district: "Nandurbar", cities: ["Nandurbar", "Sakri", "Shahada"] },
+  { district: "Jalgaon", cities: ["Jalgaon", "Bhusawal", "Chalisgaon"] },
+  { district: "Aurangabad (Chhatrapati Sambhaji Nagar)", cities: ["Aurangabad", "Paithan", "Khultabad", "Bhokardan"] },
+  { district: "Beed", cities: ["Beed", "Ashti", "Parli", "Kaij"] },
+  { district: "Jalna", cities: ["Jalna", "Bhokardan"] },
+  { district: "Osmanabad (Dharashiv)", cities: ["Osmanabad", "Tuljapur"] },
+  { district: "Nanded", cities: ["Nanded", "Kinwat", "Mudkhed", "Deglur"] },
+  { district: "Parbhani", cities: ["Parbhani", "Jintur", "Manwat", "Gangakhed"] },
+  { district: "Hingoli", cities: ["Hingoli", "Aundha Nagnath", "Basmath"] },
+  { district: "Latur", cities: ["Latur", "Udgir", "Nilanga"] },
+  { district: "Amravati", cities: ["Amravati", "Achalpur", "Badnera", "Daryapur"] },
+  { district: "Akola", cities: ["Akola", "Balapur", "Murtajapur"] },
+  { district: "Yavatmal", cities: ["Yavatmal", "Pusad", "Darwha"] },
+  { district: "Wardha", cities: ["Wardha", "Arvi", "Deoli"] },
+  { district: "Buldhana", cities: ["Buldhana", "Jalgaon Jamod", "Khamgaon"] },
+  { district: "Chandrapur", cities: ["Chandrapur", "Ballarpur", "Warora"] },
+  { district: "Gadchiroli", cities: ["Gadchiroli", "Etapalli", "Aheri"] },
+  { district: "Gondia", cities: ["Gondia", "Arjuni Morgaon", "Tirora"] },
+  { district: "Bhandara", cities: ["Bhandara", "Tumsar", "Tirora"] }
+];
+
+export default MAHARASHTRA_LOCATIONS;
