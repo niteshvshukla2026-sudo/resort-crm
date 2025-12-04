@@ -4,20 +4,6 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// simplified dev samples (only name + code)
-const DEV_DEPT_SAMPLES = [
-  { _id: "dev_dept_1", name: "Food & Beverage", code: "FOOD_BEV_123" },
-  { _id: "dev_dept_2", name: "Housekeeping", code: "HOUSEKPG_456" },
-  { _id: "dev_dept_3", name: "Engineering", code: "ENG_789" },
-  { _id: "dev_dept_4", name: "Front Office", code: "FRONT_OFF_234" },
-  { _id: "dev_dept_5", name: "Banquets", code: "BANQ_345" },
-  { _id: "dev_dept_6", name: "Security", code: "SEC_567" },
-  { _id: "dev_dept_7", name: "IT", code: "IT_678" },
-  { _id: "dev_dept_8", name: "Spa & Wellness", code: "SPA_890" },
-  { _id: "dev_dept_9", name: "Retail Outlet", code: "RETAIL_012" },
-  { _id: "dev_dept_10", name: "Purchasing", code: "PUR_901" },
-];
-
 const emptyForm = () => ({ _id: undefined, name: "", code: "" });
 
 // generate a short code from name; ensure alnum + underscores, uppercase
@@ -32,7 +18,7 @@ const generateCodeFromName = (name = "") => {
     .map((w) => (w.length <= 4 ? w : w.slice(0, 4)))
     .join("_");
 
-  // append small random suffix to avoid collisions (keeps deterministic length)
+  // append small random suffix to avoid collisions
   const suffix = Math.floor(Math.random() * 900 + 100); // 100..999
   const code = (base || "DEPT") + "_" + suffix;
   return code.slice(0, 20); // limit length
@@ -58,21 +44,18 @@ const DepartmentList = () => {
     try {
       setLoading(true);
       setError("");
-      const res = await axios.get(`${API_BASE}/api/departments`).catch(() => ({ data: [] }));
+      const res = await axios.get(`${API_BASE}/api/departments`);
       const serverDepts = Array.isArray(res.data) ? res.data : [];
-      // normalize to have only _id, name, code
       const normalized = serverDepts.map((d) => ({
         _id: d._id || d.id,
-        name: d.name || d.title || "",
-        code: d.code || (d.name ? generateCodeFromName(d.name) : generateCodeFromName("DEPT")),
+        name: d.name || "",
+        code: d.code || generateCodeFromName(d.name || ""),
       }));
-      const existingIds = new Set(normalized.map((d) => d._id || d.id));
-      const samplesToAdd = DEV_DEPT_SAMPLES.filter((s) => !existingIds.has(s._id));
-      setDepartments([...normalized, ...samplesToAdd]);
+      setDepartments(normalized);
     } catch (err) {
       console.error("load error", err);
-      setError("Failed to load departments; using sample data");
-      setDepartments(DEV_DEPT_SAMPLES);
+      setError("Failed to load departments from backend.");
+      setDepartments([]); // show empty so user knows there's no real data
     } finally {
       setLoading(false);
     }
@@ -94,14 +77,12 @@ const DepartmentList = () => {
 
   // open create
   const openCreateForm = () => {
-    setForm(emptyForm());
+    setForm({ ...emptyForm(), code: generateCodeFromName("") });
     setError("");
-    // auto-generate a placeholder code so user sees it
-    setForm((f) => ({ ...f, code: generateCodeFromName("") }));
     setShowForm(true);
   };
 
-  // open edit (name editable; code always readonly and regenerated only on name change)
+  // open edit
   const openEditForm = (d) => {
     setForm({
       _id: d._id || d.id,
@@ -112,19 +93,16 @@ const DepartmentList = () => {
     setShowForm(true);
   };
 
-  // when name changes, update code automatically (auto-generated)
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "name") {
-      // update name and regenerate code deterministically (we keep suffix random to reduce collisions)
-      // generateCodeFromName uses random suffix; acceptable for auto-gen
       setForm((p) => ({ ...p, name: value, code: generateCodeFromName(value) }));
     } else {
       setForm((p) => ({ ...p, [name]: value }));
     }
   };
 
-  // submit (create or update) — payload only { name, code }
+  // submit (create or update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -132,26 +110,26 @@ const DepartmentList = () => {
 
     try {
       setSaving(true);
-      // always use auto-generated code based on final name (don't trust external edits)
-      const codeToUse = generateCodeFromName(form.name);
-
-      const payload = { name: form.name.trim(), code: codeToUse };
+      const payload = { name: form.name.trim(), code: generateCodeFromName(form.name) };
 
       if (form._id) {
-        const res = await axios.put(`${API_BASE}/api/departments/${form._id}`, payload).catch(() => null);
+        // update
+        const res = await axios.put(`${API_BASE}/api/departments/${form._id}`, payload).catch((err) => {
+          console.error("update error", err);
+          return null;
+        });
         if (res?.data) {
-          setDepartments((p) =>
-            p.map((x) =>
-              x._id === form._id || x.id === form._id
-                ? { _id: res.data._id || res.data.id, name: res.data.name, code: res.data.code }
-                : x
-            )
-          );
+          setDepartments((p) => p.map((x) => (x._id === form._id || x.id === form._id ? { _id: res.data._id || res.data.id, name: res.data.name, code: res.data.code } : x)));
         } else {
+          // optimistic local update if server didn't return data
           setDepartments((p) => p.map((x) => (x._id === form._id || x.id === form._id ? { ...x, ...payload } : x)));
         }
       } else {
-        const res = await axios.post(`${API_BASE}/api/departments`, payload).catch(() => null);
+        // create
+        const res = await axios.post(`${API_BASE}/api/departments`, payload).catch((err) => {
+          console.error("create error", err);
+          return null;
+        });
         const created = res?.data ? { _id: res.data._id || res.data.id, name: res.data.name, code: res.data.code } : { ...payload, _id: `local_${Date.now()}` };
         setDepartments((p) => [created, ...p]);
       }
@@ -160,7 +138,7 @@ const DepartmentList = () => {
       setForm(emptyForm());
     } catch (err) {
       console.error("save error", err);
-      setError(err.response?.data?.message || "Failed to save department");
+      setError("Failed to save department");
     } finally {
       setSaving(false);
     }
@@ -169,8 +147,13 @@ const DepartmentList = () => {
   const handleDelete = async (d) => {
     if (!window.confirm(`Delete department ${d.name || d._id}?`)) return;
     try {
+      // optimistic remove
       setDepartments((p) => p.filter((x) => (x._id || x.id) !== (d._id || d.id)));
-      await axios.delete(`${API_BASE}/api/departments/${d._id || d.id}`).catch(() => null);
+      await axios.delete(`${API_BASE}/api/departments/${d._id || d.id}`).catch((err) => {
+        console.error("delete error", err);
+        // on failure, reload from server to restore
+        loadData();
+      });
     } catch (err) {
       console.error("delete error", err);
       setError("Failed to delete department");
@@ -188,7 +171,7 @@ const DepartmentList = () => {
       <div className="sa-page-header">
         <div>
           <h2>Departments</h2>
-          <p>Only Department Name is required — Code is auto-generated.</p>
+          <p>Departments are loaded from backend only.</p>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -222,7 +205,7 @@ const DepartmentList = () => {
         {loading ? (
           <div>Loading departments...</div>
         ) : filtered.length === 0 ? (
-          <div>No departments found. Try clearing filters or add a new department.</div>
+          <div>No departments found. Add one to get started.</div>
         ) : (
           <table className="sa-table">
             <thead>
@@ -263,7 +246,7 @@ const DepartmentList = () => {
         <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
             <h3 style={{ marginBottom: 6 }}>{form._id ? "Edit Department" : "New Department"}</h3>
-            <p className="sa-modal-sub">Enter department name; code will be auto-generated.</p>
+            <p className="sa-modal-sub">Enter department name; code is auto-generated.</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit} style={{ overflow: "auto", paddingRight: 8 }}>
               <label>
