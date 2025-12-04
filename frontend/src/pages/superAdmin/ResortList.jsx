@@ -55,7 +55,6 @@ const emptyForm = () => ({
   fssaiNumber: "",
   fssaiStatus: "",
   renewalDate: "", // will be dd/mm/yyyy string for display
-  pincode: "",
   isActive: true,
 });
 
@@ -63,12 +62,61 @@ const TIEUP_OPTIONS = ["Managed", "Marketed", "Owned", "Commissionable"];
 const QUALITY_OPTIONS = ["5-Star", "4-Star", "3-Star", "Budget"];
 const LOCATION_OPTIONS = ["Mainstream", "Offbeat"];
 
-// --- Extensive Maharashtra cities & popular places (searchable via datalist) ---
-import MAHARASHTRA_LOCATIONS from "../data/maharashtraLocations";
-
-const FLAT_MAHA_LIST = MAHARASHTRA_LOCATIONS.flatMap(d =>
-  d.cities.map(c => `${d.district} — ${c}`)
-);
+// --- Maharashtra cities & popular places (searchable via datalist) ---
+const MAHA_CITIES = [
+  "Mumbai",
+  "Pune",
+  "Nagpur",
+  "Nashik",
+  "Thane",
+  "Aurangabad",
+  "Solapur",
+  "Kolhapur",
+  "Amravati",
+  "Nanded",
+  "Ahmednagar",
+  "Jalgaon",
+  "Akola",
+  "Latur",
+  "Sangli",
+  "Satara",
+  "Ratnagiri",
+  "Sindhudurg",
+  "Palghar",
+  "Raigad",
+  "Chandrapur",
+  "Gondia",
+  "Buldhana",
+  "Yavatmal",
+  "Beed",
+  "Parbhani",
+  "Osmanabad",
+  "Hingoli",
+  "Jalna",
+  "Washim",
+  "Wardha",
+  "Kalyan",
+  "Dombivli",
+  "Panvel",
+  "Karjat",
+  "Mahabaleshwar",
+  "Lonavala",
+  "Khandala",
+  "Alibaug",
+  "Matheran",
+  "Panchgani",
+  "Tapi (Suratgarh)",
+  "Siddharthnagar",
+  "Dapoli",
+  "Devgad",
+  "Chiplun",
+  "Satara",
+  "Baramati",
+  "Shirdi",
+  "Malegaon",
+  "Bhiwandi",
+  "Vasai",
+];
 
 // helpers for date formatting/parsing
 const pad = (n) => String(n).padStart(2, "0");
@@ -110,63 +158,6 @@ const ResortList = () => {
   const [showView, setShowView] = useState(false);
   const [viewItem, setViewItem] = useState(null);
   const [form, setForm] = useState(emptyForm());
-
-  // pincode lookup state
-  const [pincodeLoading, setPincodeLoading] = useState(false);
-  const [pincodeError, setPincodeError] = useState("");
-  const debounceRef = React.useRef(null);
-
-  const debounce = (fn, wait = 500) => {
-    return (...args) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => fn(...args), wait);
-    };
-  };
-
-  const lookupPincode = async (pin) => {
-    if (!/^[1-9][0-9]{5}$/.test(pin)) {
-      setPincodeError("Enter a valid 6-digit pincode");
-      return null;
-    }
-    try {
-      setPincodeLoading(true);
-      setPincodeError("");
-      const res = await axios.get(`https://api.postalpincode.in/pincode/${pin}`);
-      if (!Array.isArray(res.data) || res.data.length === 0) {
-        setPincodeError("Pincode lookup failed");
-        return null;
-      }
-      const info = res.data[0];
-      if (info.Status !== "Success" || !info.PostOffice || info.PostOffice.length === 0) {
-        setPincodeError("Pincode not found");
-        return null;
-      }
-
-      const first = info.PostOffice[0];
-      const autoLocation = `${first.District} — ${first.Name}`;
-
-      setForm(prev => {
-        // don't override a manually entered locationZone
-        if (prev.locationZone && prev.locationZone.trim() !== "") {
-          return { ...prev, pincode: pin };
-        }
-        return { ...prev, pincode: pin, locationZone: autoLocation };
-      });
-
-      setPincodeError("");
-      return { info };
-    } catch (err) {
-      console.error("pincode lookup error", err);
-      setPincodeError("Failed to fetch pincode info");
-      return null;
-    } finally {
-      setPincodeLoading(false);
-    }
-  };
-
-  const debouncedLookup = debounce((pin) => {
-    lookupPincode(pin);
-  }, 500);
 
   // Filters (names match form fields)
   const [filterName, setFilterName] = useState("");
@@ -307,17 +298,7 @@ const ResortList = () => {
       }
       return next;
     });
-
-    // if editing pincode field, trigger lookup when length==6 numeric
-    if (e.target.name === "pincode") {
-      const pin = (e.target.value || "").trim();
-      if (/^[1-9][0-9]{5}$/.test(pin)) {
-        debouncedLookup(pin);
-      } else {
-        setPincodeError("");
-      }
-    }
-  }; 
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -645,22 +626,6 @@ const ResortList = () => {
               </label>
 
               <label>
-                Pincode
-                <input
-                  name="pincode"
-                  value={form.pincode || ""}
-                  onChange={handleFormChange}
-                  placeholder="6-digit pincode"
-                  maxLength={6}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                />
-                {pincodeLoading && <small style={{display:"block"}}>Checking pincode…</small>}
-                {pincodeError && <small style={{display:"block", color:'#b91c1c'}}>{pincodeError}</small>}
-                <small style={{display:"block", color:"#6b7280"}}>Enter pincode to auto-fill Location/District</small>
-              </label>
-
-              <label>
                 Owner Email
                 <input type="email" name="ownerEmail" value={form.ownerEmail} onChange={handleFormChange} placeholder="owner@example.com" />
               </label>
@@ -837,8 +802,8 @@ const ResortList = () => {
 
       {/* datalist for Maharashtra cities (used by both filter and form inputs) */}
       <datalist id="maha-cities">
-  {FLAT_MAHA_LIST.map((v) => <option key={v} value={v} />)}
-</datalist>
+        {MAHA_CITIES.map((c) => <option key={c} value={c} />)}
+      </datalist>
     </div>
   );
 };
