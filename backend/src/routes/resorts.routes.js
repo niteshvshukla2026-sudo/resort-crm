@@ -1,12 +1,13 @@
+// backend/src/routes/resort.routes.js
 import express from "express";
-import { createResort, listResorts } from "../controllers/resort.controller.js";
-import { protect, requireRole } from "../middleware/auth.js";
+import * as ctrl from "../controllers/resort.controller.js";
 
 const router = express.Router();
 
-router.use(protect, requireRole("SUPER_ADMIN"));
-
-router.get("/", listResorts);
-router.post("/", createResort);
+router.get("/", ctrl.listResorts);
+router.get("/:id", ctrl.getResort);
+router.post("/", ctrl.createResort);
+router.put("/:id", ctrl.updateResort);
+router.delete("/:id", ctrl.deleteResort);
 
 export default router;
