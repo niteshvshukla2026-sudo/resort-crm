@@ -4,675 +4,595 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-/* ---------- Small helpers ---------- */
-const statusOf = (r) =>
-  (r?.status || "OPEN").toString().toUpperCase();
+/* Dev fallback data */
+const DEV_STORES = [
+  { _id: "store_main", name: "Main Store" },
+  { _id: "store_cold", name: "Cold Store" },
+];
 
-const getId = (obj) => obj?._id || obj?.id;
+const DEV_ITEMS = [
+  { _id: "item_1", name: "Milk 1L" },
+  { _id: "item_2", name: "Bread Loaf" },
+  { _id: "item_3", name: "Egg Tray" },
+];
 
-/* ---------- TAB 1: Add Replacement ---------- */
+const DEV_VENDORS = [
+  { _id: "vend_1", name: "Demo Vendor 1" },
+  { _id: "vend_2", name: "Demo Vendor 2" },
+];
 
-const AddReplacementTab = ({ stores, items, reloadReplacements }) => {
-  const newLine = () => ({
-    id: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    item: "",
-    qty: "",
-    reason: "",
+const DEV_REPLACEMENTS = [
+  {
+    _id: "rep_1",
+    replNo: "REP-2025-001",
+    storeId: "store_main",
+    date: new Date().toISOString(),
+    status: "OPEN", // OPEN / SENT_TO_VENDOR / CLOSED
+    vendorId: null,
+    lines: [
+      { lineId: "ln1", itemId: "item_1", qty: 2, issuedQty: 0, remark: "Damaged pack" },
+      { lineId: "ln2", itemId: "item_2", qty: 5, issuedQty: 0, remark: "" },
+    ],
+  },
+];
+
+const newLine = () => ({
+  lineId: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+  itemId: "",
+  qty: "",
+  remark: "",
+});
+
+const StoreReplacement = () => {
+  const [stores, setStores] = useState([]);
+  const [items, setItems] = useState([]);
+  const [vendors, setVendors] = useState([]);
+
+  const [replacements, setReplacements] = useState([]);
+
+  // Add Replacement form
+  const [addForm, setAddForm] = useState({
+    storeId: "",
+    lines: [newLine()],
   });
 
-  const [storeFrom, setStoreFrom] = useState("");
-  const [lines, setLines] = useState([newLine()]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const updateLine = (idx, field, value) => {
-    setLines((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [field]: value };
-      return next;
+  // Issue-to-Vendor modal
+  const [issueModal, setIssueModal] = useState({
+    open: false,
+    replacement: null,
+    vendorId: "",
+    lines: [], // { lineId, itemId, itemName, replQty, issueQty, remark }
+  });
+
+  // ------------ Helpers -------------
+  const getStoreName = (id) => stores.find((s) => s._id === id || s.id === id)?.name || id || "-";
+  const getItem = (id) => items.find((i) => i._id === id || i.id === id) || null;
+  const getItemName = (id) => getItem(id)?.name || id || "-";
+  const getVendorName = (id) => vendors.find((v) => v._id === id || v.id === id)?.name || id || "-";
+
+  const generateReplNo = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const seq = String(d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()).padStart(5, "0");
+    return `REP-${y}${mm}${dd}-${seq}`;
+  };
+
+  // ------------ Load master + replacement data -------------
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const [storeRes, itemRes, vendorRes, replRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: DEV_STORES })),
+        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
+        axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: DEV_VENDORS })),
+        axios.get(`${API_BASE}/api/store-replacements`).catch(() => ({ data: DEV_REPLACEMENTS })),
+      ]);
+
+      setStores(Array.isArray(storeRes.data) && storeRes.data.length ? storeRes.data : DEV_STORES);
+      setItems(Array.isArray(itemRes.data) && itemRes.data.length ? itemRes.data : DEV_ITEMS);
+      setVendors(Array.isArray(vendorRes.data) && vendorRes.data.length ? vendorRes.data : DEV_VENDORS);
+
+      const serverRepl = Array.isArray(replRes.data) ? replRes.data : [];
+      const normalized = serverRepl.map((r) => ({
+        _id: r._id || r.id,
+        replNo: r.replNo || r.repl_no || r.code || "",
+        storeId: r.storeId || r.store || r.storeFrom || "",
+        date: r.date || r.createdAt || new Date().toISOString(),
+        status: r.status || "OPEN",
+        vendorId: r.vendorId || r.vendor || null,
+        lines:
+          (r.lines || []).map((ln) => ({
+            lineId: ln.lineId || ln._id || `ln_${Math.floor(Math.random() * 100000)}`,
+            itemId: ln.itemId || ln.item || "",
+            qty: ln.qty ?? ln.quantity ?? 0,
+            issuedQty: ln.issuedQty ?? 0,
+            remark: ln.remark || "",
+          })) || [],
+      }));
+
+      setReplacements(normalized.length ? normalized : DEV_REPLACEMENTS);
+    } catch (err) {
+      console.error("load store replacement error", err);
+      setError("Failed to load store replacement data, using demo data.");
+      setStores(DEV_STORES);
+      setItems(DEV_ITEMS);
+      setVendors(DEV_VENDORS);
+      setReplacements(DEV_REPLACEMENTS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ------------ Add Replacement form handlers -------------
+  const updateAddFormField = (name, value) =>
+    setAddForm((p) => ({
+      ...p,
+      [name]: value,
+    }));
+
+  const updateAddLine = (idx, field, value) => {
+    setAddForm((p) => {
+      const arr = [...p.lines];
+      arr[idx] = { ...arr[idx], [field]: value };
+      return { ...p, lines: arr };
     });
   };
 
-  const addLine = () => setLines((prev) => [...prev, newLine()]);
-  const removeLine = (idx) =>
-    setLines((prev) => prev.filter((_, i) => i !== idx));
+  const addLineRow = () =>
+    setAddForm((p) => ({
+      ...p,
+      lines: [...p.lines, newLine()],
+    }));
 
-  const handleSave = async (e) => {
+  const removeLineRow = (idx) =>
+    setAddForm((p) => ({
+      ...p,
+      lines: p.lines.filter((_, i) => i !== idx),
+    }));
+
+  const validateAddForm = () => {
+    if (!addForm.storeId) return "Select Store Name.";
+    const validLines = addForm.lines.filter((ln) => ln.itemId && ln.qty && Number(ln.qty) > 0);
+    if (!validLines.length) return "Add at least one Item with Qty.";
+    return null;
+  };
+
+  const handleSaveReplacement = async (e) => {
     e.preventDefault();
+    const v = validateAddForm();
+    if (v) {
+      setError(v);
+      return;
+    }
     setError("");
 
-    if (!storeFrom) return setError("Select Store From");
-    const validLines = lines.filter(
-      (ln) => ln.item && ln.qty && Number(ln.qty) > 0
-    );
-    if (!validLines.length)
-      return setError("Add at least one item with quantity");
+    const replNo = generateReplNo();
+    const payload = {
+      replNo,
+      storeId: addForm.storeId,
+      date: new Date().toISOString(),
+      status: "OPEN",
+      lines: addForm.lines
+        .filter((ln) => ln.itemId && ln.qty && Number(ln.qty) > 0)
+        .map((ln) => ({
+          itemId: ln.itemId,
+          qty: Number(ln.qty),
+          remark: ln.remark || "",
+        })),
+    };
+
+    try {
+      setSaving(true);
+      const res = await axios
+        .post(`${API_BASE}/api/store-replacements`, payload)
+        .catch(() => ({ data: { ...payload, _id: `local_${Date.now()}` } }));
+
+      const created = res.data || payload;
+      setReplacements((p) => [created, ...p]);
+
+      // reset form
+      setAddForm({
+        storeId: "",
+        lines: [newLine()],
+      });
+    } catch (err) {
+      console.error("save replacement error", err);
+      setError(err.response?.data?.message || "Failed to save replacement");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ------------ Issue to Vendor (Replacement Store action) -------------
+  const openIssueToVendor = (repl) => {
+    const modalLines = (repl.lines || []).map((ln) => ({
+      lineId: ln.lineId,
+      itemId: ln.itemId,
+      itemName: getItemName(ln.itemId),
+      replQty: ln.qty,
+      issueQty: ln.qty - (ln.issuedQty || 0),
+      remark: ln.remark || "",
+    }));
+
+    setIssueModal({
+      open: true,
+      replacement: repl,
+      vendorId: repl.vendorId || "",
+      lines: modalLines,
+    });
+    setError("");
+  };
+
+  const updateIssueLine = (idx, field, value) => {
+    setIssueModal((p) => {
+      const arr = [...p.lines];
+      arr[idx] = { ...arr[idx], [field]: value };
+      return { ...p, lines: arr };
+    });
+  };
+
+  const submitIssueToVendor = async () => {
+    const { replacement, vendorId, lines } = issueModal;
+    if (!replacement) return;
+    if (!vendorId) {
+      setError("Select Vendor before issuing.");
+      return;
+    }
+
+    // Simple validation: issueQty >=0 and <= replQty
+    for (const ln of lines) {
+      const iq = Number(ln.issueQty || 0);
+      if (iq < 0) return setError("Issue quantity cannot be negative.");
+      if (iq > Number(ln.replQty || 0)) return setError("Issue quantity cannot be more than replacement quantity.");
+    }
 
     const payload = {
-      storeFrom,
-      lines: validLines.map((ln) => ({
-        item: ln.item,
-        qty: Number(ln.qty),
-        reason: ln.reason || undefined,
+      vendorId,
+      lines: lines.map((ln) => ({
+        lineId: ln.lineId,
+        itemId: ln.itemId,
+        issueQty: Number(ln.issueQty || 0),
+        remark: ln.remark || "",
       })),
     };
 
     try {
       setSaving(true);
-      const res = await axios.post(
-        `${API_BASE}/api/replacement`,
-        payload
-      );
-      const created = res.data;
-      if (created?.replNo) {
-        alert(`Replacement created: ${created.replNo}`);
+      const res = await axios
+        .patch(`${API_BASE}/api/store-replacements/${replacement._id || replacement.id}/issue-vendor`, payload)
+        .catch(() => null);
+
+      if (res && res.data) {
+        const updated = res.data;
+        setReplacements((p) =>
+          p.map((x) => (x._id === (replacement._id || replacement.id) ? updated : x))
+        );
       } else {
-        alert("Replacement created.");
+        // optimistic update
+        setReplacements((p) =>
+          p.map((x) => {
+            if (x._id !== (replacement._id || replacement.id)) return x;
+            return {
+              ...x,
+              vendorId,
+              status: "SENT_TO_VENDOR",
+            };
+          })
+        );
       }
-      setStoreFrom("");
-      setLines([newLine()]);
-      reloadReplacements();
+
+      setIssueModal({
+        open: false,
+        replacement: null,
+        vendorId: "",
+        lines: [],
+      });
     } catch (err) {
-      console.error("create replacement error", err);
-      setError(
-        err.response?.data?.message ||
-          "Failed to create replacement"
-      );
+      console.error("issue to vendor error", err);
+      setError(err.response?.data?.message || "Failed to issue to vendor");
     } finally {
       setSaving(false);
     }
   };
 
+  // ------------ UI -------------
   return (
-    <form className="sa-card" onSubmit={handleSave}>
-      <h3>Add Replacement</h3>
-      <p className="sa-modal-sub">
-        Create store replacement and auto stock OUT from selected store.
-      </p>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-          margin: "12px 0",
-        }}
-      >
-        <label>
-          Store From
-          <select
-            value={storeFrom}
-            onChange={(e) => setStoreFrom(e.target.value)}
-            required
-          >
-            <option value="">Select store</option>
-            {stores.map((s) => (
-              <option key={getId(s)} value={getId(s)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <h4 style={{ marginTop: 8 }}>Items</h4>
-      <div className="sa-card" style={{ padding: 10 }}>
-        <table className="sa-table">
-          <thead>
-            <tr>
-              <th style={{ width: "45%" }}>Item</th>
-              <th style={{ width: "15%" }}>Qty</th>
-              <th>Reason</th>
-              <th style={{ width: "5%" }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((ln, idx) => (
-              <tr key={ln.id}>
-                <td>
-                  <select
-                    value={ln.item}
-                    onChange={(e) =>
-                      updateLine(idx, "item", e.target.value)
-                    }
-                    required
-                  >
-                    <option value="">Select item</option>
-                    {items.map((it) => (
-                      <option key={getId(it)} value={getId(it)}>
-                        {it.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    min="0"
-                    value={ln.qty}
-                    onChange={(e) =>
-                      updateLine(idx, "qty", e.target.value)
-                    }
-                    required
-                  />
-                </td>
-                <td>
-                  <input
-                    value={ln.reason}
-                    onChange={(e) =>
-                      updateLine(idx, "reason", e.target.value)
-                    }
-                    placeholder="Reason / remarks"
-                  />
-                </td>
-                <td>
-                  {lines.length > 1 && (
-                    <button
-                      type="button"
-                      className="sa-secondary-button"
-                      onClick={() => removeLine(idx)}
-                    >
-                      -
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="sa-page">
+      {/* HEADER */}
+      <div className="sa-page-header" style={{ alignItems: "flex-start" }}>
+        <div>
+          <h2>Store Replacement</h2>
+          <p>
+            Add replacement against a store and then issue those items to vendor
+            (damaged / expired stock etc.).
+          </p>
+        </div>
 
         <button
           type="button"
           className="sa-secondary-button"
-          style={{ marginTop: 8 }}
-          onClick={addLine}
+          onClick={loadData}
         >
-          + Add Item
+          Refresh
         </button>
       </div>
 
-      {error && (
-        <div className="sa-modal-error" style={{ marginTop: 8 }}>
-          {error}
-        </div>
-      )}
+      {/* ERROR MESSAGE */}
+      {error && <div className="sa-modal-error" style={{ marginBottom: 10 }}>{error}</div>}
 
-      <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-        <button
-          type="submit"
-          className="sa-primary-button"
-          disabled={saving}
-        >
-          {saving ? "Saving..." : "Save Replacement"}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-/* ---------- TAB 2: Issue to Vendor ---------- */
-
-const IssueToVendorTab = ({
-  replacements,
-  vendors,
-  stores,
-  reloadReplacements,
-}) => {
-  const [selected, setSelected] = useState(null);
-  const [vendorId, setVendorId] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const openRepl = (r) => {
-    setSelected(r);
-    setVendorId(r.vendor || "");
-    setError("");
-  };
-
-  const handleSave = async () => {
-    if (!selected) return;
-    if (!vendorId)
-      return setError("Select vendor to issue replacement.");
-
-    try {
-      setSaving(true);
-      await axios.patch(
-        `${API_BASE}/api/replacement/${selected._id}/issue-vendor`,
-        { vendor: vendorId }
-      );
-      alert("Replacement issued to vendor.");
-      setSelected(null);
-      setVendorId("");
-      reloadReplacements();
-    } catch (err) {
-      console.error("issue vendor error", err);
-      setError(
-        err.response?.data?.message ||
-          "Failed to issue replacement to vendor"
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const openList = replacements.filter(
-    (r) => statusOf(r) === "OPEN"
-  );
-
-  const getStoreName = (id) =>
-    stores.find((s) => getId(s) === id)?.name || id || "-";
-
-  const getVendorName = (id) =>
-    vendors.find((v) => getId(v) === id)?.name || id || "-";
-
-  return (
-    <div style={{ display: "flex", gap: 12 }}>
-      {/* LEFT: list */}
-      <div className="sa-card" style={{ flex: 1 }}>
-        <h3>Open Replacements</h3>
-        <p className="sa-modal-sub">
-          Select a replacement and issue it to a vendor.
-        </p>
-
-        <table className="sa-table">
-          <thead>
-            <tr>
-              <th>Repl No</th>
-              <th>Store From</th>
-              <th>Date</th>
-              <th>Items</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {openList.map((r) => (
-              <tr
-                key={r._id}
-                style={{
-                  cursor: "pointer",
-                  background:
-                    selected && selected._id === r._id
-                      ? "#111827"
-                      : "transparent",
-                }}
-                onClick={() => openRepl(r)}
+      {/* ADD REPLACEMENT (Excel: Consumption → Add Replacement) */}
+      <div className="sa-card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginBottom: 8 }}>Add Replacement</h3>
+        <form onSubmit={handleSaveReplacement}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+              marginBottom: 12,
+            }}
+          >
+            <label>
+              Store Name
+              <select
+                value={addForm.storeId}
+                onChange={(e) => updateAddFormField("storeId", e.target.value)}
+                required
               >
-                <td>{r.replNo || r._id}</td>
-                <td>{getStoreName(r.storeFrom)}</td>
-                <td>{(r.date || "").slice(0, 10)}</td>
-                <td>{(r.lines || []).length}</td>
-                <td>{statusOf(r)}</td>
-              </tr>
-            ))}
-            {!openList.length && (
+                <option value="">Select store</option>
+                {stores.map((s) => (
+                  <option key={s._id || s.id} value={s._id || s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Repl No is auto-generated on save (Excel: Auto Generated) */}
+            <label>
+              Replacement No.
+              <input value="Auto Generated on Save" readOnly />
+            </label>
+          </div>
+
+          <h4 style={{ marginBottom: 6 }}>Items</h4>
+          <table className="sa-table">
+            <thead>
               <tr>
-                <td colSpan={5} style={{ textAlign: "center" }}>
-                  No open replacements.
-                </td>
+                <th style={{ width: "40%" }}>Item Name</th>
+                <th style={{ width: "15%" }}>Item Qty</th>
+                <th>Reason / Remarks</th>
+                <th style={{ width: "8%" }}></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {addForm.lines.map((ln, idx) => (
+                <tr key={ln.lineId}>
+                  <td>
+                    <select
+                      value={ln.itemId}
+                      onChange={(e) => updateAddLine(idx, "itemId", e.target.value)}
+                      required
+                    >
+                      <option value="">Select item</option>
+                      {items.map((it) => (
+                        <option key={it._id || it.id} value={it._id || it.id}>
+                          {it.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      value={ln.qty}
+                      onChange={(e) => updateAddLine(idx, "qty", e.target.value)}
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      value={ln.remark}
+                      onChange={(e) => updateAddLine(idx, "remark", e.target.value)}
+                      placeholder="Damaged / Expired / Others"
+                    />
+                  </td>
+                  <td>
+                    {addForm.lines.length > 1 && (
+                      <button
+                        type="button"
+                        className="sa-secondary-button"
+                        onClick={() => removeLineRow(idx)}
+                      >
+                        -
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            type="button"
+            className="sa-secondary-button"
+            style={{ marginTop: 8 }}
+            onClick={addLineRow}
+          >
+            + Add Item
+          </button>
+
+          <div className="sa-modal-actions" style={{ marginTop: 12 }}>
+            <button type="submit" className="sa-primary-button" disabled={saving}>
+              {saving ? "Saving..." : "Save Replacement"}
+            </button>
+          </div>
+        </form>
       </div>
 
-      {/* RIGHT: detail / issue form */}
-      <div className="sa-card" style={{ flex: 1 }}>
-        <h3>Issue to Vendor</h3>
-        {selected ? (
+      {/* REPLACEMENT STORE TABLE (Excel: Replacement Store) */}
+      <div className="sa-card">
+        <h3 style={{ marginBottom: 8 }}>Replacement Store</h3>
+        {loading ? (
+          <div>Loading replacements...</div>
+        ) : (
           <>
+            <div style={{ marginBottom: 8, color: "#9ca3af" }}>
+              Showing {replacements.length} replacements
+            </div>
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>Repl No</th>
+                  <th>Store</th>
+                  <th>Date</th>
+                  <th>Items</th>
+                  <th>Vendor</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {replacements.map((r) => (
+                  <tr key={r._id}>
+                    <td>{r.replNo || r._id}</td>
+                    <td>{getStoreName(r.storeId)}</td>
+                    <td>{(r.date || "").slice(0, 10)}</td>
+                    <td>{(r.lines || []).length}</td>
+                    <td>{r.vendorId ? getVendorName(r.vendorId) : "-"}</td>
+                    <td>{r.status || "OPEN"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {/* ACTION: Issue Vendor (Excel: Issue Vendor / Select Vendor / Select Item / Qty) */}
+                      <button
+                        type="button"
+                        className="sa-secondary-button"
+                        style={{ padding: "4px 8px" }}
+                        onClick={() => openIssueToVendor(r)}
+                      >
+                        Issue to Vendor
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+
+      {/* ISSUE TO VENDOR MODAL (Excel form fields) */}
+      {issueModal.open && (
+        <div
+          className="sa-modal-backdrop"
+          onClick={() =>
+            !saving &&
+            setIssueModal({
+              open: false,
+              replacement: null,
+              vendorId: "",
+              lines: [],
+            })
+          }
+        >
+          <div
+            className="sa-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 900 }}
+          >
+            <h3>Issue to Vendor (Replacement)</h3>
+            <p className="sa-modal-sub">
+              Repl No: {issueModal.replacement?.replNo || "-"} — Store:{" "}
+              {getStoreName(issueModal.replacement?.storeId)}
+            </p>
+
             <div
+              className="sa-modal-form"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-                marginBottom: 10,
+                gap: 12,
+                marginBottom: 12,
               }}
             >
               <label>
-                Replacement No
+                Repl No
                 <input
-                  value={selected.replNo || selected._id}
-                  readOnly
-                />
-              </label>
-              <label>
-                Store From
-                <input
-                  value={getStoreName(selected.storeFrom)}
+                  value={issueModal.replacement?.replNo || ""}
                   readOnly
                 />
               </label>
 
               <label>
-                Vendor
+                Store Name
+                <input
+                  value={getStoreName(issueModal.replacement?.storeId)}
+                  readOnly
+                />
+              </label>
+
+              <label>
+                Select Vendor
                 <select
-                  value={vendorId}
-                  onChange={(e) => setVendorId(e.target.value)}
+                  value={issueModal.vendorId}
+                  onChange={(e) =>
+                    setIssueModal((p) => ({ ...p, vendorId: e.target.value }))
+                  }
                   required
                 >
-                  <option value="">Select vendor</option>
+                  <option value="">Select Vendor</option>
                   {vendors.map((v) => (
-                    <option key={getId(v)} value={getId(v)}>
+                    <option key={v._id || v.id} value={v._id || v.id}>
                       {v.name}
                     </option>
                   ))}
                 </select>
               </label>
-              <label>
-                Current Status
-                <input value={statusOf(selected)} readOnly />
-              </label>
             </div>
 
-            <h4>Items</h4>
+            <h4 style={{ marginBottom: 6 }}>Items to Issue</h4>
             <table className="sa-table">
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th>Qty</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(selected.lines || []).map((ln, i) => (
-                  <tr key={i}>
-                    <td>{ln.itemName || ln.item || "-"}</td>
-                    <td>{ln.qty}</td>
-                    <td>{ln.reason || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {error && (
-              <div
-                className="sa-modal-error"
-                style={{ marginTop: 8 }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div className="sa-modal-actions" style={{ marginTop: 10 }}>
-              <button
-                type="button"
-                className="sa-secondary-button"
-                onClick={() => {
-                  setSelected(null);
-                  setVendorId("");
-                  setError("");
-                }}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className="sa-primary-button"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save & Mark Sent"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <p style={{ color: "#9ca3af" }}>
-            Select a replacement from the left list to issue it to a
-            vendor.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ---------- TAB 3: Replacement GRN ---------- */
-
-const ReplacementGrnTab = ({
-  replacements,
-  vendors,
-  stores,
-  items,
-  reloadReplacements,
-}) => {
-  const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  const candidates = replacements.filter((r) => {
-    const s = statusOf(r);
-    return r.vendor && (s === "SENT_TO_VENDOR" || s === "PARTIAL");
-  });
-
-  const getStoreName = (id) =>
-    stores.find((s) => getId(s) === id)?.name || id || "-";
-
-  const getVendorName = (id) =>
-    vendors.find((v) => getId(v) === id)?.name || id || "-";
-
-  const getItemName = (id) =>
-    items.find((it) => getId(it) === id)?.name || id || "-";
-
-  const openRepl = (r) => {
-    setSelected(r);
-    setError("");
-    setForm({
-      store: r.storeFrom || "",
-      date: today,
-      lines: (r.lines || []).map((ln) => {
-        const sent = ln.qty ?? ln.sentQty ?? 0;
-        const received =
-          ln.receivedQty != null ? ln.receivedQty : sent;
-        return {
-          id: ln._id || ln.id || `ln_${Math.random()}`,
-          item: ln.item,
-          sentQty: sent,
-          receivedQty: received,
-          remarks: ln.remarks || "",
-        };
-      }),
-    });
-  };
-
-  const updateLine = (idx, field, value) => {
-    setForm((prev) => {
-      const nextLines = [...prev.lines];
-      nextLines[idx] = { ...nextLines[idx], [field]: value };
-      return { ...prev, lines: nextLines };
-    });
-  };
-
-  const handleSave = async () => {
-    if (!selected || !form) return;
-    if (!form.store) return setError("Select store to receive.");
-    if (!form.date) return setError("GRN date is required.");
-
-    try {
-      setSaving(true);
-      const payload = {
-        store: form.store,
-        date: form.date,
-        lines: form.lines.map((ln) => ({
-          item: ln.item,
-          sentQty: Number(ln.sentQty || 0),
-          receivedQty: Number(ln.receivedQty || 0),
-          remarks: ln.remarks || undefined,
-        })),
-      };
-
-      const res = await axios.post(
-        `${API_BASE}/api/replacement/${selected._id}/create-grn`,
-        payload
-      );
-
-      const created = res.data;
-      if (created?.grnNo) {
-        alert(`Replacement GRN created: ${created.grnNo}`);
-      } else {
-        alert("Replacement GRN created.");
-      }
-
-      setSelected(null);
-      setForm(null);
-      reloadReplacements();
-    } catch (err) {
-      console.error("create replacement grn error", err);
-      setError(
-        err.response?.data?.message ||
-          "Failed to create replacement GRN"
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={{ display: "flex", gap: 12 }}>
-      {/* LEFT: candidate list */}
-      <div className="sa-card" style={{ flex: 1 }}>
-        <h3>Replacements Pending GRN</h3>
-        <p className="sa-modal-sub">
-          Select a replacement to record received stock.
-        </p>
-
-        <table className="sa-table">
-          <thead>
-            <tr>
-              <th>Repl No</th>
-              <th>Vendor</th>
-              <th>Store</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {candidates.map((r) => (
-              <tr
-                key={r._id}
-                style={{
-                  cursor: "pointer",
-                  background:
-                    selected && selected._id === r._id
-                      ? "#111827"
-                      : "transparent",
-                }}
-                onClick={() => openRepl(r)}
-              >
-                <td>{r.replNo || r._id}</td>
-                <td>{getVendorName(r.vendor)}</td>
-                <td>{getStoreName(r.storeFrom)}</td>
-                <td>{statusOf(r)}</td>
-              </tr>
-            ))}
-            {!candidates.length && (
-              <tr>
-                <td colSpan={4} style={{ textAlign: "center" }}>
-                  No replacements waiting for GRN.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* RIGHT: GRN form */}
-      <div className="sa-card" style={{ flex: 1 }}>
-        <h3>Replacement GRN</h3>
-        {selected && form ? (
-          <>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              <label>
-                Replacement No
-                <input
-                  value={selected.replNo || selected._id}
-                  readOnly
-                />
-              </label>
-              <label>
-                Vendor
-                <input
-                  value={getVendorName(selected.vendor)}
-                  readOnly
-                />
-              </label>
-
-              <label>
-                Store (receive in)
-                <select
-                  value={form.store}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      store: e.target.value,
-                    }))
-                  }
-                  required
-                >
-                  <option value="">Select store</option>
-                  {stores.map((s) => (
-                    <option key={getId(s)} value={getId(s)}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                GRN Date
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, date: e.target.value }))
-                  }
-                  required
-                />
-              </label>
-            </div>
-
-            <h4>Items</h4>
-            <table className="sa-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Sent Qty</th>
-                  <th>Received Qty</th>
+                  <th>Replacement Qty</th>
+                  <th>Issue Qty</th>
                   <th>Remarks</th>
                 </tr>
               </thead>
               <tbody>
-                {form.lines.map((ln, idx) => (
-                  <tr key={ln.id}>
-                    <td>{getItemName(ln.item)}</td>
-                    <td>{ln.sentQty}</td>
+                {issueModal.lines.map((ln, idx) => (
+                  <tr key={ln.lineId}>
+                    <td>{ln.itemName}</td>
+                    <td>{ln.replQty}</td>
                     <td>
                       <input
                         type="number"
                         min="0"
-                        value={ln.receivedQty}
+                        value={ln.issueQty}
                         onChange={(e) =>
-                          updateLine(
-                            idx,
-                            "receivedQty",
-                            e.target.value
-                          )
+                          updateIssueLine(idx, "issueQty", e.target.value)
                         }
                       />
                     </td>
                     <td>
                       <input
-                        value={ln.remarks}
+                        value={ln.remark}
                         onChange={(e) =>
-                          updateLine(idx, "remarks", e.target.value)
+                          updateIssueLine(idx, "remark", e.target.value)
                         }
                         placeholder="optional"
                       />
@@ -682,219 +602,32 @@ const ReplacementGrnTab = ({
               </tbody>
             </table>
 
-            {error && (
-              <div
-                className="sa-modal-error"
-                style={{ marginTop: 8 }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div className="sa-modal-actions" style={{ marginTop: 10 }}>
+            <div className="sa-modal-actions" style={{ marginTop: 12 }}>
               <button
                 type="button"
                 className="sa-secondary-button"
-                onClick={() => {
-                  setSelected(null);
-                  setForm(null);
-                  setError("");
-                }}
+                onClick={() =>
+                  setIssueModal({
+                    open: false,
+                    replacement: null,
+                    vendorId: "",
+                    lines: [],
+                  })
+                }
               >
                 Cancel
               </button>
               <button
                 type="button"
                 className="sa-primary-button"
-                onClick={handleSave}
+                onClick={submitIssueToVendor}
                 disabled={saving}
               >
-                {saving ? "Saving..." : "Create Replacement GRN"}
+                {saving ? "Saving..." : "Save Issue to Vendor"}
               </button>
             </div>
-          </>
-        ) : (
-          <p style={{ color: "#9ca3af" }}>
-            Select a replacement from the left list to create GRN.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ---------- PARENT PAGE: StoreReplacement ---------- */
-
-const StoreReplacement = () => {
-  const [activeTab, setActiveTab] = useState("ADD"); // ADD | ISSUE | GRN
-
-  const [stores, setStores] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [items, setItems] = useState([]);
-  const [replacements, setReplacements] = useState([]);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const loadMastersAndReplacements = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [storeRes, vendorRes, itemRes, replRes] =
-        await Promise.all([
-          axios
-            .get(`${API_BASE}/api/stores`)
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`${API_BASE}/api/vendors`)
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`${API_BASE}/api/items`)
-            .catch(() => ({ data: [] })),
-          axios
-            .get(`${API_BASE}/api/replacement`)
-            .catch(() => ({ data: [] })),
-        ]);
-
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setVendors(
-        Array.isArray(vendorRes.data) ? vendorRes.data : []
-      );
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
-      setReplacements(
-        Array.isArray(replRes.data) ? replRes.data : []
-      );
-    } catch (err) {
-      console.error("load replacement data error", err);
-      setError(
-        err.response?.data?.message ||
-          "Failed to load store replacement data"
-      );
-      setReplacements([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadMastersAndReplacements();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const reloadReplacements = async () => {
-    try {
-      const replRes = await axios
-        .get(`${API_BASE}/api/replacement`)
-        .catch(() => ({ data: [] }));
-      setReplacements(
-        Array.isArray(replRes.data) ? replRes.data : []
-      );
-    } catch (err) {
-      console.error("reload replacements error", err);
-    }
-  };
-
-  return (
-    <div className="sa-page">
-      <div
-        className="sa-page-header"
-        style={{ alignItems: "flex-start" }}
-      >
-        <div>
-          <h2>Store Replacement</h2>
-          <p>
-            Manage store replacements: create, issue to vendor and
-            receive back via GRN.
-          </p>
+          </div>
         </div>
-
-        <button
-          className="sa-secondary-button"
-          type="button"
-          onClick={loadMastersAndReplacements}
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div
-        className="sa-card"
-        style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <button
-          type="button"
-          className={
-            activeTab === "ADD"
-              ? "sa-primary-button"
-              : "sa-secondary-button"
-          }
-          onClick={() => setActiveTab("ADD")}
-        >
-          Add Replacement
-        </button>
-        <button
-          type="button"
-          className={
-            activeTab === "ISSUE"
-              ? "sa-primary-button"
-              : "sa-secondary-button"
-          }
-          onClick={() => setActiveTab("ISSUE")}
-        >
-          Issue to Vendor
-        </button>
-        <button
-          type="button"
-          className={
-            activeTab === "GRN"
-              ? "sa-primary-button"
-              : "sa-secondary-button"
-          }
-          onClick={() => setActiveTab("GRN")}
-        >
-          Replacement GRN
-        </button>
-
-        <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
-          {loading ? "Loading..." : `Replacements: ${replacements.length}`}
-        </div>
-      </div>
-
-      {error && (
-        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
-          {error}
-        </div>
-      )}
-
-      {activeTab === "ADD" && (
-        <AddReplacementTab
-          stores={stores}
-          items={items}
-          reloadReplacements={reloadReplacements}
-        />
-      )}
-
-      {activeTab === "ISSUE" && (
-        <IssueToVendorTab
-          replacements={replacements}
-          vendors={vendors}
-          stores={stores}
-          reloadReplacements={reloadReplacements}
-        />
-      )}
-
-      {activeTab === "GRN" && (
-        <ReplacementGrnTab
-          replacements={replacements}
-          vendors={vendors}
-          stores={stores}
-          items={items}
-          reloadReplacements={reloadReplacements}
-        />
       )}
     </div>
   );
