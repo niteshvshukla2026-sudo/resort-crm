@@ -14,6 +14,17 @@ const newLine = () => ({
   remark: "",
 });
 
+// GRN number generator based on received date
+const generateGrnNo = (dateStr) => {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  if (Number.isNaN(d.getTime())) return `GRN-${Date.now()}`;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const rand = Math.floor(Math.random() * 900) + 100; // 100–999
+  return `GRN-${yyyy}${mm}${dd}-${rand}`;
+};
+
 // Dev fallback data (minimal)
 const DEV_SAMPLES = [
   {
@@ -72,7 +83,7 @@ const RequisitionList = () => {
     lines: [newLine()],
   });
 
-  // PO modal state (items auto from requisition; vendor/resort/store derived)
+  // PO modal state
   const [poModal, setPoModal] = useState({
     open: false,
     req: null,
@@ -85,13 +96,16 @@ const RequisitionList = () => {
     total: 0,
   });
 
-  // GRN modal state (new: matches PO approach — items auto from requisition)
+  // GRN modal state
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [grnModal, setGrnModal] = useState({
     open: false,
     req: null,
-    grnNo: "",
+    grnNo: generateGrnNo(todayStr),
     receivedBy: "",
-    receivedDate: new Date().toISOString().slice(0, 10),
+    receivedDate: todayStr,
+    challanNo: "",
+    billNo: "",
     items: [], // { lineId, item, itemName, qtyRequested, qtyReceived, remark }
   });
 
@@ -169,7 +183,7 @@ const RequisitionList = () => {
   const getVendorName = (v) => lookupName(vendors, v);
   const getItemName = (itId) => lookupName(items, itId);
 
-  // Requisition form helpers (unchanged core)
+  // requisition helpers
   const baseEmptyForm = {
     type: "INTERNAL",
     resort: "",
@@ -667,12 +681,16 @@ const RequisitionList = () => {
       };
     });
 
+    const today = new Date().toISOString().slice(0, 10);
+
     setGrnModal({
       open: true,
       req,
-      grnNo: `GRN-${Date.now()}`,
+      grnNo: generateGrnNo(today),
       receivedBy: "",
-      receivedDate: new Date().toISOString().slice(0, 10),
+      receivedDate: today,
+      challanNo: "",
+      billNo: "",
       items: itemsPayload,
     });
   };
@@ -686,9 +704,19 @@ const RequisitionList = () => {
   };
 
   const submitCreateGRN = async () => {
-    const { req, grnNo, receivedBy, receivedDate, items: grnItems } =
-      grnModal;
+    const {
+      req,
+      grnNo,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      items: grnItems,
+    } = grnModal;
+
     if (!grnNo) return setError("GRN No. is required");
+    if (!challanNo.trim())
+      return setError("Challan No is required");
     if (!grnItems || grnItems.length === 0)
       return setError("GRN must include at least one item");
 
@@ -718,6 +746,8 @@ const RequisitionList = () => {
         grnNo,
         receivedBy: receivedBy || undefined,
         receivedDate,
+        challanNo: challanNo.trim(),
+        billNo: billNo?.trim() || undefined,
         items: itemsPayload,
         store: req.toStore || req.store || undefined,
       };
@@ -739,9 +769,11 @@ const RequisitionList = () => {
         setGrnModal({
           open: false,
           req: null,
-          grnNo: "",
+          grnNo: generateGrnNo(todayStr),
           receivedBy: "",
-          receivedDate: new Date().toISOString().slice(0, 10),
+          receivedDate: todayStr,
+          challanNo: "",
+          billNo: "",
           items: [],
         });
         navigate(`/super-admin/grn/${grnIdOrNo}`);
@@ -760,9 +792,11 @@ const RequisitionList = () => {
         setGrnModal({
           open: false,
           req: null,
-          grnNo: "",
+          grnNo: generateGrnNo(todayStr),
           receivedBy: "",
-          receivedDate: new Date().toISOString().slice(0, 10),
+          receivedDate: todayStr,
+          challanNo: "",
+          billNo: "",
           items: [],
         });
         navigate(`/super-admin/grn/${grnNo}`);
@@ -796,7 +830,6 @@ const RequisitionList = () => {
 
   // placeholder for internal transfer
   const openCreateTransfer = (req) => {
-    // yaha baad mein aap apna transfer modal / page open kar sakte ho
     window.alert(
       `Transfer action for internal requisition ${req.requisitionNo || req._id} is not implemented yet.`
     );
@@ -1191,10 +1224,10 @@ const RequisitionList = () => {
                         <i className="ri-close-circle-line" />
                       </span>
 
-                      {/* VENDOR requisition → PO / GRN allowed */}
+                      {/* VENDOR requisition → PO / GRN allowed, with mutual disable */}
                       {r.type === "VENDOR" && (
                         <>
-                          {/* PO create/view */}
+                          {/* PO create/view/disabled */}
                           {r.po ? (
                             <span
                               style={actionStyle}
@@ -1203,19 +1236,24 @@ const RequisitionList = () => {
                             >
                               <i className="ri-file-paper-line" />
                             </span>
+                          ) : r.grn ? (
+                            <span
+                              style={disabledActionStyle}
+                              title="GRN already created — PO cannot be created from this requisition"
+                            >
+                              <i className="ri-file-paper-line" />
+                            </span>
                           ) : (
-                            !r.grn && (
-                              <span
-                                style={actionStyle}
-                                onClick={() => openCreatePO(r)}
-                                title="Create Purchase Order (PO)"
-                              >
-                                <i className="ri-shopping-cart-line" />
-                              </span>
-                            )
+                            <span
+                              style={actionStyle}
+                              onClick={() => openCreatePO(r)}
+                              title="Create Purchase Order (PO)"
+                            >
+                              <i className="ri-shopping-cart-line" />
+                            </span>
                           )}
 
-                          {/* GRN create/view */}
+                          {/* GRN create/view/disabled */}
                           {r.grn ? (
                             <span
                               style={actionStyle}
@@ -1512,7 +1550,6 @@ const RequisitionList = () => {
                   Cancel
                 </button>
 
-                {/* Internal requisition – user will use Transfer later, but save is same */}
                 <button
                   type="submit"
                   className="sa-primary-button"
@@ -1530,7 +1567,7 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* PO Modal – Resort (from requisition) field removed from UI */}
+      {/* PO Modal */}
       {poModal.open && (
         <div
           className="sa-modal-backdrop"
@@ -1597,8 +1634,6 @@ const RequisitionList = () => {
                   />
                 </label>
 
-                {/* Resort field removed as per requirement */}
-
                 <label>
                   Delivery Store (from requisition)
                   <input
@@ -1630,7 +1665,6 @@ const RequisitionList = () => {
                 </label>
               </div>
 
-              {/* Items table */}
               <div style={{ marginTop: 12 }}>
                 <table
                   className="sa-table"
@@ -1739,7 +1773,6 @@ const RequisitionList = () => {
                 </table>
               </div>
 
-              {/* totals */}
               <div
                 style={{
                   display: "flex",
@@ -1817,7 +1850,6 @@ const RequisitionList = () => {
                 </div>
               </div>
 
-              {/* actions */}
               <div
                 className="sa-modal-actions"
                 style={{ marginTop: 12 }}
@@ -1859,9 +1891,11 @@ const RequisitionList = () => {
             setGrnModal({
               open: false,
               req: null,
-              grnNo: "",
+              grnNo: generateGrnNo(todayStr),
               receivedBy: "",
-              receivedDate: new Date().toISOString().slice(0, 10),
+              receivedDate: todayStr,
+              challanNo: "",
+              billNo: "",
               items: [],
             })
           }
@@ -1874,7 +1908,7 @@ const RequisitionList = () => {
             <h3>Create GRN</h3>
             <p className="sa-modal-sub">
               Record goods received against the selected requisition.
-              Vendor/store are taken from the requisition.
+              Store is taken from the requisition.
             </p>
 
             <div className="sa-modal-form">
@@ -1931,22 +1965,41 @@ const RequisitionList = () => {
                       grnModal.receivedDate ||
                       new Date().toISOString().slice(0, 10)
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const val = e.target.value;
                       setGrnModal((p) => ({
                         ...p,
-                        receivedDate: e.target.value,
-                      }))
-                    }
+                        receivedDate: val,
+                        grnNo: generateGrnNo(val),
+                      }));
+                    }}
                   />
                 </label>
 
                 <label>
-                  Vendor (from requisition)
+                  Challan No<span style={{ color: "red" }}> *</span>
                   <input
-                    value={
-                      getVendorName(grnModal.req?.vendor) || ""
+                    value={grnModal.challanNo || ""}
+                    onChange={(e) =>
+                      setGrnModal((p) => ({
+                        ...p,
+                        challanNo: e.target.value,
+                      }))
                     }
-                    readOnly
+                    required
+                  />
+                </label>
+
+                <label>
+                  Bill No (optional)
+                  <input
+                    value={grnModal.billNo || ""}
+                    onChange={(e) =>
+                      setGrnModal((p) => ({
+                        ...p,
+                        billNo: e.target.value,
+                      }))
+                    }
                   />
                 </label>
 
@@ -1964,7 +2017,6 @@ const RequisitionList = () => {
                 </label>
               </div>
 
-              {/* Items table: requested qty read-only; received qty editable */}
               <div style={{ marginTop: 12 }}>
                 <table
                   className="sa-table"
@@ -2040,7 +2092,6 @@ const RequisitionList = () => {
                 </table>
               </div>
 
-              {/* actions */}
               <div
                 className="sa-modal-actions"
                 style={{ marginTop: 12 }}
@@ -2052,10 +2103,11 @@ const RequisitionList = () => {
                     setGrnModal({
                       open: false,
                       req: null,
-                      grnNo: "",
+                      grnNo: generateGrnNo(todayStr),
                       receivedBy: "",
-                      receivedDate:
-                        new Date().toISOString().slice(0, 10),
+                      receivedDate: todayStr,
+                      challanNo: "",
+                      billNo: "",
                       items: [],
                     })
                   }
