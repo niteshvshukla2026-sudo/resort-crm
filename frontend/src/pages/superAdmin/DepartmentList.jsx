@@ -2,14 +2,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-// ✅ BACKEND BASE URL
-// Vercel env: VITE_API_BASE = https://<your-backend-domain>/api
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
 
-// ✅ axios instance that always hits backend + sends token
-const authAxios = axios.create({
-  baseURL: API_BASE,
-});
+// ✅ BACKEND BASE URL (env > local > render)
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000/api"
+    : "https://resort-crm.onrender.com/api");
+
+console.log("DepartmentList API_BASE =", API_BASE);
+
+// ✅ axios instance with baseURL + token
+const authAxios = axios.create({ baseURL: API_BASE });
 
 authAxios.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
@@ -18,6 +22,7 @@ authAxios.interceptors.request.use((config) => {
   }
   return config;
 });
+
 
 const emptyForm = () => ({ _id: undefined, name: "", code: "" });
 
