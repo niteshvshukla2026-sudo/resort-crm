@@ -9,3 +9,6 @@ const server = http.createServer(app);
 server.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
 });
+
+import resortRouter from "./routes/resort.routes.js";
+app.use("/api", resortRouter);

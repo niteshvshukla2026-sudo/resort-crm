@@ -1,0 +1,139 @@
+controllers.cjs:44:  async function getResortKpi(req, res) {
+controllers.cjs:49:  // 🏨 RESORTS
+controllers.cjs:51:  async function listResorts(req, res) {
+controllers.cjs:52:    return res.json({ ok: true, resorts: [] });
+controllers.cjs:96:    getResortKpi,
+controllers.cjs:97:    listResorts,
+server.cjs:27:  // Set FRONTEND_URL env on Render to: https://resort-crm.vercel.app
+server.cjs:28:  let frontend = process.env.FRONTEND_URL || 'https://resort-crm.vercel.app';
+server_router.cjs:17:        req.user = { id: demo, name: 'Demo User', role: 'RESORT_USER', resorts: [] };
+server_router.cjs:31:  router.get('/dashboard/resort/:resortId/kpi', controllers.getResortKpi);
+server_router.cjs:34:  // 🏨 Resorts
+server_router.cjs:36:  router.get('/resorts', controllers.listResorts);
+src\app.js:9:import resortRoutes from "./routes/resorts.routes.js";
+src\app.js:20:import resortUserRoutes from "./routes/resortUser.routes.js";
+src\app.js:47: * e.g. FRONTEND_ORIGINS="https://resort-crm.vercel.app,https://staging-resort.vercel.app"
+src\app.js:51:const defaultFrontend = "https://resort-crm.vercel.app";
+src\app.js:91:  res.send("Resort Purchase Management API");
+src\app.js:97:app.use("/api/resorts", resortRoutes);
+src\app.js:107:app.use("/api/resort-user", resortUserRoutes);
+src\config\permissions.js:3:  "RESORTS",
+src\controllers\auth.controller.js:30:      resorts: user.resorts,
+src\controllers\consumptionController.js:8: *  - Agar is fromStore+resort ke liye koi rule hi nahi hai → sab allowed
+src\controllers\consumptionController.js:11:const isStoreTransferAllowed = async (resortId, fromStoreId, toStoreId) => {
+src\controllers\consumptionController.js:19:  if (resortId) {
+src\controllers\consumptionController.js:20:    baseFilter.resort = resortId;
+src\controllers\consumptionController.js:22:    baseFilter.resort = null;
+src\controllers\consumptionController.js:44:    const { type, resort, from, to } = req.query;
+src\controllers\consumptionController.js:48:    if (resort) filter.resort = resort;
+src\controllers\consumptionController.js:57:      .populate("resort", "name")
+src\controllers\consumptionController.js:77:      .populate("resort", "name")
+src\controllers\consumptionController.js:104:    if (!payload.resort) {
+src\controllers\consumptionController.js:105:      return res.status(400).json({ message: "resort is required" });
+src\controllers\consumptionController.js:131:        payload.resort,
+src\controllers\consumptionController.js:170:      "resort",
+src\controllers\consumptionController.js:194:        doc.resort,
+src\controllers\resort.controller.js:1:// backend/src/controllers/resort.controller.js
+src\controllers\resort.controller.js:2:import Resort from "../models/resort.model.js";
+src\controllers\resort.controller.js:4:export const listResorts = async (req, res) => {
+src\controllers\resort.controller.js:12:    const resorts = await Resort.find(filter).sort({ createdAt: -1 }).lean();
+src\controllers\resort.controller.js:13:    return res.json(resorts);
+src\controllers\resort.controller.js:20:export const getResort = async (req, res) => {
+src\controllers\resort.controller.js:22:    const r = await Resort.findById(req.params.id).lean();
+src\controllers\resort.controller.js:31:export const createResort = async (req, res) => {
+src\controllers\resort.controller.js:41:    const created = await Resort.create(payload);
+src\controllers\resort.controller.js:45:    res.status(500).json({ message: "Failed to create resort" });
+src\controllers\resort.controller.js:49:export const updateResort = async (req, res) => {
+src\controllers\resort.controller.js:54:    const updated = await Resort.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true }).lean();
+src\controllers\resort.controller.js:63:export const deleteResort = async (req, res) => {
+src\controllers\resort.controller.js:65:    const removed = await Resort.findByIdAndDelete(req.params.id);
+src\controllers\storeTransferRuleController.js:6: * query: resort? fromStore?
+src\controllers\storeTransferRuleController.js:10:    const { resort, fromStore } = req.query;
+src\controllers\storeTransferRuleController.js:12:    if (resort) filter.resort = resort;
+src\controllers\storeTransferRuleController.js:16:      .populate("resort", "name")
+src\controllers\storeTransferRuleController.js:30: * body: { resort?, fromStore, toStore, isAllowed? }
+src\controllers\storeTransferRuleController.js:34:    const { resort, fromStore, toStore, isAllowed } = req.body;
+src\controllers\storeTransferRuleController.js:50:      resort: resort || null,
+src\controllers\storeTransferRuleController.js:62:      resort: resort || null,
+src\controllers\storeTransferRuleController.js:89:    if (req.body.resort !== undefined) {
+src\controllers\storeTransferRuleController.js:90:      rule.resort = req.body.resort || null;
+src\controllers\user.controller.js:4:  const { name, email, password, role, resorts } = req.body;
+src\controllers\user.controller.js:5:  const user = await User.create({ name, email, password, role, resorts });
+src\controllers\user.controller.js:10:  const users = await User.find().populate("resorts", "name code");
+src\inmemoryDb.js:10:  resorts: [],
+src\inmemoryDb.js:27:  db.resorts = [];
+src\inmemoryDb.js:36:  // Resorts
+src\inmemoryDb.js:37:  db.resorts.push({ _id: "resort_1", name: "Beachside Resort" });
+src\inmemoryDb.js:38:  db.resorts.push({ _id: "resort_2", name: "Hillview Resort" });
+src\inmemoryDb.js:40:  // Users (normal resort user and approver)
+src\inmemoryDb.js:43:    username: "resort.user",
+src\inmemoryDb.js:44:    name: "Resort User",
+src\inmemoryDb.js:45:    role: "resort_user",
+src\inmemoryDb.js:46:    resorts: ["resort_1", "resort_2"],
+src\inmemoryDb.js:53:    resorts: ["resort_1"],
+src\inmemoryDb.js:57:  db.departments.push({ _id: "dept_1", name: "F&B", resort: "resort_1" });
+src\inmemoryDb.js:58:  db.stores.push({ _id: "store_1", name: "Main Store", resort: "resort_1" });
+src\inmemoryDb.js:72:    resort: "resort_1",
+src\inmemoryDb.js:89:    resort: "resort_1",
+src\inmemoryDb.js:98:  return { message: "seeded", counts: { users: db.users.length, resorts: db.resorts.length, requisitions: db.requisitions.length } };
+src\inmemoryDb.js:102:function getAssignedResortsForUser(userId) {
+src\inmemoryDb.js:105:  return db.resorts.filter(r => user.resorts.includes(r._id));
+src\inmemoryDb.js:112:    resort: payload.resort,
+src\inmemoryDb.js:124:function listRequisitionsByResort(resortId) {
+src\inmemoryDb.js:125:  return db.requisitions.filter(r => r.resort === resortId);
+src\inmemoryDb.js:144:    resort: payload.resort,
+src\inmemoryDb.js:159:    resort: payload.resort,
+src\inmemoryDb.js:183:  getAssignedResortsForUser,
+src\inmemoryDb.js:185:  listRequisitionsByResort,
+src\models\Consumption.js:34:    resort: {
+src\models\Consumption.js:36:      ref: "Resort",
+src\models\GRN.js:14:    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
+src\models\PurchaseOrder.js:14:    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
+src\models\Requisition.js:15:    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
+src\models\Resort.js:3:const ResortSchema = new mongoose.Schema(
+src\models\Resort.js:32:export default mongoose.model("Resort", ResortSchema);
+src\models\Role.js:14:    name: { type: String, required: true },           // "Resort Admin"
+src\models\Role.js:15:    key: { type: String, required: true, unique: true }, // "RESORT_ADMIN"
+src\models\Store.js:5:    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
+src\models\StoreTransferRule.js:6:    resort: {
+src\models\StoreTransferRule.js:8:      ref: "Resort",
+src\models\StoreTransferRule.js:9:      // null / undefined => global rule (all resorts)
+src\models\StoreTransferRule.js:31:  { resort: 1, fromStore: 1, toStore: 1 },
+src\models\User.js:11:      enum: ["SUPER_ADMIN", "RESORT_USER"],
+src\models\User.js:12:      default: "RESORT_USER",
+src\models\User.js:14:    resorts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resort" }],
+src\routes\resorts.routes.js:2:import Resort from "../models/Resort.js";
+src\routes\resorts.routes.js:13:// GET ALL RESORTS
+src\routes\resorts.routes.js:14:router.get("/resorts", async (req, res) => {
+src\routes\resorts.routes.js:16:    const resorts = await Resort.find().sort({ createdAt: -1 });
+src\routes\resorts.routes.js:17:    return res.json({ ok: true, resorts });
+src\routes\resorts.routes.js:23:// CREATE RESORT
+src\routes\resorts.routes.js:24:router.post("/resorts", async (req, res) => {
+src\routes\resorts.routes.js:29:    const created = await Resort.create(data);
+src\routes\resorts.routes.js:30:    return res.json({ ok: true, resort: created });
+src\routes\resorts.routes.js:36:// UPDATE RESORT
+src\routes\resorts.routes.js:37:router.put("/resorts/:id", async (req, res) => {
+src\routes\resorts.routes.js:39:    const updated = await Resort.findByIdAndUpdate(
+src\routes\resorts.routes.js:44:    return res.json({ ok: true, resort: updated });
+src\routes\resorts.routes.js:50:// DELETE RESORT
+src\routes\resorts.routes.js:51:router.delete("/resorts/:id", async (req, res) => {
+src\routes\resorts.routes.js:53:    await Resort.findByIdAndDelete(req.params.id);
+src\routes\resorts.routes.js:54:    return res.json({ ok: true, message: "Resort deleted" });
+src\routes\resortUser.routes.js:19:// Get resorts assigned to current user
+src\routes\resortUser.routes.js:20:router.get("/assigned-resorts", async (req, res) => {
+src\routes\resortUser.routes.js:22:    const resorts = inmem.getAssignedResortsForUser(req.user?.username || req.user?._id || "user_1");
+src\routes\resortUser.routes.js:23:    return res.json({ userId: req.user?._id, resorts });
+src\routes\resortUser.routes.js:26:  res.json({ userId: req.user?.id || "anon", resorts: [{ _id: "resort_1", name: "Beachside Resort" }] });
+src\routes\resortUser.routes.js:38:// List requisitions for a resort
+src\routes\resortUser.routes.js:39:router.get("/requisitions/:resortId", async (req, res) => {
+src\routes\resortUser.routes.js:41:    const list = inmem.listRequisitionsByResort(req.params.resortId);
+src\routes\resortUser.routes.js:80:// Dashboard stats (counts) for a resort
+src\routes\resortUser.routes.js:81:router.get("/dashboard-stats/:resortId", async (req, res) => {
+src\routes\resortUser.routes.js:82:  const resortId = req.params.resortId;
+src\routes\resortUser.routes.js:87:      const totalResorts = db.resorts.length;
+src\routes\resortUser.routes.js:88:      const openRequisitions = db.requisitions.filter(r => r.resort === resortId && r.status === "Submitted").length;
+src\routes\resortUser.routes.js:89:      const pendingGRN = db.grn.filter(g => g.resort === resortId && g.status === "Pending QC").length;
+src\routes\resortUser.routes.js:97:      return res.json({ totalResorts, openRequisitions, pendingGRN, lowStockItems });
+src\routes\resortUser.routes.js:103:  res.json({ totalResorts: 1, openRequisitions: 0, pendingGRN: 0, lowStockItems: 0 });
+src\server.js:13:import resortRouter from "./routes/resort.routes.js";
+src\server.js:14:app.use("/api", resortRouter);

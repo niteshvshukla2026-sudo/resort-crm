@@ -1,5 +1,13 @@
 // backend/server.cjs  (overwrite with this exact content)
 
+// ensure .env is loaded before anything else
+try {
+  require('dotenv').config();
+} catch (e) {
+  console.warn('dotenv load warning:', e && e.message);
+}
+
+
 const express = require('express');
 const cors = require('cors');
 
