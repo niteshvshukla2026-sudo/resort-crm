@@ -50,8 +50,10 @@ const emptyLine = () => ({
   itemCategory: "",
   itemId: "",
   qty: "",
-  // no uom on line anymore
 });
+
+// allowed yield UOMs (dropdown)
+const UOM_OPTIONS = ["Kg", "Ltr", "Nos", "Pax"];
 
 const RecipeMaster = () => {
   const [recipes, setRecipes] = useState([]);
@@ -72,7 +74,7 @@ const RecipeMaster = () => {
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
-    type: "LUMPSUM",
+    type: "", // still kept internally, derived from category
     name: "",
     yieldQty: "",
     yieldUom: "",
@@ -97,7 +99,6 @@ const RecipeMaster = () => {
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
       const serverItemsRaw = Array.isArray(itemRes.data) ? itemRes.data : DEV_ITEMS;
 
-      // normalize items (robust uom mapping kept but not used per-line)
       const serverItems = serverItemsRaw.map((it) => {
         const uom =
           it.uom ||
@@ -122,9 +123,13 @@ const RecipeMaster = () => {
 
       let serverItemCats = [];
       if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
-        serverItemCats = icatRes.data.map((c) => (typeof c === "string" ? c : c.name || c.code || c._id || c.id));
+        serverItemCats = icatRes.data.map((c) =>
+          typeof c === "string" ? c : c.name || c.code || c._id || c.id
+        );
       } else {
-        serverItemCats = Array.from(new Set((serverItems || DEV_ITEMS).map((it) => it.itemCategory || "Uncategorized")));
+        serverItemCats = Array.from(
+          new Set((serverItems || DEV_ITEMS).map((it) => it.itemCategory || "Uncategorized"))
+        );
       }
 
       const normalized = (Array.isArray(serverRecipes) ? serverRecipes : []).map((r) => ({
@@ -132,7 +137,7 @@ const RecipeMaster = () => {
         code: r.code || "",
         name: r.name || "",
         recipeCategoryId: r.recipeCategoryId || r.recipeCategory || "",
-        type: r.type || "LUMPSUM",
+        type: r.type || "", // kept for backend/list if needed
         yieldQty: r.yieldQty ?? r.yield_qty ?? "",
         yieldUom: r.yieldUom || r.yield_uom || "",
         lines: Array.isArray(r.lines)
@@ -142,7 +147,9 @@ const RecipeMaster = () => {
                 ln.itemCategory ||
                 ln.item_category ||
                 (() => {
-                  const item = (serverItems || DEV_ITEMS).find((it) => it._id === ln.itemId || it.id === ln.itemId);
+                  const item = (serverItems || DEV_ITEMS).find(
+                    (it) => it._id === ln.itemId || it.id === ln.itemId
+                  );
                   return item?.itemCategory || item?.category || "";
                 })(),
               itemId: ln.itemId || ln.item || "",
@@ -154,14 +161,20 @@ const RecipeMaster = () => {
       setRecipes(normalized.length ? normalized : DEV_RECIPES);
       setItems(serverItems);
       setRecipeCategories(serverCats);
-      setItemCategories(serverItemCats.length ? serverItemCats : Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))));
+      setItemCategories(
+        serverItemCats.length
+          ? serverItemCats
+          : Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")))
+      );
     } catch (err) {
       console.error(err);
       setError("Failed to load recipe data; using sample data");
       setRecipes(DEV_RECIPES);
       setItems(DEV_ITEMS);
       setRecipeCategories(DEV_RECIPE_CATS);
-      setItemCategories(Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))));
+      setItemCategories(
+        Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")))
+      );
     } finally {
       setLoading(false);
     }
@@ -172,25 +185,33 @@ const RecipeMaster = () => {
     // eslint-disable-next-line
   }, []);
 
-  const getCategoryById = (id) => recipeCategories.find((c) => c._id === id || c.id === id) || null;
+  const getCategoryById = (id) =>
+    recipeCategories.find((c) => c._id === id || c.id === id) || null;
   const getItem = (id) => items.find((it) => it._id === id || it.id === id) || null;
   const getItemName = (id) => (getItem(id) ? getItem(id).name : id);
 
   const categoryOptions = useMemo(() => recipeCategories, [recipeCategories]);
 
-  const filteredRecipes = useMemo(() => {
-    return recipes.filter((r) => {
-      if (categoryFilter && (r.recipeCategoryId || "") !== categoryFilter) return false;
-      if (searchText && searchText.trim()) {
-        const q = searchText.trim().toLowerCase();
-        const hay = [r.code, r.name, r._id].filter(Boolean).join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [recipes, categoryFilter, searchText]);
+  const filteredRecipes = useMemo(
+    () =>
+      recipes.filter((r) => {
+        if (categoryFilter && (r.recipeCategoryId || "") !== categoryFilter) return false;
+        if (searchText && searchText.trim()) {
+          const q = searchText.trim().toLowerCase();
+          const hay = [r.code, r.name, r._id].filter(Boolean).join(" ").toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      }),
+    [recipes, categoryFilter, searchText]
+  );
 
-  const updateFormField = (name, value) => setForm((p) => ({ ...p, [name]: value }));
+  const updateFormField = (name, value) =>
+    setForm((p) => ({
+      ...p,
+      [name]: value,
+    }));
+
   const updateLine = (idx, field, value) =>
     setForm((p) => {
       const arr = [...p.lines];
@@ -198,13 +219,30 @@ const RecipeMaster = () => {
       return { ...p, lines: arr };
     });
 
-  const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }));
-  const removeLine = (idx) => setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
+  const addLine = () =>
+    setForm((p) => ({
+      ...p,
+      lines: [...p.lines, emptyLine()],
+    }));
+
+  const removeLine = (idx) =>
+    setForm((p) => ({
+      ...p,
+      lines: p.lines.filter((_, i) => i !== idx),
+    }));
 
   const itemsForCategory = (cat) =>
-    items.filter((it) => (it.itemCategory || it.category || it.item_category || "").toString() === (cat || "").toString());
+    items.filter(
+      (it) =>
+        (it.itemCategory || it.category || it.item_category || "").toString() ===
+        (cat || "").toString()
+    );
 
-  // when itemCategory changes: auto-select single item if only one exists in that category; do not set line UOM
+  // helper: safely map detected uom to allowed options
+  const mapToAllowedUom = (uom) =>
+    UOM_OPTIONS.includes(uom) ? uom : undefined;
+
+  // when itemCategory changes: auto-select single item if only one exists in that category
   const onLineCategoryChange = (idx, catVal) => {
     updateLine(idx, "itemCategory", catVal);
     updateLine(idx, "itemId", "");
@@ -216,43 +254,60 @@ const RecipeMaster = () => {
     if (matches.length === 1) {
       const only = matches[0];
       updateLine(idx, "itemId", only._id || only.id);
-      // populate header yieldUom from item if header empty (convenience)
-      if (only.uom) setForm((p) => ({ ...p, yieldUom: p.yieldUom || only.uom }));
+      const allowed = mapToAllowedUom(only.uom);
+      if (allowed) {
+        setForm((p) => ({
+          ...p,
+          yieldUom: p.yieldUom || allowed,
+        }));
+      }
     }
   };
 
-  // when item selected: set itemCategory (if available) and optionally update header yieldUom
+  // when item selected: set itemCategory (if available) and possibly yieldUom
   const onLineItemChange = (idx, itemId) => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
 
     if (it && it.itemCategory) updateLine(idx, "itemCategory", it.itemCategory);
 
-    // header convenience only — we do NOT add uom to the ingredient line
-    if (it && it.uom) {
-      setForm((p) => ({ ...p, yieldUom: p.yieldUom || it.uom }));
+    const allowed = it ? mapToAllowedUom(it.uom) : undefined;
+    if (allowed) {
+      setForm((p) => ({
+        ...p,
+        yieldUom: p.yieldUom || allowed,
+      }));
     }
   };
 
+  // if all ingredient items share same allowed uom, auto-fill header if empty
   useEffect(() => {
-    // keep simple: if all lines have same detected item.uom (rare), set header if empty
     const detected = form.lines
       .map((ln) => {
         const it = getItem(ln.itemId);
-        return it?.uom || "";
+        const allowed = it ? mapToAllowedUom(it.uom) : undefined;
+        return allowed;
       })
       .filter(Boolean);
-    if (detected.length === 0) return;
+
+    if (!detected.length) return;
     const allSame = detected.every((d) => d === detected[0]);
     if (allSame) {
-      setForm((p) => ({ ...p, yieldUom: p.yieldUom || detected[0] }));
+      setForm((p) => ({
+        ...p,
+        yieldUom: p.yieldUom || detected[0],
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.lines.map((l) => l.itemId).join("||")]);
 
   const handleRecipeCategoryChange = (catId) => {
     const cat = getCategoryById(catId);
-    setForm((p) => ({ ...p, recipeCategoryId: catId, type: cat ? (cat.type || p.type) : p.type }));
+    setForm((p) => ({
+      ...p,
+      recipeCategoryId: catId,
+      type: cat ? cat.type || p.type : p.type, // only internal, not shown
+    }));
   };
 
   const openCreate = () => {
@@ -261,12 +316,13 @@ const RecipeMaster = () => {
     setFormError("");
     setShowForm(true);
   };
+
   const openEdit = (rcp) => {
     setEditing(rcp);
     setForm({
       code: rcp.code || "",
       recipeCategoryId: rcp.recipeCategoryId || "",
-      type: rcp.type || "LUMPSUM",
+      type: rcp.type || "",
       name: rcp.name || "",
       yieldQty: rcp.yieldQty ?? rcp.yield_qty ?? "",
       yieldUom: rcp.yieldUom || rcp.yield_uom || "",
@@ -277,12 +333,12 @@ const RecipeMaster = () => {
             itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || ln.item || "",
             qty: ln.qty ?? "",
-          }))) ||
-        [emptyLine()],
+          }))) || [emptyLine()],
     });
     setFormError("");
     setShowForm(true);
   };
+
   const openView = (rcp) => {
     setViewing(rcp);
     setShowView(true);
@@ -293,7 +349,7 @@ const RecipeMaster = () => {
     setForm({
       code: `${rcp.code || "RCP"}-COPY`,
       recipeCategoryId: rcp.recipeCategoryId || "",
-      type: rcp.type || "LUMPSUM",
+      type: rcp.type || "",
       name: `${rcp.name || "Copy"} (Copy)`,
       yieldQty: rcp.yieldQty ?? rcp.yield_qty ?? "",
       yieldUom: rcp.yieldUom || rcp.yield_uom || "",
@@ -304,8 +360,7 @@ const RecipeMaster = () => {
             itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || "",
             qty: ln.qty ?? "",
-          }))) ||
-        [emptyLine()],
+          }))) || [emptyLine()],
     });
     setFormError("");
     setShowForm(true);
@@ -319,11 +374,13 @@ const RecipeMaster = () => {
     for (const ln of form.lines) {
       if (!ln.itemCategory) return "Each ingredient must have an item category";
       if (!ln.itemId) return "Each ingredient must have an item";
-      if (!ln.qty || Number(ln.qty) <= 0) return "Each ingredient must have quantity > 0";
-      // no per-line UOM validation (user asked to remove UOM from ingredient)
+      if (!ln.qty || Number(ln.qty) <= 0)
+        return "Each ingredient must have quantity > 0";
     }
-    if (form.yieldQty && Number(form.yieldQty) <= 0) return "Yield Qty must be > 0";
-    if (form.yieldQty && !form.yieldUom) return "Provide Yield UOM when Yield Qty is set";
+    if (form.yieldQty && Number(form.yieldQty) <= 0)
+      return "Yield Qty must be > 0";
+    if (form.yieldQty && !form.yieldUom)
+      return "Provide Yield UOM when Yield Qty is set";
     return null;
   };
 
@@ -337,21 +394,34 @@ const RecipeMaster = () => {
       code: form.code,
       name: form.name,
       recipeCategoryId: form.recipeCategoryId,
-      type: form.type,
+      type: form.type || undefined, // still send if backend expects
       yieldQty: form.yieldQty ? Number(form.yieldQty) : undefined,
       yieldUom: form.yieldUom || undefined,
-      // lines do NOT include uom now
-      lines: (form.lines || []).map((ln) => ({ itemId: ln.itemId, qty: Number(ln.qty), itemCategory: ln.itemCategory })),
+      lines: (form.lines || []).map((ln) => ({
+        itemId: ln.itemId,
+        qty: Number(ln.qty),
+        itemCategory: ln.itemCategory,
+      })),
     };
 
     try {
       setSaving(true);
       if (editing && editing._id) {
-        const res = await axios.put(`${API_BASE}/api/recipes/${editing._id}`, payload).catch(() => null);
-        if (res && res.data) setRecipes((p) => p.map((r) => (r._id === editing._id ? res.data : r)));
-        else setRecipes((p) => p.map((r) => (r._id === editing._id ? { ...r, ...payload } : r)));
+        const res = await axios
+          .put(`${API_BASE}/api/recipes/${editing._id}`, payload)
+          .catch(() => null);
+        if (res && res.data)
+          setRecipes((p) =>
+            p.map((r) => (r._id === editing._id ? res.data : r))
+          );
+        else
+          setRecipes((p) =>
+            p.map((r) => (r._id === editing._id ? { ...r, ...payload } : r))
+          );
       } else {
-        const res = await axios.post(`${API_BASE}/api/recipes`, payload).catch(() => null);
+        const res = await axios
+          .post(`${API_BASE}/api/recipes`, payload)
+          .catch(() => null);
         if (res && res.data) setRecipes((p) => [res.data, ...p]);
         else setRecipes((p) => [{ ...payload, _id: `local_${Date.now()}` }, ...p]);
       }
@@ -396,10 +466,23 @@ const RecipeMaster = () => {
         </div>
       </div>
 
-      <div className="sa-card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <label>
           Recipe Category
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
             {categoryOptions.map((c) => (
               <option key={c._id} value={c._id}>
@@ -411,7 +494,12 @@ const RecipeMaster = () => {
 
         <label style={{ flex: 1, minWidth: 200 }}>
           Search
-          <input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="name / code ..." style={{ marginLeft: 8, width: "70%" }} />
+          <input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="name / code ..."
+            style={{ marginLeft: 8, width: "70%" }}
+          />
         </label>
 
         <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
@@ -431,7 +519,7 @@ const RecipeMaster = () => {
                 <th>Code</th>
                 <th>Name</th>
                 <th>Category</th>
-                <th>Type</th>
+                {/* Type column removed as requested */}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -439,23 +527,41 @@ const RecipeMaster = () => {
             <tbody>
               {filteredRecipes.map((r) => (
                 <tr key={r._id}>
-                  <td style={{ color: "#0b69ff", cursor: "pointer" }} onClick={() => openView(r)}>
+                  <td
+                    style={{ color: "#0b69ff", cursor: "pointer" }}
+                    onClick={() => openView(r)}
+                  >
                     {r.code}
                   </td>
                   <td>{r.name}</td>
                   <td>{getCategoryById(r.recipeCategoryId)?.name || "-"}</td>
-                  <td>{r.type}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <span title="View" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openView(r)}>
+                    <span
+                      title="View"
+                      style={{ cursor: "pointer", marginRight: 6 }}
+                      onClick={() => openView(r)}
+                    >
                       <i className="ri-eye-line" />
                     </span>
-                    <span title="Duplicate" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => duplicateAsCreate(r)}>
+                    <span
+                      title="Duplicate"
+                      style={{ cursor: "pointer", marginRight: 6 }}
+                      onClick={() => duplicateAsCreate(r)}
+                    >
                       <i className="ri-file-copy-line" />
                     </span>
-                    <span title="Edit" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => openEdit(r)}>
+                    <span
+                      title="Edit"
+                      style={{ cursor: "pointer", marginRight: 6 }}
+                      onClick={() => openEdit(r)}
+                    >
                       <i className="ri-edit-line" />
                     </span>
-                    <span title="Delete" style={{ cursor: "pointer", marginRight: 6 }} onClick={() => handleDelete(r)}>
+                    <span
+                      title="Delete"
+                      style={{ cursor: "pointer", marginRight: 6 }}
+                      onClick={() => handleDelete(r)}
+                    >
                       <i className="ri-delete-bin-6-line" />
                     </span>
                   </td>
@@ -467,21 +573,40 @@ const RecipeMaster = () => {
       </div>
 
       {showForm && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && (setShowForm(false), setEditing(null))}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && (setShowForm(false), setEditing(null))}
+        >
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editing ? "Edit Recipe" : "Create Recipe"}</h3>
-            <p className="sa-modal-sub">Minimal recipe: code, category, name, yield and ingredient lines.</p>
+            <p className="sa-modal-sub">
+              Minimal recipe: code, category, name, yield and ingredient lines.
+            </p>
 
             <form className="sa-modal-form" onSubmit={handleSave}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+                  gap: 10,
+                }}
+              >
                 <label>
                   Code
-                  <input value={form.code} onChange={(e) => updateFormField("code", e.target.value)} required />
+                  <input
+                    value={form.code}
+                    onChange={(e) => updateFormField("code", e.target.value)}
+                    required
+                  />
                 </label>
 
                 <label>
                   Recipe Category *
-                  <select value={form.recipeCategoryId} onChange={(e) => handleRecipeCategoryChange(e.target.value)} required>
+                  <select
+                    value={form.recipeCategoryId}
+                    onChange={(e) => handleRecipeCategoryChange(e.target.value)}
+                    required
+                  >
                     <option value="">-- Select Recipe Category --</option>
                     {categoryOptions.map((c) => (
                       <option key={c._id} value={c._id}>
@@ -491,14 +616,15 @@ const RecipeMaster = () => {
                   </select>
                 </label>
 
-                <label>
-                  Type
-                  <input value={form.type} disabled />
-                </label>
+                {/* Type field removed from UI */}
 
                 <label>
                   Name
-                  <input value={form.name} onChange={(e) => updateFormField("name", e.target.value)} required />
+                  <input
+                    value={form.name}
+                    onChange={(e) => updateFormField("name", e.target.value)}
+                    required
+                  />
                 </label>
 
                 <label>
@@ -515,7 +641,17 @@ const RecipeMaster = () => {
 
                 <label>
                   Yield UOM
-                  <input value={form.yieldUom || ""} onChange={(e) => updateFormField("yieldUom", e.target.value)} placeholder="e.g. Kg / Ltr / Nos" />
+                  <select
+                    value={form.yieldUom || ""}
+                    onChange={(e) => updateFormField("yieldUom", e.target.value)}
+                  >
+                    <option value="">-- Select UOM --</option>
+                    {UOM_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u === "Pax" ? "Pax (persons)" : u}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
@@ -534,7 +670,13 @@ const RecipeMaster = () => {
                     {form.lines.map((ln, idx) => (
                       <tr key={ln.id}>
                         <td>
-                          <select value={ln.itemCategory || ""} onChange={(e) => onLineCategoryChange(idx, e.target.value)} required>
+                          <select
+                            value={ln.itemCategory || ""}
+                            onChange={(e) =>
+                              onLineCategoryChange(idx, e.target.value)
+                            }
+                            required
+                          >
                             <option value="">-- Select category --</option>
                             {itemCategories.map((c) => (
                               <option key={c} value={c}>
@@ -545,10 +687,19 @@ const RecipeMaster = () => {
                         </td>
 
                         <td>
-                          <select value={ln.itemId || ""} onChange={(e) => onLineItemChange(idx, e.target.value)} required>
+                          <select
+                            value={ln.itemId || ""}
+                            onChange={(e) =>
+                              onLineItemChange(idx, e.target.value)
+                            }
+                            required
+                          >
                             <option value="">-- Select item --</option>
                             {itemsForCategory(ln.itemCategory).map((it) => (
-                              <option key={it._id || it.id} value={it._id || it.id}>
+                              <option
+                                key={it._id || it.id}
+                                value={it._id || it.id}
+                              >
                                 {it.name}
                               </option>
                             ))}
@@ -561,31 +712,59 @@ const RecipeMaster = () => {
                             min="0"
                             step="any"
                             value={ln.qty}
-                            onChange={(e) => updateLine(idx, "qty", e.target.value)}
+                            onChange={(e) =>
+                              updateLine(idx, "qty", e.target.value)
+                            }
                             required
                             placeholder="Qty"
                             style={{ width: "100%" }}
                           />
                         </td>
 
-                        <td>{form.lines.length > 1 && <button type="button" onClick={() => removeLine(idx)}>Remove</button>}</td>
+                        <td>
+                          {form.lines.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeLine(idx)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <button type="button" className="sa-secondary-button" style={{ marginTop: 8 }} onClick={addLine}>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  style={{ marginTop: 8 }}
+                  onClick={addLine}
+                >
                   + Add Ingredient
                 </button>
               </div>
 
-              {formError && <div className="sa-modal-error" style={{ marginTop: 8 }}>{formError}</div>}
+              {formError && (
+                <div className="sa-modal-error" style={{ marginTop: 8 }}>
+                  {formError}
+                </div>
+              )}
 
               <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-                <button type="button" className="sa-secondary-button" onClick={() => (!saving && setShowForm(false))}>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
                   {saving ? "Saving..." : editing ? "Update Recipe" : "Save Recipe"}
                 </button>
               </div>
@@ -595,12 +774,22 @@ const RecipeMaster = () => {
       )}
 
       {showView && viewing && (
-        <div className="sa-modal-backdrop" onClick={() => setShowView(false)}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => setShowView(false)}
+        >
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{viewing.code} — {viewing.name}</h3>
-            <p className="sa-modal-sub">Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"} — Type: {viewing.type}</p>
+            <h3>
+              {viewing.code} — {viewing.name}
+            </h3>
+            <p className="sa-modal-sub">
+              Category: {getCategoryById(viewing.recipeCategoryId)?.name || "-"}
+            </p>
 
-            <p>Yield: {viewing.yieldQty ?? viewing.yield_qty ?? "-"} {viewing.yieldUom ?? viewing.yield_uom ?? ""}</p>
+            <p>
+              Yield: {viewing.yieldQty ?? viewing.yield_qty ?? "-"}{" "}
+              {viewing.yieldUom ?? viewing.yield_uom ?? ""}
+            </p>
 
             <h4 style={{ marginTop: 8 }}>Ingredients</h4>
             <table className="sa-table">
@@ -615,7 +804,11 @@ const RecipeMaster = () => {
                 {(viewing.lines || []).map((ln, i) => (
                   <tr key={i}>
                     <td>{getItemName(ln.itemId)}</td>
-                    <td>{ln.itemCategory || getItem(ln.itemId)?.itemCategory || "-"}</td>
+                    <td>
+                      {ln.itemCategory ||
+                        getItem(ln.itemId)?.itemCategory ||
+                        "-"}
+                    </td>
                     <td>{ln.qty}</td>
                   </tr>
                 ))}
@@ -623,8 +816,23 @@ const RecipeMaster = () => {
             </table>
 
             <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-              <button type="button" className="sa-secondary-button" onClick={() => setShowView(false)}>Close</button>
-              <button type="button" className="sa-primary-button" onClick={() => { setShowView(false); openEdit(viewing); }}>Edit</button>
+              <button
+                type="button"
+                className="sa-secondary-button"
+                onClick={() => setShowView(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="sa-primary-button"
+                onClick={() => {
+                  setShowView(false);
+                  openEdit(viewing);
+                }}
+              >
+                Edit
+              </button>
             </div>
           </div>
         </div>
