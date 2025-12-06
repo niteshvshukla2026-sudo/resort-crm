@@ -31,7 +31,7 @@ import { ProtectedRoute } from "./router/ProtectedRoute.jsx";
 import RoleList from "./pages/superAdmin/RoleList.jsx";
 import ConsumptionList from "./pages/superAdmin/ConsumptionList.jsx";
 import ConsumptionForm from "./pages/superAdmin/ConsumptionForm.jsx";
-import StoreTransferRules from "./pages/superAdmin/StoreTransferRules.jsx";
+import StoreReplacement from "./pages/superAdmin/StoreReplacement.jsx";
 
 const App = () => {
   return (
@@ -63,7 +63,7 @@ const App = () => {
  <Route path="consumption" element={<ConsumptionList />} />
   <Route path="consumption/new" element={<ConsumptionForm />} />
   <Route path="consumption/:id" element={<ConsumptionForm />} /> 
-   <Route path="store-transfer-rules" element={<StoreTransferRules />} />
+    <Route path="store-replacement" element={<StoreReplacement />} />
         {/* Purchase */}
         <Route path="requisitions" element={<SuperRequisitionList />} />
         <Route path="po" element={<POList />} />
