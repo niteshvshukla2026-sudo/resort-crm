@@ -12,9 +12,11 @@ const TYPE_OPTIONS = [
   { value: "REPLACEMENT", label: "Store Replacement" },
 ];
 
+// now also supports recipe field
 const emptyLine = () => ({
   category: "",
   item: "",
+  recipe: "",
   qty: "",
   uom: "",
   remarks: "",
@@ -35,19 +37,25 @@ const ConsumptionForm = () => {
 
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
+  const [recipes, setRecipes] = useState([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const isRecipeType = type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION";
+
   // ---- master data ----
   const loadMasters = async () => {
     try {
-      const [storeRes, itemRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/stores`),
-        axios.get(`${API_BASE}/api/items`),
+      const [storeRes, itemRes, recipeRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })), // adjust if your recipe endpoint is different
       ]);
+
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
       setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
+      setRecipes(Array.isArray(recipeRes.data) ? recipeRes.data : []);
     } catch (err) {
       console.error("load masters error", err);
       // non-fatal
@@ -60,16 +68,26 @@ const ConsumptionForm = () => {
     try {
       const res = await axios.get(`${API_BASE}/api/consumption/${id}`);
       const c = res.data || {};
-      setType(c.type || "LUMPSUM");
+      const existingType = c.type || "LUMPSUM";
+      const entryIsRecipeType =
+        existingType === "RECIPE_LUMPSUM" || existingType === "RECIPE_PORTION";
+
+      setType(existingType);
       setStoreFrom(c.storeFrom?._id || c.storeFrom || "");
       setStoreTo(c.storeTo?._id || c.storeTo || "");
       setReferenceNo(c.referenceNo || "");
       setDate(c.date ? c.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setNotes(c.notes || "");
+
       setLines(
         (c.lines || []).map((ln) => ({
-          category: "", // we don't store category in backend; user can pick if needed
-          item: ln.item?._id || ln.item || "",
+          category: "",
+          recipe: entryIsRecipeType
+            ? ln.recipe?._id || ln.recipe || ""
+            : "",
+          item: !entryIsRecipeType
+            ? ln.item?._id || ln.item || ""
+            : "",
           qty: ln.qty ?? "",
           uom: ln.uom || "",
           remarks: ln.remarks || "",
@@ -111,7 +129,6 @@ const ConsumptionForm = () => {
 
       if (field === "category") {
         row.category = value;
-        // reset item & uom when category changes
         row.item = "";
         row.uom = "";
       } else if (field === "item") {
@@ -120,6 +137,8 @@ const ConsumptionForm = () => {
         if (it) {
           row.uom = it.uom || row.uom;
         }
+      } else if (field === "recipe") {
+        row.recipe = value;
       } else {
         row[field] = value;
       }
@@ -155,9 +174,23 @@ const ConsumptionForm = () => {
       }
     }
 
-    const validLines = lines.filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0);
+    let validLines;
+    if (isRecipeType) {
+      validLines = lines.filter(
+        (ln) => ln.recipe && ln.qty && Number(ln.qty) > 0
+      );
+    } else {
+      validLines = lines.filter(
+        (ln) => ln.item && ln.qty && Number(ln.qty) > 0
+      );
+    }
+
     if (validLines.length === 0) {
-      setError("Add at least one item line with quantity.");
+      setError(
+        isRecipeType
+          ? "Add at least one recipe with quantity."
+          : "Add at least one item line with quantity."
+      );
       return false;
     }
 
@@ -170,6 +203,28 @@ const ConsumptionForm = () => {
     e.preventDefault();
     if (!validate()) return;
 
+    let linePayload;
+    if (isRecipeType) {
+      // for recipe types, send recipe + qty + remarks
+      linePayload = lines
+        .filter((ln) => ln.recipe && ln.qty && Number(ln.qty) > 0)
+        .map((ln) => ({
+          recipe: ln.recipe,
+          qty: Number(ln.qty),
+          remarks: ln.remarks || "",
+        }));
+    } else {
+      // for normal types, send item + qty + uom + remarks
+      linePayload = lines
+        .filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0)
+        .map((ln) => ({
+          item: ln.item,
+          qty: Number(ln.qty),
+          uom: ln.uom || "",
+          remarks: ln.remarks || "",
+        }));
+    }
+
     const payload = {
       type,
       storeFrom,
@@ -177,14 +232,7 @@ const ConsumptionForm = () => {
       referenceNo: type === "REPLACEMENT" ? referenceNo : undefined,
       date,
       notes: notes || undefined,
-      lines: lines
-        .filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0)
-        .map((ln) => ({
-          item: ln.item,
-          qty: Number(ln.qty),
-          uom: ln.uom || "",
-          remarks: ln.remarks || "",
-        })),
+      lines: linePayload,
     };
 
     try {
@@ -230,7 +278,11 @@ const ConsumptionForm = () => {
         >
           <label>
             Type
-            <select value={type} onChange={(e) => setType(e.target.value)} required>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              required
+            >
               {TYPE_OPTIONS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -241,13 +293,17 @@ const ConsumptionForm = () => {
 
           <label>
             Date
-            {/* date is not editable */}
+            {/* date is fixed, not editable */}
             <input type="date" value={date} disabled />
           </label>
 
           <label>
             Store From
-            <select value={storeFrom} onChange={(e) => setStoreFrom(e.target.value)} required>
+            <select
+              value={storeFrom}
+              onChange={(e) => setStoreFrom(e.target.value)}
+              required
+            >
               <option value="">Select store</option>
               {stores.map((s) => (
                 <option key={s._id || s.id} value={s._id || s.id}>
@@ -258,28 +314,32 @@ const ConsumptionForm = () => {
           </label>
 
           {type === "REPLACEMENT" && (
-            <label>
-              Store To
-              <select value={storeTo} onChange={(e) => setStoreTo(e.target.value)} required>
-                <option value="">Select store</option>
-                {stores.map((s) => (
-                  <option key={s._id || s.id} value={s._id || s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+            <>
+              <label>
+                Store To
+                <select
+                  value={storeTo}
+                  onChange={(e) => setStoreTo(e.target.value)}
+                  required
+                >
+                  <option value="">Select store</option>
+                  {stores.map((s) => (
+                    <option key={s._id || s.id} value={s._id || s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          {type === "REPLACEMENT" && (
-            <label>
-              Reference No.
-              <input
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                placeholder="e.g. REP-2025-001"
-              />
-            </label>
+              <label>
+                Reference No.
+                <input
+                  value={referenceNo}
+                  onChange={(e) => setReferenceNo(e.target.value)}
+                  placeholder="e.g. REP-2025-001"
+                />
+              </label>
+            </>
           )}
         </div>
 
@@ -297,21 +357,91 @@ const ConsumptionForm = () => {
         </div>
 
         {/* Lines */}
-        <h3 style={{ marginBottom: 8 }}>Items</h3>
+        <h3 style={{ marginBottom: 8 }}>
+          {isRecipeType ? "Recipes" : "Items"}
+        </h3>
         <div className="sa-card" style={{ padding: 12, marginBottom: 16 }}>
           <table className="sa-table">
             <thead>
-              <tr>
-                <th style={{ width: "20%" }}>Category</th>
-                <th style={{ width: "30%" }}>Item</th>
-                <th style={{ width: "15%" }}>Qty</th>
-                <th style={{ width: "15%" }}>UOM</th>
-                <th>Remarks</th>
-                <th style={{ width: "5%" }}></th>
-              </tr>
+              {isRecipeType ? (
+                <tr>
+                  <th style={{ width: "45%" }}>Recipe</th>
+                  <th style={{ width: "15%" }}>Consumed Qty</th>
+                  <th>Remarks</th>
+                  <th style={{ width: "5%" }}></th>
+                </tr>
+              ) : (
+                <tr>
+                  <th style={{ width: "20%" }}>Category</th>
+                  <th style={{ width: "30%" }}>Item</th>
+                  <th style={{ width: "15%" }}>Qty</th>
+                  <th style={{ width: "15%" }}>UOM</th>
+                  <th>Remarks</th>
+                  <th style={{ width: "5%" }}></th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {lines.map((ln, idx) => {
+                if (isRecipeType) {
+                  // recipe-based rows
+                  return (
+                    <tr key={idx}>
+                      <td>
+                        <select
+                          value={ln.recipe}
+                          onChange={(e) =>
+                            handleLineChange(idx, "recipe", e.target.value)
+                          }
+                          required
+                        >
+                          <option value="">Select recipe</option>
+                          {recipes.map((rc) => (
+                            <option key={rc._id || rc.id} value={rc._id || rc.id}>
+                              {rc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          value={ln.qty}
+                          onChange={(e) =>
+                            handleLineChange(idx, "qty", e.target.value)
+                          }
+                          required
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          value={ln.remarks}
+                          onChange={(e) =>
+                            handleLineChange(idx, "remarks", e.target.value)
+                          }
+                          placeholder="optional"
+                        />
+                      </td>
+
+                      <td>
+                        {lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(idx)}
+                            className="sa-secondary-button"
+                          >
+                            -
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                // normal item-based rows
                 const filteredItems = items.filter((it) => {
                   const cat =
                     it.category ||
@@ -325,11 +455,13 @@ const ConsumptionForm = () => {
 
                 return (
                   <tr key={idx}>
-                    {/* Category dropdown */}
+                    {/* Category */}
                     <td>
                       <select
                         value={ln.category}
-                        onChange={(e) => handleLineChange(idx, "category", e.target.value)}
+                        onChange={(e) =>
+                          handleLineChange(idx, "category", e.target.value)
+                        }
                       >
                         <option value="">Select category</option>
                         {itemCategories.map((cat) => (
@@ -340,11 +472,13 @@ const ConsumptionForm = () => {
                       </select>
                     </td>
 
-                    {/* Item dropdown (filtered by category) */}
+                    {/* Item */}
                     <td>
                       <select
                         value={ln.item}
-                        onChange={(e) => handleLineChange(idx, "item", e.target.value)}
+                        onChange={(e) =>
+                          handleLineChange(idx, "item", e.target.value)
+                        }
                         required
                       >
                         <option value="">Select item</option>
@@ -362,12 +496,14 @@ const ConsumptionForm = () => {
                         type="number"
                         min="0"
                         value={ln.qty}
-                        onChange={(e) => handleLineChange(idx, "qty", e.target.value)}
+                        onChange={(e) =>
+                          handleLineChange(idx, "qty", e.target.value)
+                        }
                         required
                       />
                     </td>
 
-                    {/* UOM auto from item, read-only */}
+                    {/* UOM auto from item (read-only) */}
                     <td>
                       <input
                         value={ln.uom}
@@ -381,7 +517,9 @@ const ConsumptionForm = () => {
                     <td>
                       <input
                         value={ln.remarks}
-                        onChange={(e) => handleLineChange(idx, "remarks", e.target.value)}
+                        onChange={(e) =>
+                          handleLineChange(idx, "remarks", e.target.value)
+                        }
                         placeholder="optional"
                       />
                     </td>
@@ -409,7 +547,7 @@ const ConsumptionForm = () => {
             style={{ marginTop: 8 }}
             onClick={addLine}
           >
-            + Add Item
+            {isRecipeType ? "+ Add Recipe" : "+ Add Item"}
           </button>
         </div>
 
