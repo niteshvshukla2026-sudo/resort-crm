@@ -2,17 +2,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
+// --------------------------------------------------
+// ✅ BACKEND BASE URL (always ends with /api)
+// --------------------------------------------------
+const getApiBase = () => {
+  const raw =
+    import.meta.env.VITE_API_BASE ||
+    (window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : "https://resort-crm.onrender.com"); // <- tumhara backend domain
 
-// ✅ BACKEND BASE URL (env > local > render)
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  (window.location.hostname === "localhost"
-    ? "http://localhost:5000/api"
-    : "https://resort-crm.onrender.com/api");
+  // agar already /api hai to waise hi use karo, warna /api add kar do
+  if (raw.endsWith("/api")) return raw;
+  return raw.replace(/\/+$/, "") + "/api";
+};
 
+const API_BASE = getApiBase();
 console.log("DepartmentList API_BASE =", API_BASE);
 
-// ✅ axios instance with baseURL + token
+// axios instance with baseURL + token
 const authAxios = axios.create({ baseURL: API_BASE });
 
 authAxios.interceptors.request.use((config) => {
@@ -23,6 +31,7 @@ authAxios.interceptors.request.use((config) => {
   return config;
 });
 
+// --------------------------------------------------
 
 const emptyForm = () => ({ _id: undefined, name: "", code: "" });
 
@@ -60,12 +69,16 @@ const DepartmentList = () => {
   const [filterName, setFilterName] = useState("");
   const [filterCode, setFilterCode] = useState("");
 
+  // -------------------- LOAD DATA --------------------
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
-      // ✅ backend call: <API_BASE>/departments
+
+      // ✅ hits:  https://resort-crm.onrender.com/api/departments
       const res = await authAxios.get("/departments");
+      console.log("departments response:", res.status, res.data);
+
       const serverDepts = Array.isArray(res.data) ? res.data : [];
       const normalized = serverDepts.map((d) => ({
         _id: d._id || d.id,
@@ -74,9 +87,18 @@ const DepartmentList = () => {
       }));
       setDepartments(normalized);
     } catch (err) {
-      console.error("load error", err.response?.data || err.message);
-      setError("Failed to load departments from backend.");
-      setDepartments([]); // show empty so user knows there's no real data
+      console.error(
+        "load error",
+        err.response?.status,
+        err.response?.data,
+        err.message
+      );
+      setError(
+        `Failed to load departments from backend.${
+          err.response?.status ? ` (Status ${err.response.status})` : ""
+        }`
+      );
+      setDepartments([]);
     } finally {
       setLoading(false);
     }
@@ -87,25 +109,30 @@ const DepartmentList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // filters
+  // -------------------- FILTERS --------------------
   const filtered = useMemo(() => {
     return departments.filter((d) => {
-      if (filterName && !d.name?.toLowerCase().includes(filterName.toLowerCase()))
+      if (
+        filterName &&
+        !d.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
         return false;
-      if (filterCode && !d.code?.toLowerCase().includes(filterCode.toLowerCase()))
+      if (
+        filterCode &&
+        !d.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
         return false;
       return true;
     });
   }, [departments, filterName, filterCode]);
 
-  // open create
+  // -------------------- FORM HANDLERS --------------------
   const openCreateForm = () => {
     setForm({ ...emptyForm(), code: generateCodeFromName("") });
     setError("");
     setShowForm(true);
   };
 
-  // open edit
   const openEditForm = (d) => {
     setForm({
       _id: d._id || d.id,
@@ -125,7 +152,7 @@ const DepartmentList = () => {
     }
   };
 
-  // submit (create or update)
+  // -------------------- SUBMIT (CREATE / UPDATE) --------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -140,12 +167,17 @@ const DepartmentList = () => {
       };
 
       if (form._id) {
-        // update
+        // UPDATE
         let res = null;
         try {
           res = await authAxios.put(`/departments/${form._id}`, payload);
         } catch (err) {
-          console.error("update error", err.response?.data || err.message);
+          console.error(
+            "update error",
+            err.response?.status,
+            err.response?.data,
+            err.message
+          );
         }
 
         if (res?.data) {
@@ -161,7 +193,7 @@ const DepartmentList = () => {
             )
           );
         } else {
-          // optimistic local update if server didn't return data
+          // optimistic local update
           setDepartments((p) =>
             p.map((x) =>
               x._id === form._id || x.id === form._id ? { ...x, ...payload } : x
@@ -169,12 +201,17 @@ const DepartmentList = () => {
           );
         }
       } else {
-        // create
+        // CREATE
         let res = null;
         try {
           res = await authAxios.post("/departments", payload);
         } catch (err) {
-          console.error("create error", err.response?.data || err.message);
+          console.error(
+            "create error",
+            err.response?.status,
+            err.response?.data,
+            err.message
+          );
         }
 
         const created = res?.data
@@ -191,13 +228,19 @@ const DepartmentList = () => {
       setShowForm(false);
       setForm(emptyForm());
     } catch (err) {
-      console.error("save error", err.response?.data || err.message);
+      console.error(
+        "save error",
+        err.response?.status,
+        err.response?.data,
+        err.message
+      );
       setError("Failed to save department");
     } finally {
       setSaving(false);
     }
   };
 
+  // -------------------- DELETE --------------------
   const handleDelete = async (d) => {
     if (!window.confirm(`Delete department ${d.name || d._id}?`)) return;
     try {
@@ -205,25 +248,38 @@ const DepartmentList = () => {
       setDepartments((p) =>
         p.filter((x) => (x._id || x.id) !== (d._id || d.id))
       );
+
       try {
         await authAxios.delete(`/departments/${d._id || d.id}`);
       } catch (err) {
-        console.error("delete error", err.response?.data || err.message);
-        // on failure, reload from server to restore
+        console.error(
+          "delete error",
+          err.response?.status,
+          err.response?.data,
+          err.message
+        );
+        // on failure, reload from server
         loadData();
       }
     } catch (err) {
-      console.error("delete error", err.response?.data || err.message);
+      console.error(
+        "delete error",
+        err.response?.status,
+        err.response?.data,
+        err.message
+      );
       setError("Failed to delete department");
       await loadData();
     }
   };
 
+  // -------------------- VIEW MODAL --------------------
   const openView = (d) => {
     setViewItem(d);
     setShowView(true);
   };
 
+  // -------------------- RENDER --------------------
   return (
     <div className="sa-page">
       <div className="sa-page-header">
