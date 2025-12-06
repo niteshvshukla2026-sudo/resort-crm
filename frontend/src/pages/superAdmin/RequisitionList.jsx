@@ -3,7 +3,8 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
 
 // helper to create a new line
 const newLine = () => ({
@@ -40,9 +41,7 @@ const DEV_SAMPLES = [
     vendor: "dev_vendor_1",
     status: "PENDING",
     date: new Date().toISOString(),
-    lines: [
-      { lineId: "ln3", item: "dev_item_3", qty: 2, remark: "urgent" },
-    ],
+    lines: [{ lineId: "ln3", item: "dev_item_3", qty: 2, remark: "urgent" }],
   },
 ];
 
@@ -86,7 +85,7 @@ const RequisitionList = () => {
     total: 0,
   });
 
-  // GRN modal state (new: matches PO approach — items auto from requisition)
+  // GRN modal state (matches PO approach — items auto from requisition)
   const [grnModal, setGrnModal] = useState({
     open: false,
     req: null,
@@ -154,7 +153,8 @@ const RequisitionList = () => {
   const lookupName = (list, ref) => {
     if (!ref) return "-";
     const found = list.find(
-      (x) => x._id === ref || x.id === ref || x.name === ref || x.code === ref
+      (x) =>
+        x._id === ref || x.id === ref || x.name === ref || x.code === ref
     );
     return found ? found.name || found.code || ref : ref;
   };
@@ -164,7 +164,7 @@ const RequisitionList = () => {
   const getVendorName = (v) => lookupName(vendors, v);
   const getItemName = (itId) => lookupName(items, itId);
 
-  // Requisition form helpers (unchanged)
+  // Requisition form helpers
   const baseEmptyForm = {
     type: "INTERNAL",
     resort: "",
@@ -261,7 +261,8 @@ const RequisitionList = () => {
     });
   };
 
-  const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, newLine()] }));
+  const addLine = () =>
+    setForm((p) => ({ ...p, lines: [...p.lines, newLine()] }));
   const removeLine = (idx) =>
     setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
 
@@ -273,18 +274,24 @@ const RequisitionList = () => {
     if (!form.type) return setError("Select requisition type");
 
     if (form.type === "INTERNAL") {
-      if (!form.fromStore) return setError("Select From Store for internal requisition");
-      if (!form.toStore) return setError("Select To Store for internal requisition");
+      if (!form.fromStore)
+        return setError("Select From Store for internal requisition");
+      if (!form.toStore)
+        return setError("Select To Store for internal requisition");
     } else {
-      if (!form.vendor) return setError("Select vendor for vendor requisition");
-      if (!form.store) return setError("Select store to receive goods for vendor requisition");
+      if (!form.vendor)
+        return setError("Select vendor for vendor requisition");
+      if (!form.store)
+        return setError("Select store to receive goods for vendor requisition");
     }
 
-    if (!form.lines || form.lines.length === 0) return setError("Add at least one item");
+    if (!form.lines || form.lines.length === 0)
+      return setError("Add at least one item");
 
     for (const ln of form.lines) {
       if (!ln.item) return setError("Each line must have an item selected");
-      if (!ln.qty || Number(ln.qty) <= 0) return setError("Each line must have quantity > 0");
+      if (!ln.qty || Number(ln.qty) <= 0)
+        return setError("Each line must have quantity > 0");
     }
 
     // derive resort from selected store if not selected
@@ -305,8 +312,12 @@ const RequisitionList = () => {
         fromStore: form.type === "INTERNAL" ? form.fromStore : undefined,
         toStore: form.type === "INTERNAL" ? form.toStore : undefined,
         department: form.department || undefined,
-        vendor: form.type === "VENDOR" ? form.vendor || undefined : undefined,
-        store: form.type === "VENDOR" ? form.store || undefined : form.toStore || undefined,
+        vendor:
+          form.type === "VENDOR" ? form.vendor || undefined : undefined,
+        store:
+          form.type === "VENDOR"
+            ? form.store || undefined
+            : form.toStore || undefined,
         requiredBy: form.requiredBy || undefined,
         lines: form.lines.map((x) => ({
           item: x.item,
@@ -317,8 +328,13 @@ const RequisitionList = () => {
 
       let res;
       if (editingId) {
-        res = await axios.put(`${API_BASE}/requisitions/${editingId}`, payload);
-        setRequisitions((p) => p.map((r) => (r._id === editingId ? res.data : r)));
+        res = await axios.put(
+          `${API_BASE}/requisitions/${editingId}`,
+          payload
+        );
+        setRequisitions((p) =>
+          p.map((r) => (r._id === editingId ? res.data : r))
+        );
       } else {
         res = await axios.post(`${API_BASE}/requisitions`, payload);
         setRequisitions((p) => [res.data, ...p]);
@@ -336,7 +352,8 @@ const RequisitionList = () => {
 
   // delete
   const handleDelete = async (req) => {
-    if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`)) return;
+    if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`))
+      return;
     try {
       setRequisitions((p) => p.filter((r) => r._id !== req._id));
       await axios.delete(`${API_BASE}/requisitions/${req._id}`);
@@ -347,14 +364,25 @@ const RequisitionList = () => {
     }
   };
 
-  // approve / hold / reject (unchanged)
+  // approve / hold / reject
   const handleApprove = async (req) => {
     if (req.status === "APPROVED") return;
-    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
+    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`))
+      return;
     try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/approve`);
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "APPROVED" } : r)));
+      const res = await axios.post(
+        `${API_BASE}/requisitions/${req._id}/approve`
+      );
+      if (res?.data)
+        setRequisitions((p) =>
+          p.map((r) => (r._id === req._id ? res.data : r))
+        );
+      else
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id ? { ...r, status: "APPROVED" } : r
+          )
+        );
     } catch (err) {
       console.error("approve error", err);
       setError(err.response?.data?.message || "Failed to approve requisition");
@@ -362,11 +390,24 @@ const RequisitionList = () => {
   };
 
   const handleHold = async (req) => {
-    if (!window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)) return;
+    if (
+      !window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)
+    )
+      return;
     try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/hold`);
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "ON_HOLD" } : r)));
+      const res = await axios.post(
+        `${API_BASE}/requisitions/${req._id}/hold`
+      );
+      if (res?.data)
+        setRequisitions((p) =>
+          p.map((r) => (r._id === req._id ? res.data : r))
+        );
+      else
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id ? { ...r, status: "ON_HOLD" } : r
+          )
+        );
     } catch (err) {
       console.error("hold error", err);
       setError(err.response?.data?.message || "Failed to put requisition on hold");
@@ -377,23 +418,50 @@ const RequisitionList = () => {
     const reason = window.prompt("Enter rejection reason (optional):", "");
     if (reason === null) return;
     try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/reject`, { reason });
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "REJECTED" } : r)));
+      const res = await axios.post(
+        `${API_BASE}/requisitions/${req._id}/reject`,
+        { reason }
+      );
+      if (res?.data)
+        setRequisitions((p) =>
+          p.map((r) => (r._id === req._id ? res.data : r))
+        );
+      else
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id ? { ...r, status: "REJECTED" } : r
+          )
+        );
     } catch (err) {
       console.error("reject error", err);
       setError(err.response?.data?.message || "Failed to reject requisition");
     }
   };
 
-  // ------------------ PO modal (unchanged from last) ------------------
+  // ------------------ PO modal ------------------
   const openCreatePO = (req) => {
+    const isVendor =
+      (req.type || "INTERNAL").toUpperCase() === "VENDOR";
+    const status = (req.status || "PENDING").toUpperCase();
+
+    // Only vendor requisition + must be approved
+    if (!isVendor) {
+      setError("PO can be created only for Vendor requisitions.");
+      return;
+    }
+    if (status !== "APPROVED") {
+      setError("Approve the requisition before creating a PO.");
+      return;
+    }
+
     // map requisition lines to PO item rows
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
-      const rate = ln.expectedRate || ln.rate || (itemObj?.indicativePrice || 0);
-      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const rate =
+        ln.expectedRate || ln.rate || itemObj?.indicativePrice || 0;
+      const name =
+        (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
       const qtyVal = ln.qty || 0;
       return {
         lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
@@ -424,29 +492,39 @@ const RequisitionList = () => {
   const submitCreatePO = async () => {
     const { req, poNo, items: poItems, poDate, taxPercent } = poModal;
     if (!poNo) return setError("PO No. is required");
+
     const vendorId = req.vendor || undefined;
     const deliverTo = req.toStore || req.store || undefined;
     const resortId = req.resort || undefined;
 
-    if (!vendorId) return setError("Requisition has no vendor assigned (cannot create PO)");
-    if (!deliverTo) return setError("Requisition has no destination store (cannot create PO)");
-    if (!poItems || poItems.length === 0) return setError("PO must have at least one item");
+    if (!vendorId)
+      return setError(
+        "Requisition has no vendor assigned (cannot create PO)"
+      );
+    if (!deliverTo)
+      return setError(
+        "Requisition has no destination store (cannot create PO)"
+      );
+    if (!poItems || poItems.length === 0)
+      return setError("PO must have at least one item");
 
     for (const it of poItems) {
       if (!it.item) return setError("Each PO line must have an item id");
-      if (!it.qty || Number(it.qty) <= 0) return setError("Each PO line qty must be > 0");
-      if (it.rate == null || Number(it.rate) < 0) return setError("Each PO line rate must be >= 0");
+      if (!it.qty || Number(it.qty) <= 0)
+        return setError("Each PO line qty must be > 0");
+      if (it.rate == null || Number(it.rate) < 0)
+        return setError("Each PO line rate must be >= 0");
     }
 
     try {
       setSaving(true);
-      const itemsPayload = poItems.map(it => {
+      const itemsPayload = poItems.map((it) => {
         const qty = Number(it.qty);
         const rate = Number(it.rate);
         const amount = qty * rate;
         return { item: it.item, qty, rate, amount, remark: it.remark || "" };
       });
-      const subTotal = itemsPayload.reduce((s,i)=>s + i.amount, 0);
+      const subTotal = itemsPayload.reduce((s, i) => s + i.amount, 0);
       const taxAmt = Number(((taxPercent || 0) / 100) * subTotal);
       const total = subTotal + taxAmt;
 
@@ -460,25 +538,47 @@ const RequisitionList = () => {
         subTotal,
         taxPercent: taxPercent || 0,
         taxAmount: taxAmt,
-        total
+        total,
       };
 
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-po`, payload);
+      const res = await axios.post(
+        `${API_BASE}/requisitions/${req._id}/create-po`,
+        payload
+      );
 
       if (res?.data?.requisition) {
-        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
+        setRequisitions((p) =>
+          p.map((r) => (r._id === req._id ? res.data.requisition : r))
+        );
         const createdPo = res.data.po;
-        const poIdOrNo = (createdPo && (createdPo._id || createdPo.code)) || poNo;
+        const poIdOrNo =
+          (createdPo && (createdPo._id || createdPo.code)) || poNo;
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else if (res?.data) {
         const createdPo = res.data;
-        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { code: createdPo.code || poNo, _id: createdPo._id } } : r)));
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id
+              ? {
+                  ...r,
+                  status: "PO_CREATED",
+                  po: { code: createdPo.code || poNo, _id: createdPo._id },
+                }
+              : r
+          )
+        );
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         const poIdOrNo = createdPo._id || createdPo.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
-        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "PO_CREATED", po: { poNo } } : r)));
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id
+              ? { ...r, status: "PO_CREATED", po: { poNo } }
+              : r
+          )
+        );
         setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poNo}`);
       }
@@ -490,28 +590,47 @@ const RequisitionList = () => {
     }
   };
 
-  // ------------------ GRN modal (NEW, full form) ------------------
+  // ------------------ GRN modal ------------------
 
-  // Open GRN modal: ONLY allowed when no PO exists on requisition (per your rule)
+  // Open GRN modal:
+  //  - Only Vendor requisition
+  //  - Must be approved
+  //  - If PO exists => cannot create from requisition (must create from PO)
   const openCreateGRN = (req) => {
-    // If req has PO, we should not open (UI already prevents). But guard here:
-    if (req.po) {
-      setError("This requisition already has a PO — create GRN from PO page instead.");
+    const isVendor =
+      (req.type || "INTERNAL").toUpperCase() === "VENDOR";
+    const status = (req.status || "PENDING").toUpperCase();
+
+    if (!isVendor) {
+      setError("GRN can be created only for Vendor requisitions.");
       return;
     }
 
-    // Map requisition lines to grn rows
+    if (req.po) {
+      setError(
+        "This requisition already has a PO — create GRN from the PO page."
+      );
+      return;
+    }
+
+    if (status !== "APPROVED") {
+      setError("Approve the requisition before creating a GRN.");
+      return;
+    }
+
+    // Map requisition lines to GRN rows
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
-      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const name =
+        (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
       const qtyRequested = ln.qty || 0;
       return {
         lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
         item: itemId,
         itemName: name,
         qtyRequested,
-        qtyReceived: qtyRequested, // default to full received; user can adjust
+        qtyReceived: qtyRequested, // default full
         remark: ln.remark || "",
       };
     });
@@ -539,24 +658,28 @@ const RequisitionList = () => {
   const submitCreateGRN = async () => {
     const { req, grnNo, receivedBy, receivedDate, items: grnItems } = grnModal;
     if (!grnNo) return setError("GRN No. is required");
-    if (!grnItems || grnItems.length === 0) return setError("GRN must include at least one item");
+    if (!grnItems || grnItems.length === 0)
+      return setError("GRN must include at least one item");
 
-    // vendor/po check: if PO exists we don't allow creating GRN from requisition (UI blocks)
-    if (req.po) return setError("PO exists for this requisition — create GRN from PO instead.");
+    if (req.po)
+      return setError(
+        "PO exists for this requisition — create GRN from PO instead."
+      );
 
     // validate items
     for (const it of grnItems) {
       if (!it.item) return setError("Each GRN line must have an item");
-      if (it.qtyReceived == null || Number(it.qtyReceived) < 0) return setError("Each GRN line received qty must be >= 0");
+      if (it.qtyReceived == null || Number(it.qtyReceived) < 0)
+        return setError("Each GRN line received qty must be >= 0");
     }
 
     try {
       setSaving(true);
-      const itemsPayload = grnItems.map(it => ({
+      const itemsPayload = grnItems.map((it) => ({
         item: it.item,
         qtyRequested: Number(it.qtyRequested || 0),
         qtyReceived: Number(it.qtyReceived || 0),
-        remark: it.remark || ""
+        remark: it.remark || "",
       }));
 
       const payload = {
@@ -567,17 +690,43 @@ const RequisitionList = () => {
         store: req.toStore || req.store || undefined,
       };
 
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
+      const res = await axios.post(
+        `${API_BASE}/requisitions/${req._id}/create-grn`,
+        payload
+      );
 
       if (res?.data?.requisition) {
-        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
+        setRequisitions((p) =>
+          p.map((r) => (r._id === req._id ? res.data.requisition : r))
+        );
         const createdGrn = res.data.grn || res.data;
-        const grnIdOrNo = createdGrn?._id || createdGrn?.code || grnNo;
-        setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] });
+        const grnIdOrNo =
+          createdGrn?._id || createdGrn?.code || grnNo;
+        setGrnModal({
+          open: false,
+          req: null,
+          grnNo: "",
+          receivedBy: "",
+          receivedDate: new Date().toISOString().slice(0, 10),
+          items: [],
+        });
         navigate(`/super-admin/grn/${grnIdOrNo}`);
       } else {
-        setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "GRN_CREATED", grn: { grnNo } } : r)));
-        setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] });
+        setRequisitions((p) =>
+          p.map((r) =>
+            r._id === req._id
+              ? { ...r, status: "GRN_CREATED", grn: { grnNo } }
+              : r
+          )
+        );
+        setGrnModal({
+          open: false,
+          req: null,
+          grnNo: "",
+          receivedBy: "",
+          receivedDate: new Date().toISOString().slice(0, 10),
+          items: [],
+        });
         navigate(`/super-admin/grn/${grnNo}`);
       }
     } catch (err) {
@@ -633,15 +782,28 @@ const RequisitionList = () => {
   const applyFilters = () => {
     return requisitions.filter((r) => {
       if (statusFilter !== "ALL") {
-        if ((r.status || "PENDING").toUpperCase() !== statusFilter.toUpperCase()) return false;
+        if (
+          (r.status || "PENDING").toUpperCase() !==
+          statusFilter.toUpperCase()
+        )
+          return false;
       }
       if (typeFilter !== "ALL") {
-        if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
+        if (
+          (r.type || "INTERNAL").toUpperCase() !==
+          typeFilter.toUpperCase()
+        )
+          return false;
       }
       if (resortFilter) {
         const val = r.resort || r.resortName || r.resortRef || r.resort;
         if (!val) return false;
-        if (!String(val).toLowerCase().includes(String(resortFilter).toLowerCase())) return false;
+        if (
+          !String(val)
+            .toLowerCase()
+            .includes(String(resortFilter).toLowerCase())
+        )
+          return false;
       }
       if (dateFrom) {
         const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
@@ -663,7 +825,13 @@ const RequisitionList = () => {
       }
       if (searchText && searchText.trim()) {
         const q = searchText.trim().toLowerCase();
-        const fields = [r.requisitionNo, r.department, r.store, r.vendor, r.resort];
+        const fields = [
+          r.requisitionNo,
+          r.department,
+          r.store,
+          r.vendor,
+          r.resort,
+        ];
         const joined = fields.filter(Boolean).join(" ").toLowerCase();
         if (!joined.includes(q)) return false;
       }
@@ -682,8 +850,19 @@ const RequisitionList = () => {
     setSearchText("");
   };
 
-  const actionStyle = { display: "inline-block", marginLeft: 6, cursor: "pointer", padding: 6, borderRadius: 6, position: "relative" };
-  const disabledActionStyle = { ...actionStyle, opacity: 0.4, cursor: "not-allowed" };
+  const actionStyle = {
+    display: "inline-block",
+    marginLeft: 6,
+    cursor: "pointer",
+    padding: 6,
+    borderRadius: 6,
+    position: "relative",
+  };
+  const disabledActionStyle = {
+    ...actionStyle,
+    opacity: 0.4,
+    cursor: "not-allowed",
+  };
 
   return (
     <div className="sa-page">
@@ -694,20 +873,43 @@ const RequisitionList = () => {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreateForm}
+          >
             <i className="ri-add-line"></i> New Requisition
           </button>
 
-          <button type="button" className="sa-secondary-button" onClick={() => { loadData(); clearFilters(); }}>
+          <button
+            type="button"
+            className="sa-secondary-button"
+            onClick={() => {
+              loadData();
+              clearFilters();
+            }}
+          >
             Refresh
           </button>
         </div>
       </div>
 
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
         <label style={{ fontSize: "0.85rem" }}>
           Status
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginLeft: 6 }}>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ marginLeft: 6 }}
+          >
             <option value="ALL">All</option>
             <option value="PENDING">Pending</option>
             <option value="APPROVED">Approved</option>
@@ -720,7 +922,11 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Type
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ marginLeft: 6 }}>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ marginLeft: 6 }}
+          >
             <option value="ALL">All</option>
             <option value="INTERNAL">Internal</option>
             <option value="VENDOR">Vendor</option>
@@ -729,27 +935,55 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Resort
-          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)} style={{ marginLeft: 6 }}>
+          <select
+            value={resortFilter}
+            onChange={(e) => setResortFilter(e.target.value)}
+            style={{ marginLeft: 6 }}
+          >
             <option value="">All Resorts</option>
             {resorts.length > 0
-              ? resorts.map((r) => <option key={r._id || r.id} value={r._id || r.name || r.id}>{r.name}</option>)
-              : Array.from(new Set(requisitions.map((x) => x.resort))).map((name) => <option key={name} value={name}>{name}</option>)}
+              ? resorts.map((r) => (
+                  <option key={r._id || r.id} value={r._id || r.name || r.id}>
+                    {r.name}
+                  </option>
+                ))
+              : Array.from(new Set(requisitions.map((x) => x.resort))).map(
+                  (name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  )
+                )}
           </select>
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Date from
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ marginLeft: 6 }} />
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{ marginLeft: 6 }}
+          />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Date to
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ marginLeft: 6 }} />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{ marginLeft: 6 }}
+          />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Action
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={{ marginLeft: 6 }}>
+          <select
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            style={{ marginLeft: 6 }}
+          >
             <option value="ALL">All</option>
             <option value="NeedsPO">Needs PO</option>
             <option value="NeedsGRN">Needs GRN</option>
@@ -760,11 +994,18 @@ const RequisitionList = () => {
 
         <label style={{ flex: 1, minWidth: 220 }}>
           Search
-          <input placeholder="Requisition no / dept / store / vendor" value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ marginLeft: 8, width: "80%" }} />
+          <input
+            placeholder="Requisition no / dept / store / vendor"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ marginLeft: 8, width: "80%" }}
+          />
         </label>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button className="sa-secondary-button" onClick={clearFilters}>Clear</button>
+          <button className="sa-secondary-button" onClick={clearFilters}>
+            Clear
+          </button>
         </div>
       </div>
 
@@ -775,7 +1016,13 @@ const RequisitionList = () => {
           <div>Loading requisitions...</div>
         ) : (
           <>
-            <div style={{ marginBottom: 8, color: "#6b7280", fontSize: "0.9rem" }}>
+            <div
+              style={{
+                marginBottom: 8,
+                color: "#6b7280",
+                fontSize: "0.9rem",
+              }}
+            >
               Showing {filteredList.length} of {requisitions.length} requisitions
             </div>
 
@@ -792,86 +1039,211 @@ const RequisitionList = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map((r) => (
-                  <tr key={r._id}>
-                    <td>{r.requisitionNo || r._id}</td>
-                    <td>{r.type || "INTERNAL"}</td>
-                    <td>{getResortName(r.resort)}</td>
-                    <td>
-                      {r.type === "VENDOR" ? (
-                        <>
-                          {getVendorName(r.vendor)}
-                          {r.store ? ` → ${getStoreName(r.store)}` : ""}
-                        </>
-                      ) : r.fromStore || r.toStore ? (
-                        <>
-                          {getStoreName(r.fromStore)} → {getStoreName(r.toStore || r.store)}
-                        </>
-                      ) : getDepartmentName(r.department) !== "-" ? (
-                        getDepartmentName(r.department)
-                      ) : (
-                        getStoreName(r.store)
-                      )}
-                    </td>
-                    <td>{r.status || "PENDING"}</td>
-                    <td>{r.date ? r.date.slice(0, 10) : "-"}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <span style={actionStyle} onClick={() => handleView(r)} title="View"><i className="ri-eye-line" /></span>
-                      <span style={actionStyle} onClick={() => openDuplicateAsCreate(r)} title="Create (Duplicate)"><i className="ri-file-copy-line" /></span>
-                      <span style={actionStyle} onClick={() => openEditForm(r)} title="Edit"><i className="ri-edit-line" /></span>
+                {filteredList.map((r) => {
+                  const status = (r.status || "PENDING").toUpperCase();
+                  const type = (r.type || "INTERNAL").toUpperCase();
+                  const isVendor = type === "VENDOR";
+                  const isApproved = status === "APPROVED";
+                  const hasPO = !!r.po;
+                  const hasGRN = !!r.grn;
+                  const canCreatePO =
+                    isVendor && isApproved && !hasPO && !hasGRN;
+                  const canCreateGRN =
+                    isVendor && isApproved && !hasGRN && !hasPO;
 
-                      <span style={{ ...actionStyle, background: r.status === "APPROVED" ? "#052e16" : "transparent" }} onClick={() => handleApprove(r)} title={r.status === "APPROVED" ? "Already approved" : "Approve"}>
-                        <i className="ri-checkbox-circle-line" />
-                      </span>
+                  return (
+                    <tr key={r._id}>
+                      <td>{r.requisitionNo || r._id}</td>
+                      <td>{r.type || "INTERNAL"}</td>
+                      <td>{getResortName(r.resort)}</td>
+                      <td>
+                        {r.type === "VENDOR" ? (
+                          <>
+                            {getVendorName(r.vendor)}
+                            {r.store ? ` → ${getStoreName(r.store)}` : ""}
+                          </>
+                        ) : r.fromStore || r.toStore ? (
+                          <>
+                            {getStoreName(r.fromStore)} →{" "}
+                            {getStoreName(r.toStore || r.store)}
+                          </>
+                        ) : getDepartmentName(r.department) !== "-" ? (
+                          getDepartmentName(r.department)
+                        ) : (
+                          getStoreName(r.store)
+                        )}
+                      </td>
+                      <td>{r.status || "PENDING"}</td>
+                      <td>{r.date ? r.date.slice(0, 10) : "-"}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span
+                          style={actionStyle}
+                          onClick={() => handleView(r)}
+                          title="View"
+                        >
+                          <i className="ri-eye-line" />
+                        </span>
+                        <span
+                          style={actionStyle}
+                          onClick={() => openDuplicateAsCreate(r)}
+                          title="Create (Duplicate)"
+                        >
+                          <i className="ri-file-copy-line" />
+                        </span>
+                        <span
+                          style={actionStyle}
+                          onClick={() => openEditForm(r)}
+                          title="Edit"
+                        >
+                          <i className="ri-edit-line" />
+                        </span>
 
-                      <span style={actionStyle} onClick={() => handleHold(r)} title="Hold"><i className="ri-pause-line" /></span>
+                        <span
+                          style={{
+                            ...actionStyle,
+                            background:
+                              r.status === "APPROVED"
+                                ? "#052e16"
+                                : "transparent",
+                          }}
+                          onClick={() => handleApprove(r)}
+                          title={
+                            r.status === "APPROVED"
+                              ? "Already approved"
+                              : "Approve"
+                          }
+                        >
+                          <i className="ri-checkbox-circle-line" />
+                        </span>
 
-                      <span style={actionStyle} onClick={() => handleReject(r)} title="Reject"><i className="ri-close-circle-line" /></span>
+                        <span
+                          style={actionStyle}
+                          onClick={() => handleHold(r)}
+                          title="Hold"
+                        >
+                          <i className="ri-pause-line" />
+                        </span>
 
-                      {/* PO create/view */}
-                      {r.po ? (
-                        <span style={actionStyle} title="View PO" onClick={() => viewPO(r.po)}><i className="ri-file-paper-line" /></span>
-                      ) : (
-                        !r.grn && <span style={actionStyle} onClick={() => openCreatePO(r)} title="Create Purchase Order (PO)"><i className="ri-shopping-cart-line" /></span>
-                      )}
+                        <span
+                          style={actionStyle}
+                          onClick={() => handleReject(r)}
+                          title="Reject"
+                        >
+                          <i className="ri-close-circle-line" />
+                        </span>
 
-                      {/* GRN create/view:
-                          - If requisition has PO => show disabled (cannot create GRN from requisition)
-                          - If no PO => allow create GRN from requisition (as before)
-                      */}
-                      {r.grn ? (
-                        <span style={actionStyle} title="View GRN" onClick={() => viewGRN(r.grn)}><i className="ri-inbox-line" /></span>
-                      ) : r.po ? (
-                        // disabled GRN because PO exists
-                        <span style={disabledActionStyle} title="PO created — cannot create GRN from requisition (create GRN from PO page)"><i className="ri-inbox-line" /></span>
-                      ) : (
-                        // no PO & no GRN => allow create GRN
-                        <span style={actionStyle} onClick={() => openCreateGRN(r)} title="Create GRN"><i className="ri-add-box-line" /></span>
-                      )}
+                        {/* PO create/view (only Vendor requisition) */}
+                        {isVendor && (
+                          <>
+                            {hasPO ? (
+                              <span
+                                style={actionStyle}
+                                title="View PO"
+                                onClick={() => viewPO(r.po)}
+                              >
+                                <i className="ri-file-paper-line" />
+                              </span>
+                            ) : canCreatePO ? (
+                              <span
+                                style={actionStyle}
+                                onClick={() => openCreatePO(r)}
+                                title="Create Purchase Order (PO)"
+                              >
+                                <i className="ri-shopping-cart-line" />
+                              </span>
+                            ) : (
+                              <span
+                                style={disabledActionStyle}
+                                title="Approve requisition before creating PO"
+                              >
+                                <i className="ri-shopping-cart-line" />
+                              </span>
+                            )}
+                          </>
+                        )}
 
-                      <span style={actionStyle} onClick={() => handleDelete(r)} title="Delete"><i className="ri-delete-bin-6-line" /></span>
-                    </td>
-                  </tr>
-                ))}
+                        {/* GRN create/view (only Vendor requisition) */}
+                        {isVendor && (
+                          <>
+                            {hasGRN ? (
+                              <span
+                                style={actionStyle}
+                                title="View GRN"
+                                onClick={() => viewGRN(r.grn)}
+                              >
+                                <i className="ri-inbox-line" />
+                              </span>
+                            ) : hasPO ? (
+                              // disabled GRN because PO exists
+                              <span
+                                style={disabledActionStyle}
+                                title="PO created — create GRN from PO page"
+                              >
+                                <i className="ri-inbox-line" />
+                              </span>
+                            ) : canCreateGRN ? (
+                              <span
+                                style={actionStyle}
+                                onClick={() => openCreateGRN(r)}
+                                title="Create GRN"
+                              >
+                                <i className="ri-add-box-line" />
+                              </span>
+                            ) : (
+                              <span
+                                style={disabledActionStyle}
+                                title="Approve requisition before creating GRN"
+                              >
+                                <i className="ri-add-box-line" />
+                              </span>
+                            )}
+                          </>
+                        )}
+
+                        <span
+                          style={actionStyle}
+                          onClick={() => handleDelete(r)}
+                          title="Delete"
+                        >
+                          <i className="ri-delete-bin-6-line" />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </>
         )}
       </div>
 
-      {/* Create / Edit Requisition Modal (unchanged) */}
+      {/* Create / Edit Requisition Modal */}
       {showForm && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editingId ? "Edit Requisition" : "Create Requisition"}</h3>
-            <p className="sa-modal-sub">Fill the following details to raise a requisition.</p>
+            <p className="sa-modal-sub">
+              Fill the following details to raise a requisition.
+            </p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
                 Requisition Type
-                <select name="type" value={form.type} onChange={updateForm} required>
-                  <option value="INTERNAL">Internal (Store → Store transfer)</option>
-                  <option value="VENDOR">Vendor (Direct purchase from vendor)</option>
+                <select
+                  name="type"
+                  value={form.type}
+                  onChange={updateForm}
+                  required
+                >
+                  <option value="INTERNAL">
+                    Internal (Store → Store transfer)
+                  </option>
+                  <option value="VENDOR">
+                    Vendor (Direct purchase from vendor)
+                  </option>
                 </select>
               </label>
 
@@ -879,17 +1251,35 @@ const RequisitionList = () => {
                 <>
                   <label>
                     From Store
-                    <select name="fromStore" value={form.fromStore} onChange={updateForm} required>
+                    <select
+                      name="fromStore"
+                      value={form.fromStore}
+                      onChange={updateForm}
+                      required
+                    >
                       <option value="">-- Select From Store --</option>
-                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
+                      {stores.map((s) => (
+                        <option key={s._id || s.id} value={s._id || s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
                   <label>
                     To Store
-                    <select name="toStore" value={form.toStore} onChange={updateForm} required>
+                    <select
+                      name="toStore"
+                      value={form.toStore}
+                      onChange={updateForm}
+                      required
+                    >
                       <option value="">-- Select To Store --</option>
-                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
+                      {stores.map((s) => (
+                        <option key={s._id || s.id} value={s._id || s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </>
@@ -897,17 +1287,35 @@ const RequisitionList = () => {
                 <>
                   <label>
                     Vendor
-                    <select name="vendor" value={form.vendor} onChange={updateForm} required>
+                    <select
+                      name="vendor"
+                      value={form.vendor}
+                      onChange={updateForm}
+                      required
+                    >
                       <option value="">-- Select Vendor --</option>
-                      {vendors.map((v) => <option key={v._id || v.id} value={v._id || v.id}>{v.name}</option>)}
+                      {vendors.map((v) => (
+                        <option key={v._id || v.id} value={v._id || v.id}>
+                          {v.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
                   <label>
                     Store (to receive goods)
-                    <select name="store" value={form.store} onChange={updateForm} required>
+                    <select
+                      name="store"
+                      value={form.store}
+                      onChange={updateForm}
+                      required
+                    >
                       <option value="">-- Select Store --</option>
-                      {stores.map((s) => <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>)}
+                      {stores.map((s) => (
+                        <option key={s._id || s.id} value={s._id || s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </>
@@ -915,7 +1323,12 @@ const RequisitionList = () => {
 
               <label>
                 Required On
-                <input type="date" name="requiredBy" value={form.requiredBy} onChange={updateForm} />
+                <input
+                  type="date"
+                  name="requiredBy"
+                  value={form.requiredBy}
+                  onChange={updateForm}
+                />
               </label>
 
               {/* items */}
@@ -934,21 +1347,51 @@ const RequisitionList = () => {
                     {form.lines.map((ln, idx) => (
                       <tr key={ln.lineId}>
                         <td>
-                          <select value={ln.item} onChange={(e) => updateLine(idx, "item", e.target.value)} required>
+                          <select
+                            value={ln.item}
+                            onChange={(e) =>
+                              updateLine(idx, "item", e.target.value)
+                            }
+                            required
+                          >
                             <option value="">-- Select Item --</option>
-                            {items.map((it) => <option key={it._id || it.id} value={it._id || it.id}>{it.name}</option>)}
+                            {items.map((it) => (
+                              <option key={it._id || it.id} value={it._id || it.id}>
+                                {it.name}
+                              </option>
+                            ))}
                           </select>
                         </td>
-                        <td style={{ textAlign: "center" }}>{renderCurrentStock(ln)}</td>
-                        <td>
-                          <input type="number" min="1" value={ln.qty} onChange={(e) => updateLine(idx, "qty", e.target.value)} required />
+                        <td style={{ textAlign: "center" }}>
+                          {renderCurrentStock(ln)}
                         </td>
                         <td>
-                          <input value={ln.remark} onChange={(e) => updateLine(idx, "remark", e.target.value)} />
+                          <input
+                            type="number"
+                            min="1"
+                            value={ln.qty}
+                            onChange={(e) =>
+                              updateLine(idx, "qty", e.target.value)
+                            }
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            value={ln.remark}
+                            onChange={(e) =>
+                              updateLine(idx, "remark", e.target.value)
+                            }
+                          />
                         </td>
                         <td>
                           {form.lines.length > 1 && (
-                            <button type="button" onClick={() => removeLine(idx)}>Remove</button>
+                            <button
+                              type="button"
+                              onClick={() => removeLine(idx)}
+                            >
+                              Remove
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -956,57 +1399,130 @@ const RequisitionList = () => {
                   </tbody>
                 </table>
 
-                <button type="button" onClick={addLine} style={{ marginTop: 5 }}>+ Add Line</button>
+                <button
+                  type="button"
+                  onClick={addLine}
+                  style={{ marginTop: 5 }}
+                >
+                  + Add Line
+                </button>
               </div>
 
               {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>Cancel</button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : editingId ? "Update Requisition" : "Save Requisition"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : editingId
+                    ? "Update Requisition"
+                    : "Save Requisition"}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* PO Modal (unchanged) */}
+      {/* PO Modal */}
       {poModal.open && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setPoModal({ open: false, req: null, poNo: "", items: [] })}>
-          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() =>
+            !saving &&
+            setPoModal({ open: false, req: null, poNo: "", items: [] })
+          }
+        >
+          <div
+            className="sa-modal large"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 980 }}
+          >
             <h3>Create Purchase Order</h3>
-            <p className="sa-modal-sub">This PO will be created from the selected requisition. Vendor and delivery store are taken from the requisition.</p>
+            <p className="sa-modal-sub">
+              This PO will be created from the selected requisition. Vendor and
+              delivery store are taken from the requisition.
+            </p>
 
             <div className="sa-modal-form">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
                 <label>
                   Approved Requisition (read-only)
-                  <input value={poModal.req?.requisitionNo || poModal.req?._id || ""} readOnly />
+                  <input
+                    value={
+                      poModal.req?.requisitionNo || poModal.req?._id || ""
+                    }
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   PO No.
-                  <input value={poModal.poNo || ""} onChange={(e) => setPoModal((p) => ({ ...p, poNo: e.target.value }))} placeholder="PO-YYYY-XXX" />
+                  <input
+                    value={poModal.poNo || ""}
+                    onChange={(e) =>
+                      setPoModal((p) => ({ ...p, poNo: e.target.value }))
+                    }
+                    placeholder="PO-YYYY-XXX"
+                  />
                 </label>
 
                 <label>
                   Vendor (from requisition)
-                  <input value={getVendorName(poModal.req?.vendor) || ""} readOnly />
+                  <input
+                    value={getVendorName(poModal.req?.vendor) || ""}
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   Resort (from requisition)
-                  <input value={getResortName(poModal.req?.resort) || ""} readOnly />
+                  <input
+                    value={getResortName(poModal.req?.resort) || ""}
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   Delivery Store (from requisition)
-                  <input value={getStoreName(poModal.req?.toStore || poModal.req?.store) || ""} readOnly />
+                  <input
+                    value={
+                      getStoreName(
+                        poModal.req?.toStore || poModal.req?.store
+                      ) || ""
+                    }
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   PO Date
-                  <input type="date" value={poModal.poDate || new Date().toISOString().slice(0,10)} onChange={(e)=>setPoModal(p=>({...p, poDate: e.target.value}))} />
+                  <input
+                    type="date"
+                    value={
+                      poModal.poDate || new Date().toISOString().slice(0, 10)
+                    }
+                    onChange={(e) =>
+                      setPoModal((p) => ({ ...p, poDate: e.target.value }))
+                    }
+                  />
                 </label>
               </div>
 
@@ -1025,29 +1541,70 @@ const RequisitionList = () => {
                   <tbody>
                     {(poModal.items || []).map((ln, idx) => (
                       <tr key={ln.lineId || idx}>
-                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
-                        <td><input type="number" min="0" value={ln.qty} readOnly /></td>
                         <td>
-                          <input type="number" min="0" value={ln.rate} onChange={(e) => {
-                            const v = Number(e.target.value||0);
-                            setPoModal(p => {
-                              const newItems = [...(p.items||[])];
-                              newItems[idx] = { ...newItems[idx], rate: v, amount: Number((v * Number(newItems[idx].qty || 0)).toFixed(2)) };
-                              const sub = newItems.reduce((s,i)=>s + Number(i.amount||0), 0);
-                              const tax = (p.taxPercent || 0) / 100 * sub;
-                              return { ...p, items: newItems, subTotal: sub, taxAmount: tax, total: sub + tax };
-                            });
-                          }} />
+                          {ln.itemName || getItemName(ln.item) || ln.item}
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            value={ln.qty}
+                            readOnly
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            value={ln.rate}
+                            onChange={(e) => {
+                              const v = Number(e.target.value || 0);
+                              setPoModal((p) => {
+                                const newItems = [...(p.items || [])];
+                                newItems[idx] = {
+                                  ...newItems[idx],
+                                  rate: v,
+                                  amount: Number(
+                                    (
+                                      v *
+                                      Number(newItems[idx].qty || 0)
+                                    ).toFixed(2)
+                                  ),
+                                };
+                                const sub = newItems.reduce(
+                                  (s, i) => s + Number(i.amount || 0),
+                                  0
+                                );
+                                const tax =
+                                  ((p.taxPercent || 0) / 100) * sub;
+                                return {
+                                  ...p,
+                                  items: newItems,
+                                  subTotal: sub,
+                                  taxAmount: tax,
+                                  total: sub + tax,
+                                };
+                              });
+                            }}
+                          />
                         </td>
                         <td>{Number(ln.amount || 0).toFixed(2)}</td>
-                        <td><input value={ln.remark || ""} onChange={(e)=> {
-                          const v = e.target.value;
-                          setPoModal(p => {
-                            const newItems = [...(p.items||[])];
-                            newItems[idx] = { ...newItems[idx], remark: v };
-                            return { ...p, items: newItems };
-                          });
-                        }} /></td>
+                        <td>
+                          <input
+                            value={ln.remark || ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setPoModal((p) => {
+                                const newItems = [...(p.items || [])];
+                                newItems[idx] = {
+                                  ...newItems[idx],
+                                  remark: v,
+                                };
+                                return { ...p, items: newItems };
+                              });
+                            }}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1055,76 +1612,198 @@ const RequisitionList = () => {
               </div>
 
               {/* totals */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
                 <div style={{ width: 360, textAlign: "right" }}>
-                  <div style={{ marginBottom: 6 }}>Subtotal: <strong>{(poModal.subTotal || 0).toFixed(2)}</strong></div>
                   <div style={{ marginBottom: 6 }}>
-                    Tax % <input type="number" min="0" value={poModal.taxPercent || 0} onChange={(e)=> {
-                      const tp = Number(e.target.value||0);
-                      setPoModal(p => {
-                        const st = p.items?.reduce((s,i)=>s + Number(i.amount || 0), 0) || 0;
-                        const taxAmt = (tp/100)*st;
-                        return { ...p, taxPercent: tp, taxAmount: taxAmt, subTotal: st, total: st + taxAmt };
-                      });
-                    }} style={{ width: 70, marginLeft: 8 }} />
+                    Subtotal:{" "}
+                    <strong>{(poModal.subTotal || 0).toFixed(2)}</strong>
                   </div>
-                  <div style={{ marginBottom: 6 }}>Tax Amount: <strong>{(poModal.taxAmount || 0).toFixed(2)}</strong></div>
-                  <div style={{ marginTop: 8, fontSize: "1.05rem" }}>Total: <strong>{(poModal.total || poModal.subTotal || 0).toFixed(2)}</strong></div>
+                  <div style={{ marginBottom: 6 }}>
+                    Tax %{" "}
+                    <input
+                      type="number"
+                      min="0"
+                      value={poModal.taxPercent || 0}
+                      onChange={(e) => {
+                        const tp = Number(e.target.value || 0);
+                        setPoModal((p) => {
+                          const st =
+                            p.items?.reduce(
+                              (s, i) => s + Number(i.amount || 0),
+                              0
+                            ) || 0;
+                          const taxAmt = (tp / 100) * st;
+                          return {
+                            ...p,
+                            taxPercent: tp,
+                            taxAmount: taxAmt,
+                            subTotal: st,
+                            total: st + taxAmt,
+                          };
+                        });
+                      }}
+                      style={{ width: 70, marginLeft: 8 }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    Tax Amount:{" "}
+                    <strong>{(poModal.taxAmount || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: "1.05rem" }}>
+                    Total:{" "}
+                    <strong>
+                      {(
+                        poModal.total || poModal.subTotal || 0
+                      ).toFixed(2)}
+                    </strong>
+                  </div>
                 </div>
               </div>
 
               {/* actions */}
               <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-                <button type="button" className="sa-secondary-button" onClick={() => setPoModal({ open: false, req: null, poNo: "", items: [] })}>Cancel</button>
-                <button type="button" className="sa-primary-button" onClick={submitCreatePO} disabled={saving}>{saving ? "Creating..." : "Create PO"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() =>
+                    setPoModal({
+                      open: false,
+                      req: null,
+                      poNo: "",
+                      items: [],
+                    })
+                  }
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="sa-primary-button"
+                  onClick={submitCreatePO}
+                  disabled={saving}
+                >
+                  {saving ? "Creating..." : "Create PO"}
+                </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* GRN Modal (new full form) */}
+      {/* GRN Modal */}
       {grnModal.open && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] })}>
-          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() =>
+            !saving &&
+            setGrnModal({
+              open: false,
+              req: null,
+              grnNo: "",
+              receivedBy: "",
+              receivedDate: new Date().toISOString().slice(0, 10),
+              items: [],
+            })
+          }
+        >
+          <div
+            className="sa-modal large"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 980 }}
+          >
             <h3>Create GRN</h3>
-            <p className="sa-modal-sub">Record goods received against the selected requisition. Vendor/store are taken from the requisition.</p>
+            <p className="sa-modal-sub">
+              Record goods received against the selected requisition. Vendor and
+              store are taken from the requisition.
+            </p>
 
             <div className="sa-modal-form">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
                 <label>
                   Approved Requisition (read-only)
-                  <input value={grnModal.req?.requisitionNo || grnModal.req?._id || ""} readOnly />
+                  <input
+                    value={
+                      grnModal.req?.requisitionNo || grnModal.req?._id || ""
+                    }
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   GRN No.
-                  <input value={grnModal.grnNo || ""} onChange={(e) => setGrnModal(p => ({ ...p, grnNo: e.target.value }))} />
+                  <input
+                    value={grnModal.grnNo || ""}
+                    onChange={(e) =>
+                      setGrnModal((p) => ({ ...p, grnNo: e.target.value }))
+                    }
+                  />
                 </label>
 
                 <label>
                   Received By
-                  <input value={grnModal.receivedBy || ""} onChange={(e) => setGrnModal(p => ({ ...p, receivedBy: e.target.value }))} />
+                  <input
+                    value={grnModal.receivedBy || ""}
+                    onChange={(e) =>
+                      setGrnModal((p) => ({
+                        ...p,
+                        receivedBy: e.target.value,
+                      }))
+                    }
+                  />
                 </label>
 
                 <label>
                   Received Date
-                  <input type="date" value={grnModal.receivedDate || new Date().toISOString().slice(0,10)} onChange={(e) => setGrnModal(p => ({ ...p, receivedDate: e.target.value }))} />
+                  <input
+                    type="date"
+                    value={
+                      grnModal.receivedDate ||
+                      new Date().toISOString().slice(0, 10)
+                    }
+                    onChange={(e) =>
+                      setGrnModal((p) => ({
+                        ...p,
+                        receivedDate: e.target.value,
+                      }))
+                    }
+                  />
                 </label>
 
                 <label>
                   Vendor (from requisition)
-                  <input value={getVendorName(grnModal.req?.vendor) || ""} readOnly />
+                  <input
+                    value={getVendorName(grnModal.req?.vendor) || ""}
+                    readOnly
+                  />
                 </label>
 
                 <label>
                   Store (from requisition)
-                  <input value={getStoreName(grnModal.req?.toStore || grnModal.req?.store) || ""} readOnly />
+                  <input
+                    value={
+                      getStoreName(
+                        grnModal.req?.toStore || grnModal.req?.store
+                      ) || ""
+                    }
+                    readOnly
+                  />
                 </label>
               </div>
 
-              {/* Items table: requested qty read-only; received qty editable */}
+              {/* Items table */}
               <div style={{ marginTop: 12 }}>
                 <table className="sa-table" style={{ width: "100%" }}>
                   <thead>
@@ -1139,17 +1818,40 @@ const RequisitionList = () => {
                   <tbody>
                     {(grnModal.items || []).map((ln, idx) => (
                       <tr key={ln.lineId || idx}>
-                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
-                        <td><input type="number" min="0" value={ln.qtyRequested} readOnly /></td>
                         <td>
-                          <input type="number" min="0" value={ln.qtyReceived} onChange={(e) => {
-                            const v = Number(e.target.value || 0);
-                            updateGrnLine(idx, "qtyReceived", v);
-                          }} />
+                          {ln.itemName || getItemName(ln.item) || ln.item}
                         </td>
-                        <td>{Number((ln.qtyRequested || 0) - (ln.qtyReceived || 0)).toFixed(2)}</td>
                         <td>
-                          <input value={ln.remark || ""} onChange={(e) => updateGrnLine(idx, "remark", e.target.value)} />
+                          <input
+                            type="number"
+                            min="0"
+                            value={ln.qtyRequested}
+                            readOnly
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            value={ln.qtyReceived}
+                            onChange={(e) => {
+                              const v = Number(e.target.value || 0);
+                              updateGrnLine(idx, "qtyReceived", v);
+                            }}
+                          />
+                        </td>
+                        <td>
+                          {Number(
+                            (ln.qtyRequested || 0) - (ln.qtyReceived || 0)
+                          ).toFixed(2)}
+                        </td>
+                        <td>
+                          <input
+                            value={ln.remark || ""}
+                            onChange={(e) =>
+                              updateGrnLine(idx, "remark", e.target.value)
+                            }
+                          />
                         </td>
                       </tr>
                     ))}
@@ -1159,8 +1861,30 @@ const RequisitionList = () => {
 
               {/* actions */}
               <div className="sa-modal-actions" style={{ marginTop: 12 }}>
-                <button type="button" className="sa-secondary-button" onClick={() => setGrnModal({ open: false, req: null, grnNo: "", receivedBy: "", receivedDate: new Date().toISOString().slice(0,10), items: [] })}>Cancel</button>
-                <button type="button" className="sa-primary-button" onClick={submitCreateGRN} disabled={saving}>{saving ? "Creating..." : "Create GRN"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() =>
+                    setGrnModal({
+                      open: false,
+                      req: null,
+                      grnNo: "",
+                      receivedBy: "",
+                      receivedDate: new Date().toISOString().slice(0, 10),
+                      items: [],
+                    })
+                  }
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="sa-primary-button"
+                  onClick={submitCreateGRN}
+                  disabled={saving}
+                >
+                  {saving ? "Creating..." : "Create GRN"}
+                </button>
               </div>
             </div>
           </div>
