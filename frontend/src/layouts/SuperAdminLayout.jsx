@@ -28,7 +28,8 @@ const menuItems = [
   { label: "Purchase Orders", icon: "ri-file-paper-line", path: "/super-admin/po" },
   { label: "GRN", icon: "ri-archive-stack-line", path: "/super-admin/grn" },
   { label: "Consumption", icon: "ri-goblet-line", path: "/super-admin/consumption" },
-  { label: "Store Transfer Rules", icon: "ri-route-line", path: "/super-admin/store-transfer-rules" },
+  { label: "Store Replacement", icon: "ri-exchange-box-line", path: "/super-admin/store-replacement" },
+
   // INVENTORY / REPORTS
   { type: "section", label: "Inventory & Reports" },
   { label: "Inventory", icon: "ri-archive-line", path: "/super-admin/inventory" },
