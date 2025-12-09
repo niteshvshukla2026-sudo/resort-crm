@@ -7,7 +7,7 @@ function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   const controllers = createControllers({ useMongo, mongoose });
 
-  // Demo-auth header (optional, used earlier in your setup)
+  // Demo-auth header (optional)
   router.use((req, res, next) => {
     const demo = req.header("x-demo-user");
     if (demo) {
@@ -26,7 +26,7 @@ function createRouter({ useMongo, mongoose }) {
   });
 
   // ------------------------
-  // 🔐 AUTH ROUTES
+  // 🔐 AUTH
   // ------------------------
   router.post("/api/auth/login", controllers.login);
 
@@ -39,35 +39,48 @@ function createRouter({ useMongo, mongoose }) {
   );
 
   // ------------------------
-  // 🏨 Resorts
+  // 🏨 RESORTS (full CRUD)
   // ------------------------
-  router.get("/resorts", controllers.listResorts);          // old style
-  router.get("/api/resorts", controllers.listResorts);      // new API
+  // old path (if something was using it)
+  router.get("/resorts", controllers.listResorts);
+
+  // new REST API used by UI
+  router.get("/api/resorts", controllers.listResorts);
+  router.post("/api/resorts", controllers.createResort);
+  router.put("/api/resorts/:id", controllers.updateResort);
+  router.delete("/api/resorts/:id", controllers.deleteResort);
 
   // ------------------------
-  // 🏬 Departments
+  // 🏬 DEPARTMENTS (full CRUD)
   // ------------------------
-  router.get("/departments", controllers.listDepartments);       // old style
-  router.get("/api/departments", controllers.listDepartments);   // new API
+  router.get("/departments", controllers.listDepartments);
+
+  router.get("/api/departments", controllers.listDepartments);
+  router.post("/api/departments", controllers.createDepartment);
+  router.put("/api/departments/:id", controllers.updateDepartment);
+  router.delete(
+    "/api/departments/:id",
+    controllers.deleteDepartment
+  );
 
   // ------------------------
-  // 📦 Requisition
+  // 📦 REQUISITIONS (demo)
   // ------------------------
   router.get("/requisitions", controllers.listRequisitions);
   router.post("/requisitions", controllers.createRequisition);
 
   // ------------------------
-  // 📑 Purchase Orders
+  // 📑 PURCHASE ORDERS (demo)
   // ------------------------
   router.get("/po", controllers.listPOs);
 
   // ------------------------
-  // 📦 Items
+  // 📦 ITEMS (demo)
   // ------------------------
   router.get("/items", controllers.listItems);
 
   // ------------------------
-  // 👥 Roles / Users
+  // 👥 ROLES / USERS (demo)
   // ------------------------
   router.get("/roles", controllers.listRoles);
   router.get("/users", controllers.listUsers);
