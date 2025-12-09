@@ -33,7 +33,7 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🏨 Resorts
   // ------------------------
-  router.get('/resorts', controllers.listResorts);
+   router.get('/api/resorts', controllers.listResorts);
 
   // ------------------------
   // 📦 Requisition

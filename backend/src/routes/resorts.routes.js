@@ -1,3 +1,4 @@
+// backend/src/routes/resorts.routes.js
 import express from "express";
 import Resort from "../models/Resort.js";
 
@@ -16,8 +17,7 @@ function generateCode(name = "") {
   return clean || "R" + Math.floor(Math.random() * 999);
 }
 
-// GET ALL RESORTS
-// final URL: GET /api/resorts
+// GET ALL RESORTS  ->  GET /api/resorts
 router.get("/", async (req, res) => {
   try {
     const resorts = await Resort.find().sort({ createdAt: -1 });
@@ -27,8 +27,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// CREATE RESORT
-// final URL: POST /api/resorts
+// CREATE RESORT  ->  POST /api/resorts
 router.post("/", async (req, res) => {
   try {
     const data = req.body;
@@ -41,8 +40,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// UPDATE RESORT
-// final URL: PUT /api/resorts/:id
+// UPDATE RESORT  ->  PUT /api/resorts/:id
 router.put("/:id", async (req, res) => {
   try {
     const updated = await Resort.findByIdAndUpdate(
@@ -56,8 +54,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE RESORT
-// final URL: DELETE /api/resorts/:id
+// DELETE RESORT  ->  DELETE /api/resorts/:id
 router.delete("/:id", async (req, res) => {
   try {
     await Resort.findByIdAndDelete(req.params.id);
