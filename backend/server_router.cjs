@@ -1,7 +1,7 @@
 // backend/server_router.cjs
 
-const express = require('express');
-const { createControllers } = require('./controllers.cjs');
+const express = require("express");
+const { createControllers } = require("./controllers.cjs");
 
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
@@ -9,12 +9,17 @@ function createRouter({ useMongo, mongoose }) {
 
   // Demo-auth header (optional, used earlier in your setup)
   router.use((req, res, next) => {
-    const demo = req.header('x-demo-user');
+    const demo = req.header("x-demo-user");
     if (demo) {
       try {
         req.user = JSON.parse(demo);
       } catch (e) {
-        req.user = { id: demo, name: 'Demo User', role: 'RESORT_USER', resorts: [] };
+        req.user = {
+          id: demo,
+          name: "Demo User",
+          role: "RESORT_USER",
+          resorts: [],
+        };
       }
     }
     next();
@@ -23,39 +28,49 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🔐 AUTH ROUTES
   // ------------------------
-  router.post('/api/auth/login', controllers.login);
+  router.post("/api/auth/login", controllers.login);
 
   // ------------------------
   // 📊 Dashboard
   // ------------------------
-  router.get('/dashboard/resort/:resortId/kpi', controllers.getResortKpi);
+  router.get(
+    "/dashboard/resort/:resortId/kpi",
+    controllers.getResortKpi
+  );
 
   // ------------------------
   // 🏨 Resorts
   // ------------------------
-   router.get('/api/resorts', controllers.listResorts);
+  router.get("/resorts", controllers.listResorts);          // old style
+  router.get("/api/resorts", controllers.listResorts);      // new API
+
+  // ------------------------
+  // 🏬 Departments
+  // ------------------------
+  router.get("/departments", controllers.listDepartments);       // old style
+  router.get("/api/departments", controllers.listDepartments);   // new API
 
   // ------------------------
   // 📦 Requisition
   // ------------------------
-  router.get('/requisitions', controllers.listRequisitions);
-  router.post('/requisitions', controllers.createRequisition);
+  router.get("/requisitions", controllers.listRequisitions);
+  router.post("/requisitions", controllers.createRequisition);
 
   // ------------------------
   // 📑 Purchase Orders
   // ------------------------
-  router.get('/po', controllers.listPOs);
+  router.get("/po", controllers.listPOs);
 
   // ------------------------
   // 📦 Items
   // ------------------------
-  router.get('/items', controllers.listItems);
+  router.get("/items", controllers.listItems);
 
   // ------------------------
   // 👥 Roles / Users
   // ------------------------
-  router.get('/roles', controllers.listRoles);
-  router.get('/users', controllers.listUsers);
+  router.get("/roles", controllers.listRoles);
+  router.get("/users", controllers.listUsers);
 
   return router;
 }

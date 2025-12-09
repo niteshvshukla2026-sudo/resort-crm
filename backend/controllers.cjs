@@ -1,7 +1,6 @@
 // backend/controllers.cjs
 
 function createControllers({ useMongo, mongoose }) {
-  
   // --------------------------------
   // 🔐 LOGIN CONTROLLER
   // --------------------------------
@@ -10,7 +9,9 @@ function createControllers({ useMongo, mongoose }) {
       const { email, password } = req.body || {};
 
       if (!email || !password) {
-        return res.status(400).json({ ok: false, error: "email and password required" });
+        return res
+          .status(400)
+          .json({ ok: false, error: "email and password required" });
       }
 
       // DEMO login logic (replace with real DB + bcrypt + JWT)
@@ -19,7 +20,7 @@ function createControllers({ useMongo, mongoose }) {
           id: "admin_1",
           email,
           role: "SUPER_ADMIN",
-          name: "Admin User"
+          name: "Admin User",
         };
 
         const token = "demo-token-123"; // Replace with JWT later
@@ -27,14 +28,18 @@ function createControllers({ useMongo, mongoose }) {
         return res.json({
           ok: true,
           token,
-          user
+          user,
         });
       }
 
-      return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid credentials" });
     } catch (err) {
       console.error("Login error:", err);
-      return res.status(500).json({ ok: false, error: "server error" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "server error" });
     }
   }
 
@@ -50,6 +55,17 @@ function createControllers({ useMongo, mongoose }) {
   // --------------------------------
   async function listResorts(req, res) {
     return res.json({ ok: true, resorts: [] });
+  }
+
+  // --------------------------------
+  // 🏬 DEPARTMENTS
+  // --------------------------------
+  async function listDepartments(req, res) {
+    // demo / placeholder – currently returns empty list
+    // later you can replace with real Mongo query
+    // e.g. const departments = await Department.find().sort({ createdAt: -1 });
+    const departments = [];
+    return res.json({ ok: true, departments });
   }
 
   // --------------------------------
@@ -95,6 +111,7 @@ function createControllers({ useMongo, mongoose }) {
     login,
     getResortKpi,
     listResorts,
+    listDepartments,
     listRequisitions,
     createRequisition,
     listPOs,
