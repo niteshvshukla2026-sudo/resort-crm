@@ -6,12 +6,19 @@ const router = express.Router();
 // GENERATE CODE
 function generateCode(name = "") {
   if (!name) return "R" + Math.floor(Math.random() * 999);
-  const clean = name.trim().split(/\s+/).map(w => w[0]).join("").slice(0,4).toUpperCase();
+  const clean = name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
   return clean || "R" + Math.floor(Math.random() * 999);
 }
 
 // GET ALL RESORTS
-router.get("/resorts", async (req, res) => {
+// final URL: GET /api/resorts
+router.get("/", async (req, res) => {
   try {
     const resorts = await Resort.find().sort({ createdAt: -1 });
     return res.json({ ok: true, resorts });
@@ -21,7 +28,8 @@ router.get("/resorts", async (req, res) => {
 });
 
 // CREATE RESORT
-router.post("/resorts", async (req, res) => {
+// final URL: POST /api/resorts
+router.post("/", async (req, res) => {
   try {
     const data = req.body;
     if (!data.code) data.code = generateCode(data.name);
@@ -34,7 +42,8 @@ router.post("/resorts", async (req, res) => {
 });
 
 // UPDATE RESORT
-router.put("/resorts/:id", async (req, res) => {
+// final URL: PUT /api/resorts/:id
+router.put("/:id", async (req, res) => {
   try {
     const updated = await Resort.findByIdAndUpdate(
       req.params.id,
@@ -48,7 +57,8 @@ router.put("/resorts/:id", async (req, res) => {
 });
 
 // DELETE RESORT
-router.delete("/resorts/:id", async (req, res) => {
+// final URL: DELETE /api/resorts/:id
+router.delete("/:id", async (req, res) => {
   try {
     await Resort.findByIdAndDelete(req.params.id);
     return res.json({ ok: true, message: "Resort deleted" });
