@@ -27,11 +27,45 @@ authAxios.interceptors.request.use((config) => {
 
 // small Maharashtra city list for datalist (keeps UX nice)
 const MAHA_CITIES = [
-  "Mumbai","Pune","Nagpur","Nashik","Thane","Aurangabad","Solapur","Kolhapur",
-  "Amravati","Nanded","Ahmednagar","Jalgaon","Akola","Latur","Sangli","Satara",
-  "Ratnagiri","Sindhudurg","Palghar","Raigad","Chandrapur","Gondia","Buldhana",
-  "Yavatmal","Beed","Parbhani","Osmanabad","Hingoli","Jalna","Washim","Wardha",
-  "Kalyan","Dombivli","Panvel","Lonavala","Alibaug","Mahabaleshwar","Matheran","Shirdi"
+  "Mumbai",
+  "Pune",
+  "Nagpur",
+  "Nashik",
+  "Thane",
+  "Aurangabad",
+  "Solapur",
+  "Kolhapur",
+  "Amravati",
+  "Nanded",
+  "Ahmednagar",
+  "Jalgaon",
+  "Akola",
+  "Latur",
+  "Sangli",
+  "Satara",
+  "Ratnagiri",
+  "Sindhudurg",
+  "Palghar",
+  "Raigad",
+  "Chandrapur",
+  "Gondia",
+  "Buldhana",
+  "Yavatmal",
+  "Beed",
+  "Parbhani",
+  "Osmanabad",
+  "Hingoli",
+  "Jalna",
+  "Washim",
+  "Wardha",
+  "Kalyan",
+  "Dombivli",
+  "Panvel",
+  "Lonavala",
+  "Alibaug",
+  "Mahabaleshwar",
+  "Matheran",
+  "Shirdi",
 ];
 
 // helpers for date formatting/parsing
@@ -48,8 +82,11 @@ const parseDDMMYYYYToISO = (s) => {
   if (parts.length !== 3) return "";
   const [dd, mm, yyyy] = parts.map((p) => p.trim());
   if (!dd || !mm || !yyyy) return "";
-  const day = Number(dd), month = Number(mm), year = Number(yyyy);
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return "";
+  const day = Number(dd),
+    month = Number(mm),
+    year = Number(yyyy);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year))
+    return "";
   return `${year}-${pad(month)}-${pad(day)}`;
 };
 const parseDDMMYYYYToDate = (s) => {
@@ -86,7 +123,11 @@ const generateCodeFromName = (name = "") => {
   if (!name) return "";
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
-  return words.map((w) => w[0]).join("").slice(0, 4).toUpperCase();
+  return words
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
 };
 
 const TIEUP_OPTIONS = ["Managed", "Marketed", "Owned", "Commissionable"];
@@ -119,6 +160,7 @@ const ResortList = () => {
     try {
       setLoading(true);
       setError("");
+
       // final URL: /api/resorts
       const res = await authAxios.get("/resorts");
       console.log("resorts response:", res.status, res.data);
@@ -166,19 +208,54 @@ const ResortList = () => {
   // Filters logic
   const filtered = useMemo(() => {
     return resorts.filter((r) => {
-      if (filterName && !r.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
-      if (filterCode && !r.code?.toLowerCase().includes(filterCode.toLowerCase())) return false;
-      if (filterLocationZone && !r.locationZone?.toLowerCase().includes(filterLocationZone.toLowerCase())) return false;
+      if (
+        filterName &&
+        !r.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
+        return false;
+      if (
+        filterCode &&
+        !r.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
+        return false;
+      if (
+        filterLocationZone &&
+        !r.locationZone
+          ?.toLowerCase()
+          .includes(filterLocationZone.toLowerCase())
+      )
+        return false;
       if (filterStatus) {
         if (filterStatus === "active" && r.isActive === false) return false;
         if (filterStatus === "inactive" && r.isActive !== false) return false;
       }
-      if (filterTieUpCategory && (r.tieUpCategory || "") !== filterTieUpCategory) return false;
-      if (filterQualityCategory && (r.qualityCategory || "") !== filterQualityCategory) return false;
-      if (filterLocationCategory && (r.locationCategory || "") !== filterLocationCategory) return false;
+      if (
+        filterTieUpCategory &&
+        (r.tieUpCategory || "") !== filterTieUpCategory
+      )
+        return false;
+      if (
+        filterQualityCategory &&
+        (r.qualityCategory || "") !== filterQualityCategory
+      )
+        return false;
+      if (
+        filterLocationCategory &&
+        (r.locationCategory || "") !== filterLocationCategory
+      )
+        return false;
       return true;
     });
-  }, [resorts, filterName, filterCode, filterLocationZone, filterStatus, filterTieUpCategory, filterQualityCategory, filterLocationCategory]);
+  }, [
+    resorts,
+    filterName,
+    filterCode,
+    filterLocationZone,
+    filterStatus,
+    filterTieUpCategory,
+    filterQualityCategory,
+    filterLocationCategory,
+  ]);
 
   // Form handlers
   const openCreateForm = () => {
@@ -239,12 +316,15 @@ const ResortList = () => {
     const fe = {};
     if (!form.name?.trim()) fe.name = "Resort name is required";
     if (!form.address?.trim()) fe.address = "Address is required";
-    if (!form.locationZone?.trim()) fe.locationZone = "Location/Zone is required";
+    if (!form.locationZone?.trim())
+      fe.locationZone = "Location/Zone is required";
     if (!form.ownerName?.trim()) fe.ownerName = "Owner name is required";
-    if (!form.ownerContact?.trim()) fe.ownerContact = "Owner contact is required";
+    if (!form.ownerContact?.trim())
+      fe.ownerContact = "Owner contact is required";
     else {
       const digits = (form.ownerContact || "").replace(/\D/g, "");
-      if (digits.length !== 10) fe.ownerContact = "Owner contact must be 10 digits";
+      if (digits.length !== 10)
+        fe.ownerContact = "Owner contact must be 10 digits";
     }
     if (form.ownerEmail) {
       const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -266,6 +346,7 @@ const ResortList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
     if (!validateForm()) {
       setError("Please fix the highlighted errors.");
       return;
@@ -290,7 +371,9 @@ const ResortList = () => {
         locationCategory: form.locationCategory || undefined,
         fssaiNumber: form.fssaiNumber || undefined,
         fssaiStatus: form.fssaiStatus || undefined,
-        renewalDate: form.renewalDate ? parseDDMMYYYYToISO(form.renewalDate) : undefined,
+        renewalDate: form.renewalDate
+          ? parseDDMMYYYYToISO(form.renewalDate)
+          : undefined,
         isActive: !!form.isActive,
       };
 
@@ -304,7 +387,7 @@ const ResortList = () => {
         console.log("create resort res:", res.data);
       }
 
-      // ✅ Always reload from backend so UI == DB
+      // ✅ Always reload list from backend so UI == DB
       await loadResorts();
 
       setShowForm(false);
@@ -318,8 +401,7 @@ const ResortList = () => {
         err.message
       );
       setError(
-        err?.response?.data?.message ||
-          "Failed to save resort"
+        err?.response?.data?.message || "Failed to save resort"
       );
     } finally {
       setSaving(false);
@@ -334,7 +416,11 @@ const ResortList = () => {
       try {
         await authAxios.delete(`/resorts/${r._id || r.id}`);
       } catch (err) {
-        console.error("delete resort error", err.response?.status, err.response?.data);
+        console.error(
+          "delete resort error",
+          err.response?.status,
+          err.response?.data
+        );
         await loadResorts();
       }
     } catch (err) {
@@ -350,15 +436,27 @@ const ResortList = () => {
       <div className="sa-page-header">
         <div>
           <h2>Resorts</h2>
-          <p>All resorts load from backend only. Create/Edit/Delete will persist to database.</p>
+          <p>
+            All resorts load from backend only. Create/Edit/Delete will persist
+            to database.
+          </p>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button className="sa-secondary-button" onClick={() => { /* export if needed */ }}>
+          <button
+            className="sa-secondary-button"
+            onClick={() => {
+              /* optional export */
+            }}
+          >
             Download
           </button>
 
-          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreateForm}
+          >
             <i className="ri-add-line" /> New Resort
           </button>
         </div>
@@ -845,9 +943,7 @@ const ResortList = () => {
                   placeholder="dd/mm/yyyy"
                 />
                 {fieldErrors.renewalDate && (
-                  <div className="field-error">
-                    {fieldErrors.renewalDate}
-                  </div>
+                  <div className="field-error">{fieldErrors.renewalDate}</div>
                 )}
                 <small style={{ display: "block", color: "#6b7280" }}>
                   Enter date as DD/MM/YYYY. Status will auto-update based on
