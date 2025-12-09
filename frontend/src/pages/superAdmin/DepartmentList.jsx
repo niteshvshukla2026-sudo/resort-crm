@@ -79,7 +79,13 @@ const DepartmentList = () => {
       const res = await authAxios.get("/departments");
       console.log("departments response:", res.status, res.data);
 
-      const serverDepts = Array.isArray(res.data) ? res.data : [];
+      // BACKEND RESPONSE: { ok: true, departments: [...] }
+      const serverDepts = Array.isArray(res.data?.departments)
+        ? res.data.departments
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+
       const normalized = serverDepts.map((d) => ({
         _id: d._id || d.id,
         name: d.name || "",
@@ -168,9 +174,12 @@ const DepartmentList = () => {
 
       if (form._id) {
         // UPDATE
-        let res = null;
         try {
-          res = await authAxios.put(`/departments/${form._id}`, payload);
+          const res = await authAxios.put(
+            `/departments/${form._id}`,
+            payload
+          );
+          console.log("update department res:", res.data);
         } catch (err) {
           console.error(
             "update error",
@@ -178,33 +187,13 @@ const DepartmentList = () => {
             err.response?.data,
             err.message
           );
-        }
-
-        if (res?.data) {
-          setDepartments((p) =>
-            p.map((x) =>
-              x._id === form._id || x.id === form._id
-                ? {
-                    _id: res.data._id || res.data.id,
-                    name: res.data.name,
-                    code: res.data.code,
-                  }
-                : x
-            )
-          );
-        } else {
-          // optimistic local update
-          setDepartments((p) =>
-            p.map((x) =>
-              x._id === form._id || x.id === form._id ? { ...x, ...payload } : x
-            )
-          );
+          throw err;
         }
       } else {
         // CREATE
-        let res = null;
         try {
-          res = await authAxios.post("/departments", payload);
+          const res = await authAxios.post("/departments", payload);
+          console.log("create department res:", res.data);
         } catch (err) {
           console.error(
             "create error",
@@ -212,18 +201,12 @@ const DepartmentList = () => {
             err.response?.data,
             err.message
           );
+          throw err;
         }
-
-        const created = res?.data
-          ? {
-              _id: res.data._id || res.data.id,
-              name: res.data.name,
-              code: res.data.code,
-            }
-          : { ...payload, _id: `local_${Date.now()}` };
-
-        setDepartments((p) => [created, ...p]);
       }
+
+      // ✅ always reload from backend so UI == DB
+      await loadData();
 
       setShowForm(false);
       setForm(emptyForm());
@@ -259,7 +242,7 @@ const DepartmentList = () => {
           err.message
         );
         // on failure, reload from server
-        loadData();
+        await loadData();
       }
     } catch (err) {
       console.error(
