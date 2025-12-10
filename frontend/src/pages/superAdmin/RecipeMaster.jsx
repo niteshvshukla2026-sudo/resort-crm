@@ -4,6 +4,17 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+/** 🔹 FIXED recipe categories (not from backend) */
+const RECIPE_CATEGORIES = [
+  { id: "BY_PORTION", name: "By Portion", type: "RECIPE_PORTION" },
+  {
+    id: "BY_RECIPE_LUMPSUM",
+    name: "By Recipe Lumpsum",
+    type: "RECIPE_LUMPSUM",
+  },
+  // NOTE: Lumpsum deliberately NOT included in dropdown
+];
+
 /* Dev fallback items ONLY if /api/items fails */
 const DEV_ITEMS = [
   { _id: "item_rice", name: "Rice", uom: "Kg", itemCategory: "Pantry" },
@@ -15,7 +26,7 @@ const DEV_ITEMS = [
 
 const emptyLine = () => ({
   id: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-  itemCategory: "", // will hold itemCategoryId
+  itemCategory: "", // itemCategoryId or name (string)
   itemId: "",
   qty: "",
 });
@@ -27,7 +38,6 @@ const RecipeMaster = () => {
   const [recipes, setRecipes] = useState([]);
   const [items, setItems] = useState([]);
   const [itemCategories, setItemCategories] = useState([]); // [{id,name}]
-  const [recipeCategories, setRecipeCategories] = useState([]); // from master
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,7 +52,7 @@ const RecipeMaster = () => {
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
-    type: "", // internal only (if backend uses)
+    type: "", // internal only
     name: "",
     yieldQty: "",
     yieldUom: "",
@@ -53,20 +63,18 @@ const RecipeMaster = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  /** ---------- LOAD DATA (recipes, items, item-categories) ---------- */
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [recRes, itemRes, rcatRes, icatRes] = await Promise.all([
+      const [recRes, itemRes, icatRes] = await Promise.all([
         axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
         axios
-          .get(`${API_BASE}/api/recipe-categories`)
-          .catch(() => ({ data: [] })), // recipe category master
-        axios
           .get(`${API_BASE}/api/item-categories`)
-          .catch(() => ({ data: null })), // item category master
+          .catch(() => ({ data: null })),
       ]);
 
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
@@ -74,16 +82,29 @@ const RecipeMaster = () => {
         ? itemRes.data
         : DEV_ITEMS;
 
-      // ---------- Item Categories from master ----------
+      // ----- Item Categories -----
       let serverItemCats = [];
-      if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
-        serverItemCats = icatRes.data.map((c) => ({
+      const icData = icatRes?.data;
+      let icRaw = [];
+
+      if (Array.isArray(icData)) {
+        icRaw = icData;
+      } else if (icData && Array.isArray(icData.itemCategories)) {
+        icRaw = icData.itemCategories;
+      } else if (icData && Array.isArray(icData.categories)) {
+        icRaw = icData.categories;
+      } else if (icData && Array.isArray(icData.data)) {
+        icRaw = icData.data;
+      }
+
+      if (icRaw.length) {
+        serverItemCats = icRaw.map((c) => ({
           id: (c._id || c.id || c.code || c.name).toString(),
           name: c.name || c.code || c._id || c.id,
         }));
       }
 
-      // If no master, infer from items (dev only)
+      // Fallback: infer from items
       if (!serverItemCats.length) {
         const map = new Map();
         (serverItemsRaw.length ? serverItemsRaw : DEV_ITEMS).forEach((it) => {
@@ -106,7 +127,7 @@ const RecipeMaster = () => {
         serverItemCats.map((c) => [c.id.toString(), c.name])
       );
 
-      // ---------- Items ----------
+      // ----- Items -----
       const serverItems = serverItemsRaw.map((it) => {
         const uom =
           it.uom ||
@@ -137,32 +158,13 @@ const RecipeMaster = () => {
           id: it.id || it._id,
           name: it.name || it.title || "",
           uom,
-          itemCategoryId: catId, // for linking
-          itemCategoryName: catName, // for display
+          itemCategoryId: catId,
+          itemCategoryName: catName,
           ...it,
         };
       });
 
-      // ---------- Recipe Categories from master ----------
-      let serverRecipeCats = [];
-      if (Array.isArray(rcatRes.data)) {
-        serverRecipeCats = rcatRes.data.map((c) =>
-          typeof c === "string"
-            ? {
-                _id: c,
-                id: c,
-                name: c,
-              }
-            : {
-                ...c,
-                _id: c._id || c.id || c.code || c.name,
-                id: c._id || c.id || c.code || c.name,
-                name: c.name || c.code || "",
-              }
-        );
-      }
-
-      // ---------- Recipes ----------
+      // ----- Recipes -----
       const normalizedRecipes = serverRecipes.map((r) => ({
         _id: r._id || r.id,
         code: r.code || "",
@@ -194,18 +196,17 @@ const RecipeMaster = () => {
 
       setRecipes(normalizedRecipes);
       setItems(serverItems);
-      setRecipeCategories(serverRecipeCats);
       setItemCategories(serverItemCats);
     } catch (err) {
       console.error(err);
       setError("Failed to load recipe data");
       setRecipes([]);
       setItems(DEV_ITEMS);
-      setRecipeCategories([]);
-      const fallbackCats = Array.from(
-        new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
-      ).map((id) => ({ id: id.toString(), name: id.toString() }));
-      setItemCategories(fallbackCats);
+      setItemCategories(
+        Array.from(
+          new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
+        ).map((id) => ({ id: id.toString(), name: id.toString() }))
+      );
     } finally {
       setLoading(false);
     }
@@ -216,13 +217,10 @@ const RecipeMaster = () => {
     // eslint-disable-next-line
   }, []);
 
+  /** ---------- HELPERS ---------- */
+
   const getCategoryById = (id) =>
-    recipeCategories.find(
-      (c) =>
-        c._id === id ||
-        c.id === id ||
-        (c._id || c.id)?.toString() === (id || "").toString()
-    ) || null;
+    RECIPE_CATEGORIES.find((c) => c.id === id) || null;
 
   const getItemCategoryName = (id) => {
     if (!id) return "";
@@ -236,20 +234,7 @@ const RecipeMaster = () => {
     items.find((it) => it._id === id || it.id === id) || null;
   const getItemName = (id) => (getItem(id) ? getItem(id).name : id);
 
-  // ✅ Recipe Category dropdown:
-  //    - master se aayega
-  //    - jiska name "Lumpsum" / "Lump Sum" ho, usko hide
-  const categoryOptions = useMemo(() => {
-    if (!recipeCategories.length) return [];
-
-    const filtered = recipeCategories.filter((c) => {
-      const n = (c.name || "").toLowerCase().trim();
-      return n !== "lumpsum" && n !== "lump sum";
-    });
-
-    // Agar filter ke baad kuch nahi bacha to sab dikha do, taaki dropdown empty na rahe
-    return filtered.length ? filtered : recipeCategories;
-  }, [recipeCategories]);
+  const categoryOptions = RECIPE_CATEGORIES;
 
   const filteredRecipes = useMemo(
     () =>
@@ -294,7 +279,7 @@ const RecipeMaster = () => {
       lines: p.lines.filter((_, i) => i !== idx),
     }));
 
-  // ✅ Items list for selected categoryId
+  // Items list for selected categoryId
   const itemsForCategory = (categoryId) =>
     items.filter(
       (it) =>
@@ -302,7 +287,6 @@ const RecipeMaster = () => {
         (categoryId || "").toString()
     );
 
-  // helper: safely map detected uom to allowed options
   const mapToAllowedUom = (uom) =>
     UOM_OPTIONS.includes(uom) ? uom : undefined;
 
@@ -481,14 +465,14 @@ const RecipeMaster = () => {
     const payload = {
       code: form.code,
       name: form.name,
-      recipeCategoryId: form.recipeCategoryId,
+      recipeCategoryId: form.recipeCategoryId, // backend ignore kare to bhi ok
       type: form.type || undefined,
       yieldQty: form.yieldQty ? Number(form.yieldQty) : undefined,
       yieldUom: form.yieldUom || undefined,
       lines: (form.lines || []).map((ln) => ({
         itemId: ln.itemId,
         qty: Number(ln.qty),
-        itemCategory: ln.itemCategory, // this is itemCategoryId
+        itemCategory: ln.itemCategory,
       })),
     };
 
@@ -542,6 +526,8 @@ const RecipeMaster = () => {
     }
   };
 
+  /** ---------- UI ---------- */
+
   return (
     <div className="sa-page">
       <div className="sa-page-header" style={{ alignItems: "flex-start" }}>
@@ -579,7 +565,7 @@ const RecipeMaster = () => {
           >
             <option value="">All</option>
             {categoryOptions.map((c) => (
-              <option key={c._id || c.id} value={c._id || c.id}>
+              <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
@@ -702,7 +688,7 @@ const RecipeMaster = () => {
                   >
                     <option value="">-- Select Recipe Category --</option>
                     {categoryOptions.map((c) => (
-                      <option key={c._id || c.id} value={c._id || c.id}>
+                      <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
