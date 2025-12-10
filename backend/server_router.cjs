@@ -25,16 +25,16 @@ function createRouter({ useMongo, mongoose }) {
     };
   };
 
-  // --- Models / in-memory for ItemCategory, Item, Store, Vendor ---
+  // --- Models / in-memory for ItemCategory, Item, Store, Recipe ---
   let ItemCategoryModel = null;
   let ItemModel = null;
   let StoreModel = null;
-  let VendorModel = null;
+  let RecipeModel = null;
 
   let memItemCategories = [];
   let memItems = [];
   let memStores = [];
-  let memVendors = [];
+  let memRecipes = [];
 
   if (useMongo && mongoose) {
     const { Schema } = mongoose;
@@ -54,7 +54,7 @@ function createRouter({ useMongo, mongoose }) {
       {
         name: { type: String, required: true },
         code: { type: String, required: true },
-        itemCategory: { type: String, default: "" },
+        itemCategory: { type: String, default: "" }, // yaha hum itemCategoryId ya name rakh sakte
         uom: { type: String, default: "" },
         brand: { type: String, default: "" },
         indicativePrice: { type: Number },
@@ -72,75 +72,32 @@ function createRouter({ useMongo, mongoose }) {
       { timestamps: true }
     );
 
-    // Vendor  (fields aligned with VendorList.jsx)
-    const vendorSchema = new Schema(
+    // ✅ Recipe (for RecipeMaster.jsx)
+    const recipeLineSchema = new Schema(
       {
-        code: {
-          type: String,
-          required: true,
-          trim: true,
-          uppercase: true,
-          unique: true,
-        },
-        name: { type: String, required: true, trim: true },
+        itemId: { type: String, required: true }, // Item _id ya koi code
+        qty: { type: Number, required: true },
+        itemCategory: { type: String, default: "" }, // itemCategoryId ya name string
+      },
+      { _id: false }
+    );
 
-        vendorType: { type: String, default: "" },
+    const recipeSchema = new Schema(
+      {
+        code: { type: String, required: true },
+        name: { type: String, required: true },
 
-        categories: [{ type: String, trim: true }],
-        category: { type: String, trim: true }, // optional single category
+        // Recipe Category (frontend fixed: By Portion, By Recipe Lumpsum)
+        recipeCategoryId: { type: String, default: "" }, // e.g. BY_PORTION
+        type: { type: String, default: "" }, // e.g. RECIPE_PORTION / RECIPE_LUMPSUM
 
-        resorts: [{ type: String, trim: true }],
-        resort: { type: String, trim: true }, // optional single resort
+        yieldQty: { type: Number }, // optional
+        yieldUom: { type: String, default: "" }, // "Kg", "Ltr", "Nos", "Pax"
 
-        contactPerson: { type: String, trim: true },
-        phone: { type: String, trim: true },
-        whatsapp: { type: String, trim: true },
-        alternatePhone: { type: String, trim: true },
-        email: { type: String, trim: true },
-
-        addressLine1: { type: String, trim: true },
-        addressLine2: { type: String, trim: true },
-        city: { type: String, trim: true },
-        state: { type: String, trim: true },
-        pincode: { type: String, trim: true },
-        country: { type: String, trim: true },
-
-        gstNumber: { type: String, trim: true },
-        panNumber: { type: String, trim: true },
-        fssaiNumber: { type: String, trim: true },
-
-        paymentTerms: { type: String, trim: true },
-        creditLimit: { type: Number },
-        paymentMode: { type: String, trim: true },
-
-        bankName: { type: String, trim: true },
-        accountNumber: { type: String, trim: true },
-        ifsc: { type: String, trim: true },
-        branch: { type: String, trim: true },
-
-        deliveryTime: { type: Number }, // days
-        minOrderQty: { type: Number },
-
-        status: {
-          type: String,
-          enum: ["Active", "Inactive", "Blacklisted"],
-          default: "Active",
-        },
-
-        notes: { type: String, trim: true },
+        lines: { type: [recipeLineSchema], default: [] },
       },
       { timestamps: true }
     );
-
-    vendorSchema.pre("save", function (next) {
-      if (!this.category && Array.isArray(this.categories) && this.categories.length) {
-        this.category = this.categories[0];
-      }
-      if (!this.resort && Array.isArray(this.resorts) && this.resorts.length) {
-        this.resort = this.resorts[0];
-      }
-      next();
-    });
 
     ItemCategoryModel =
       mongoose.models.ItemCategory ||
@@ -151,13 +108,13 @@ function createRouter({ useMongo, mongoose }) {
     StoreModel =
       mongoose.models.Store || mongoose.model("Store", storeSchema);
 
-    VendorModel =
-      mongoose.models.Vendor || mongoose.model("Vendor", vendorSchema);
+    RecipeModel =
+      mongoose.models.Recipe || mongoose.model("Recipe", recipeSchema);
 
-    console.log("ItemCategory, Item, Store & Vendor models initialised (Mongo)");
+    console.log("ItemCategory, Item, Store & Recipe models initialised (Mongo)");
   } else {
     console.warn(
-      "Mongo DB not enabled; ItemCategory/Item/Store/Vendor will use in-memory arrays (data lost on restart)."
+      "Mongo DB not enabled; ItemCategory/Item/Store/Recipe will use in-memory arrays (data lost on restart)."
     );
   }
 
@@ -189,7 +146,10 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 📊 Dashboard
   // ------------------------
-  router.get("/dashboard/resort/:resortId/kpi", safe("getResortKpi"));
+  router.get(
+    "/dashboard/resort/:resortId/kpi",
+    safe("getResortKpi")
+  );
 
   // ------------------------
   // 🏨 RESORTS (full CRUD)
@@ -233,7 +193,9 @@ function createRouter({ useMongo, mongoose }) {
       const { resort, name, code } = req.body || {};
 
       if (!resort || !name) {
-        return res.status(400).json({ message: "resort & name are required" });
+        return res
+          .status(400)
+          .json({ message: "resort & name are required" });
       }
 
       if (StoreModel) {
@@ -349,7 +311,9 @@ function createRouter({ useMongo, mongoose }) {
       const { name, code, departmentCategory } = req.body || {};
 
       if (!name || !code) {
-        return res.status(400).json({ message: "name & code are required" });
+        return res
+          .status(400)
+          .json({ message: "name & code are required" });
       }
 
       if (ItemCategoryModel) {
@@ -394,14 +358,18 @@ function createRouter({ useMongo, mongoose }) {
           { new: true }
         );
         if (!updated) {
-          return res.status(404).json({ message: "Item category not found" });
+          return res
+            .status(404)
+            .json({ message: "Item category not found" });
         }
         return res.json(updated);
       }
 
       const idx = memItemCategories.findIndex((c) => c._id === id);
       if (idx === -1) {
-        return res.status(404).json({ message: "Item category not found" });
+        return res
+          .status(404)
+          .json({ message: "Item category not found" });
       }
       memItemCategories[idx] = {
         ...memItemCategories[idx],
@@ -424,7 +392,9 @@ function createRouter({ useMongo, mongoose }) {
       if (ItemCategoryModel) {
         const deleted = await ItemCategoryModel.findByIdAndDelete(id);
         if (!deleted) {
-          return res.status(404).json({ message: "Item category not found" });
+          return res
+            .status(404)
+            .json({ message: "Item category not found" });
         }
         return res.json({ ok: true });
       }
@@ -432,7 +402,9 @@ function createRouter({ useMongo, mongoose }) {
       const before = memItemCategories.length;
       memItemCategories = memItemCategories.filter((c) => c._id !== id);
       if (memItemCategories.length === before) {
-        return res.status(404).json({ message: "Item category not found" });
+        return res
+          .status(404)
+          .json({ message: "Item category not found" });
       }
       return res.json({ ok: true });
     } catch (err) {
@@ -464,34 +436,31 @@ function createRouter({ useMongo, mongoose }) {
         req.body || {};
 
       if (!name || !code) {
-        return res.status(400).json({ message: "name & code are required" });
+        return res
+          .status(400)
+          .json({ message: "name & code are required" });
       }
 
-      const normPrice =
-        indicativePrice === "" || indicativePrice == null
-          ? undefined
-          : Number(indicativePrice);
-
-      if (ItemModel) {
-        const doc = await ItemModel.create({
-          name,
-          code,
-          itemCategory: itemCategory || "",
-          uom: uom || "",
-          brand: brand || "",
-          indicativePrice: normPrice,
-        });
-        return res.status(201).json(doc);
-      }
-
-      const created = {
-        _id: `it_${Date.now()}`,
+      const common = {
         name,
         code,
         itemCategory: itemCategory || "",
         uom: uom || "",
         brand: brand || "",
-        indicativePrice: normPrice,
+        indicativePrice:
+          indicativePrice === "" || indicativePrice == null
+            ? undefined
+            : Number(indicativePrice),
+      };
+
+      if (ItemModel) {
+        const doc = await ItemModel.create(common);
+        return res.status(201).json(doc);
+      }
+
+      const created = {
+        _id: `it_${Date.now()}`,
+        ...common,
       };
       memItems.push(created);
       return res.status(201).json(created);
@@ -513,9 +482,8 @@ function createRouter({ useMongo, mongoose }) {
       if (itemCategory != null) update.itemCategory = itemCategory;
       if (uom != null) update.uom = uom;
       if (brand != null) update.brand = brand;
-      if (indicativePrice != null && indicativePrice !== "") {
+      if (indicativePrice != null && indicativePrice !== "")
         update.indicativePrice = Number(indicativePrice);
-      }
 
       if (ItemModel) {
         const updated = await ItemModel.findByIdAndUpdate(
@@ -573,289 +541,174 @@ function createRouter({ useMongo, mongoose }) {
   router.delete("/api/items/:id", deleteItemHandler);
 
   // =======================================================
-  // 🚚 VENDORS (FULL CRUD)
+  // 🧾 RECIPES (FULL CRUD for RecipeMaster.jsx)
   // =======================================================
 
-  const listVendorsHandler = async (req, res) => {
+  const listRecipesHandler = async (req, res) => {
     try {
-      if (VendorModel) {
-        const docs = await VendorModel.find().lean();
-        return res.json(docs); // frontend expects plain array
+      if (RecipeModel) {
+        const docs = await RecipeModel.find().lean();
+        return res.json(docs);
       }
-      return res.json(memVendors);
+      return res.json(memRecipes);
     } catch (err) {
-      console.error("GET /api/vendors error", err);
-      res.status(500).json({ message: "Failed to list vendors" });
+      console.error("GET /api/recipes error", err);
+      res.status(500).json({ message: "Failed to list recipes" });
     }
   };
 
-  const createVendorHandler = async (req, res) => {
+  const createRecipeHandler = async (req, res) => {
     try {
-      const body = req.body || {};
-      let {
+      const {
         code,
         name,
-        vendorType,
-        categories,
-        resorts,
-        contactPerson,
-        phone,
-        whatsapp,
-        alternatePhone,
-        email,
-        addressLine1,
-        addressLine2,
-        city,
-        state,
-        pincode,
-        country,
-        gstNumber,
-        panNumber,
-        fssaiNumber,
-        paymentTerms,
-        creditLimit,
-        paymentMode,
-        bankName,
-        accountNumber,
-        ifsc,
-        branch,
-        deliveryTime,
-        minOrderQty,
-        status,
-        notes,
-      } = body;
+        recipeCategoryId,
+        type,
+        yieldQty,
+        yieldUom,
+        lines,
+      } = req.body || {};
 
-      if (!name || !code) {
-        return res.status(400).json({ message: "name & code are required" });
+      if (!code || !name) {
+        return res
+          .status(400)
+          .json({ message: "code & name are required" });
       }
 
-      const normCategories = Array.isArray(categories)
-        ? categories
-        : categories
-        ? [categories]
-        : [];
-      const normResorts = Array.isArray(resorts)
-        ? resorts
-        : resorts
-        ? [resorts]
+      // ensure lines array
+      const normLines = Array.isArray(lines)
+        ? lines
+            .filter((ln) => ln && ln.itemId && ln.qty != null)
+            .map((ln) => ({
+              itemId: String(ln.itemId),
+              qty: Number(ln.qty),
+              itemCategory:
+                ln.itemCategory != null ? String(ln.itemCategory) : "",
+            }))
         : [];
 
-      const normCredit =
-        creditLimit === "" || creditLimit == null
-          ? undefined
-          : Number(creditLimit);
-      const normDelivery =
-        deliveryTime === "" || deliveryTime == null
-          ? undefined
-          : Number(deliveryTime);
-      const normMinQty =
-        minOrderQty === "" || minOrderQty == null
-          ? undefined
-          : Number(minOrderQty);
+      const common = {
+        code,
+        name,
+        recipeCategoryId: recipeCategoryId || "",
+        type: type || "",
+        yieldQty:
+          yieldQty === "" || yieldQty == null ? undefined : Number(yieldQty),
+        yieldUom: yieldUom || "",
+        lines: normLines,
+      };
 
-      if (VendorModel) {
-        try {
-          const doc = await VendorModel.create({
-            code: String(code).toUpperCase(),
-            name,
-            vendorType: vendorType || "",
-            categories: normCategories,
-            resorts: normResorts,
-            contactPerson: contactPerson || "",
-            phone: phone || "",
-            whatsapp: whatsapp || "",
-            alternatePhone: alternatePhone || "",
-            email: email || "",
-            addressLine1: addressLine1 || "",
-            addressLine2: addressLine2 || "",
-            city: city || "",
-            state: state || "",
-            pincode: pincode || "",
-            country: country || "",
-            gstNumber: gstNumber || "",
-            panNumber: panNumber || "",
-            fssaiNumber: fssaiNumber || "",
-            paymentTerms: paymentTerms || "",
-            creditLimit: normCredit,
-            paymentMode: paymentMode || "",
-            bankName: bankName || "",
-            accountNumber: accountNumber || "",
-            ifsc: ifsc || "",
-            branch: branch || "",
-            deliveryTime: normDelivery,
-            minOrderQty: normMinQty,
-            status: status || "Active",
-            notes: notes || "",
-          });
-          return res.status(201).json(doc);
-        } catch (err) {
-          if (err.code === 11000 && err.keyPattern && err.keyPattern.code) {
-            return res.status(400).json({ message: "Vendor code already exists" });
-          }
-          throw err;
-        }
+      if (RecipeModel) {
+        const doc = await RecipeModel.create(common);
+        return res.status(201).json(doc);
       }
 
       const created = {
-        _id: `ven_${Date.now()}`,
-        code: String(code).toUpperCase(),
-        name,
-        vendorType: vendorType || "",
-        categories: normCategories,
-        resorts: normResorts,
-        contactPerson: contactPerson || "",
-        phone: phone || "",
-        whatsapp: whatsapp || "",
-        alternatePhone: alternatePhone || "",
-        email: email || "",
-        addressLine1: addressLine1 || "",
-        addressLine2: addressLine2 || "",
-        city: city || "",
-        state: state || "",
-        pincode: pincode || "",
-        country: country || "",
-        gstNumber: gstNumber || "",
-        panNumber: panNumber || "",
-        fssaiNumber: fssaiNumber || "",
-        paymentTerms: paymentTerms || "",
-        creditLimit: normCredit,
-        paymentMode: paymentMode || "",
-        bankName: bankName || "",
-        accountNumber: accountNumber || "",
-        ifsc: ifsc || "",
-        branch: branch || "",
-        deliveryTime: normDelivery,
-        minOrderQty: normMinQty,
-        status: status || "Active",
-        notes: notes || "",
+        _id: `rcp_${Date.now()}`,
+        ...common,
       };
-      memVendors.push(created);
+      memRecipes.push(created);
       return res.status(201).json(created);
     } catch (err) {
-      console.error("POST /api/vendors error", err);
-      res.status(500).json({ message: "Failed to create vendor" });
+      console.error("POST /api/recipes error", err);
+      res.status(500).json({ message: "Failed to create recipe" });
     }
   };
 
-  const updateVendorHandler = async (req, res) => {
+  const updateRecipeHandler = async (req, res) => {
     try {
       const { id } = req.params;
-      const body = req.body || {};
+      const {
+        code,
+        name,
+        recipeCategoryId,
+        type,
+        yieldQty,
+        yieldUom,
+        lines,
+      } = req.body || {};
 
       const update = {};
-      const maybeAssign = (field, val, transform) => {
-        if (val != null) update[field] = transform ? transform(val) : val;
-      };
+      if (code != null) update.code = code;
+      if (name != null) update.name = name;
+      if (recipeCategoryId != null)
+        update.recipeCategoryId = recipeCategoryId;
+      if (type != null) update.type = type;
+      if (yieldQty !== undefined) {
+        if (yieldQty === "" || yieldQty == null) update.yieldQty = undefined;
+        else update.yieldQty = Number(yieldQty);
+      }
+      if (yieldUom != null) update.yieldUom = yieldUom;
 
-      maybeAssign("code", body.code, (v) => String(v).toUpperCase());
-      maybeAssign("name", body.name);
-      maybeAssign("vendorType", body.vendorType);
-      maybeAssign(
-        "categories",
-        body.categories,
-        (v) =>
-          (Array.isArray(v) ? v : v ? [v] : [])
-      );
-      maybeAssign(
-        "resorts",
-        body.resorts,
-        (v) =>
-          (Array.isArray(v) ? v : v ? [v] : [])
-      );
-      maybeAssign("contactPerson", body.contactPerson);
-      maybeAssign("phone", body.phone);
-      maybeAssign("whatsapp", body.whatsapp);
-      maybeAssign("alternatePhone", body.alternatePhone);
-      maybeAssign("email", body.email);
-      maybeAssign("addressLine1", body.addressLine1);
-      maybeAssign("addressLine2", body.addressLine2);
-      maybeAssign("city", body.city);
-      maybeAssign("state", body.state);
-      maybeAssign("pincode", body.pincode);
-      maybeAssign("country", body.country);
-      maybeAssign("gstNumber", body.gstNumber);
-      maybeAssign("panNumber", body.panNumber);
-      maybeAssign("fssaiNumber", body.fssaiNumber);
-      maybeAssign("paymentTerms", body.paymentTerms);
-      if (body.creditLimit != null && body.creditLimit !== "") {
-        update.creditLimit = Number(body.creditLimit);
+      if (lines !== undefined) {
+        const normLines = Array.isArray(lines)
+          ? lines
+              .filter((ln) => ln && ln.itemId && ln.qty != null)
+              .map((ln) => ({
+                itemId: String(ln.itemId),
+                qty: Number(ln.qty),
+                itemCategory:
+                  ln.itemCategory != null ? String(ln.itemCategory) : "",
+              }))
+          : [];
+        update.lines = normLines;
       }
-      maybeAssign("paymentMode", body.paymentMode);
-      maybeAssign("bankName", body.bankName);
-      maybeAssign("accountNumber", body.accountNumber);
-      maybeAssign("ifsc", body.ifsc);
-      maybeAssign("branch", body.branch);
-      if (body.deliveryTime != null && body.deliveryTime !== "") {
-        update.deliveryTime = Number(body.deliveryTime);
-      }
-      if (body.minOrderQty != null && body.minOrderQty !== "") {
-        update.minOrderQty = Number(body.minOrderQty);
-      }
-      maybeAssign("status", body.status);
-      maybeAssign("notes", body.notes);
 
-      if (VendorModel) {
-        try {
-          const updated = await VendorModel.findByIdAndUpdate(
-            id,
-            { $set: update },
-            { new: true }
-          );
-          if (!updated) {
-            return res.status(404).json({ message: "Vendor not found" });
-          }
-          return res.json(updated);
-        } catch (err) {
-          if (err.code === 11000 && err.keyPattern && err.keyPattern.code) {
-            return res.status(400).json({ message: "Vendor code already exists" });
-          }
-          throw err;
+      if (RecipeModel) {
+        const updated = await RecipeModel.findByIdAndUpdate(
+          id,
+          { $set: update },
+          { new: true }
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Recipe not found" });
         }
+        return res.json(updated);
       }
 
-      const idx = memVendors.findIndex((v) => v._id === id);
+      const idx = memRecipes.findIndex((r) => r._id === id);
       if (idx === -1) {
-        return res.status(404).json({ message: "Vendor not found" });
+        return res.status(404).json({ message: "Recipe not found" });
       }
-      memVendors[idx] = { ...memVendors[idx], ...update };
-      return res.json(memVendors[idx]);
+      memRecipes[idx] = { ...memRecipes[idx], ...update };
+      return res.json(memRecipes[idx]);
     } catch (err) {
-      console.error("PUT /api/vendors/:id error", err);
-      res.status(500).json({ message: "Failed to update vendor" });
+      console.error("PUT /api/recipes/:id error", err);
+      res.status(500).json({ message: "Failed to update recipe" });
     }
   };
 
-  const deleteVendorHandler = async (req, res) => {
+  const deleteRecipeHandler = async (req, res) => {
     try {
       const { id } = req.params;
 
-      if (VendorModel) {
-        const deleted = await VendorModel.findByIdAndDelete(id);
+      if (RecipeModel) {
+        const deleted = await RecipeModel.findByIdAndDelete(id);
         if (!deleted) {
-          return res.status(404).json({ message: "Vendor not found" });
+          return res.status(404).json({ message: "Recipe not found" });
         }
         return res.json({ ok: true });
       }
 
-      const before = memVendors.length;
-      memVendors = memVendors.filter((v) => v._id !== id);
-      if (memVendors.length === before) {
-        return res.status(404).json({ message: "Vendor not found" });
+      const before = memRecipes.length;
+      memRecipes = memRecipes.filter((r) => r._id !== id);
+      if (memRecipes.length === before) {
+        return res.status(404).json({ message: "Recipe not found" });
       }
       return res.json({ ok: true });
     } catch (err) {
-      console.error("DELETE /api/vendors/:id error", err);
-      res.status(500).json({ message: "Failed to delete vendor" });
+      console.error("DELETE /api/recipes/:id error", err);
+      res.status(500).json({ message: "Failed to delete recipe" });
     }
   };
 
-  // plain path + /api path — dono ko support karte hai
-  router.get("/vendors", listVendorsHandler);
+  // plain path + /api path
+  router.get("/recipes", listRecipesHandler);
 
-  router.get("/api/vendors", listVendorsHandler);
-  router.post("/api/vendors", createVendorHandler);
-  router.put("/api/vendors/:id", updateVendorHandler);
-  router.delete("/api/vendors/:id", deleteVendorHandler);
+  router.get("/api/recipes", listRecipesHandler);
+  router.post("/api/recipes", createRecipeHandler);
+  router.put("/api/recipes/:id", updateRecipeHandler);
+  router.delete("/api/recipes/:id", deleteRecipeHandler);
 
   // ------------------------
   // 👥 ROLES / USERS (demo)
