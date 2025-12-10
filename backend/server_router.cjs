@@ -8,24 +8,50 @@ function createRouter({ useMongo, mongoose }) {
   const controllers = createControllers({ useMongo, mongoose });
 
   // ------------------------
-  // 🧾 Item Category model / storage
+  // Helpers
   // ------------------------
+
+  // Safe wrapper for old controllers-based routes
+  const safe = (name) => {
+    const fn = controllers[name];
+    if (typeof fn === "function") return fn;
+
+    console.warn(`controllers.${name} not implemented; route will return 501`);
+
+    return (req, res) => {
+      res
+        .status(501)
+        .json({ message: `Not implemented on this server: ${name}` });
+    };
+  };
+
+  // --- ItemCategory & Item models (Mongo or in-memory) ---
   let ItemCategoryModel = null;
-  let inmemItemCategories = [];
+  let ItemModel = null;
+  let memItemCategories = [];
+  let memItems = [];
 
   if (useMongo && mongoose) {
     const { Schema } = mongoose;
+
     const itemCategorySchema = new Schema(
       {
-        name: { type: String, required: true, trim: true },
-        code: { type: String, required: true, trim: true },
-        // department _id (string / ObjectId)
-        department: {
-          type: Schema.Types.ObjectId,
-          ref: "Department",
-          required: true,
-        },
-        isActive: { type: Boolean, default: true },
+        name: { type: String, required: true },
+        code: { type: String, required: true },
+        // yahi field tum frontend se bhej rahe ho
+        departmentCategory: { type: String, default: "" },
+      },
+      { timestamps: true }
+    );
+
+    const itemSchema = new Schema(
+      {
+        name: { type: String, required: true },
+        code: { type: String, required: true },
+        itemCategory: { type: String, default: "" }, // sirf string store kar rahe
+        uom: { type: String, default: "" },
+        brand: { type: String, default: "" },
+        indicativePrice: { type: Number },
       },
       { timestamps: true }
     );
@@ -33,24 +59,14 @@ function createRouter({ useMongo, mongoose }) {
     ItemCategoryModel =
       mongoose.models.ItemCategory ||
       mongoose.model("ItemCategory", itemCategorySchema);
-  }
 
-  function genCode(name = "", code = "") {
-    if (code && code.trim()) return code.trim();
+    ItemModel = mongoose.models.Item || mongoose.model("Item", itemSchema);
 
-    const base =
-      (name || "")
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9\s]/g, "")
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((w) => (w.length <= 4 ? w : w.slice(0, 4)))
-        .join("_") || "IC";
-
-    const suffix = Math.floor(Math.random() * 900 + 100);
-    return `${base}_${suffix}`.slice(0, 20);
+    console.log("ItemCategory & Item models initialised (Mongo)");
+  } else {
+    console.warn(
+      "Mongo DB not enabled for ItemCategory/Item; using in-memory arrays (data lost on restart)."
+    );
   }
 
   // ------------------------
@@ -76,218 +92,302 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-  router.post("/api/auth/login", controllers.login);
+  router.post("/api/auth/login", safe("login"));
 
   // ------------------------
   // 📊 Dashboard
   // ------------------------
   router.get(
     "/dashboard/resort/:resortId/kpi",
-    controllers.getResortKpi
+    safe("getResortKpi")
   );
 
   // ------------------------
   // 🏨 RESORTS (full CRUD)
   // ------------------------
-  router.get("/resorts", controllers.listResorts);
+  router.get("/resorts", safe("listResorts"));
 
-  router.get("/api/resorts", controllers.listResorts);
-  router.post("/api/resorts", controllers.createResort);
-  router.put("/api/resorts/:id", controllers.updateResort);
-  router.delete("/api/resorts/:id", controllers.deleteResort);
+  router.get("/api/resorts", safe("listResorts"));
+  router.post("/api/resorts", safe("createResort"));
+  router.put("/api/resorts/:id", safe("updateResort"));
+  router.delete("/api/resorts/:id", safe("deleteResort"));
 
   // ------------------------
   // 🏬 DEPARTMENTS (full CRUD)
   // ------------------------
-  router.get("/departments", controllers.listDepartments);
+  router.get("/departments", safe("listDepartments"));
 
-  router.get("/api/departments", controllers.listDepartments);
-  router.post("/api/departments", controllers.createDepartment);
-  router.put("/api/departments/:id", controllers.updateDepartment);
-  router.delete("/api/departments/:id", controllers.deleteDepartment);
+  router.get("/api/departments", safe("listDepartments"));
+  router.post("/api/departments", safe("createDepartment"));
+  router.put("/api/departments/:id", safe("updateDepartment"));
+  router.delete("/api/departments/:id", safe("deleteDepartment"));
 
-  // ------------------------
-  // 🧾 ITEM CATEGORIES (NEW – full CRUD)
-  // ------------------------
+  // =======================================================
+  // 📁 ITEM CATEGORIES  (FULL CRUD, DIRECTLY HERE)
+  // =======================================================
 
-  // GET all item categories (frontend expects plain array)
+  // LIST
   router.get("/api/item-categories", async (req, res) => {
     try {
       if (ItemCategoryModel) {
-        const list = await ItemCategoryModel.find().lean().exec();
-        return res.json(list);
+        const docs = await ItemCategoryModel.find().lean();
+        return res.json(docs);
       }
-      // in-memory fallback
-      return res.json(inmemItemCategories);
+      return res.json(memItemCategories);
     } catch (err) {
-      console.error("GET /api/item-categories error:", err);
-      res
-        .status(500)
-        .json({ message: "Failed to fetch item categories" });
+      console.error("GET /api/item-categories error", err);
+      res.status(500).json({ message: "Failed to list item categories" });
     }
   });
 
   // CREATE
   router.post("/api/item-categories", async (req, res) => {
     try {
-      const { name, code, department, departmentCategory } = req.body;
+      const { name, code, departmentCategory } = req.body || {};
 
-      if (!name || !name.trim()) {
+      if (!name || !code) {
         return res
           .status(400)
-          .json({ message: "Item category name required" });
+          .json({ message: "name & code are required" });
       }
-
-      const deptId = department || departmentCategory;
-      if (!deptId) {
-        return res
-          .status(400)
-          .json({ message: "Department is required" });
-      }
-
-      const finalCode = genCode(name, code);
 
       if (ItemCategoryModel) {
-        const created = await ItemCategoryModel.create({
-          name: name.trim(),
-          code: finalCode,
-          department: deptId,
+        const doc = await ItemCategoryModel.create({
+          name,
+          code,
+          departmentCategory: departmentCategory || "",
         });
-        return res.status(201).json(created.toObject());
+        return res.status(201).json(doc);
       }
 
-      // in-memory fallback
-      const item = {
-        _id: `local_${Date.now()}`,
-        name: name.trim(),
-        code: finalCode,
-        department: deptId,
-        isActive: true,
+      const created = {
+        _id: `ic_${Date.now()}`,
+        name,
+        code,
+        departmentCategory: departmentCategory || "",
       };
-      inmemItemCategories.push(item);
-      return res.status(201).json(item);
+      memItemCategories.push(created);
+      return res.status(201).json(created);
     } catch (err) {
-      console.error("POST /api/item-categories error:", err);
-      res
-        .status(500)
-        .json({ message: "Failed to create item category" });
+      console.error("POST /api/item-categories error", err);
+      res.status(500).json({ message: "Failed to create item category" });
     }
   });
 
   // UPDATE
   router.put("/api/item-categories/:id", async (req, res) => {
     try {
-      const { name, code, department, departmentCategory, isActive } =
-        req.body;
-      const id = req.params.id;
+      const { id } = req.params;
+      const { name, code, departmentCategory } = req.body || {};
 
       if (ItemCategoryModel) {
-        const ic = await ItemCategoryModel.findById(id);
-        if (!ic) {
+        const updated = await ItemCategoryModel.findByIdAndUpdate(
+          id,
+          {
+            $set: {
+              ...(name != null ? { name } : {}),
+              ...(code != null ? { code } : {}),
+              ...(departmentCategory != null ? { departmentCategory } : {}),
+            },
+          },
+          { new: true }
+        );
+        if (!updated) {
           return res
             .status(404)
             .json({ message: "Item category not found" });
         }
-
-        if (name && name.trim()) ic.name = name.trim();
-        if (code || name) ic.code = genCode(name || ic.name, code);
-
-        const deptId = department || departmentCategory;
-        if (deptId) ic.department = deptId;
-
-        if (typeof isActive === "boolean") ic.isActive = isActive;
-
-        await ic.save();
-        return res.json(ic.toObject());
+        return res.json(updated);
       }
 
-      // in-memory
-      const idx = inmemItemCategories.findIndex(
-        (x) => x._id === id
-      );
+      const idx = memItemCategories.findIndex((c) => c._id === id);
       if (idx === -1) {
         return res
           .status(404)
           .json({ message: "Item category not found" });
       }
-
-      const current = inmemItemCategories[idx];
-      const updated = {
-        ...current,
-        name: name ? name.trim() : current.name,
-        code: genCode(name || current.name, code || current.code),
-        department:
-          department || departmentCategory || current.department,
-        isActive:
-          typeof isActive === "boolean"
-            ? isActive
-            : current.isActive,
+      memItemCategories[idx] = {
+        ...memItemCategories[idx],
+        ...(name != null ? { name } : {}),
+        ...(code != null ? { code } : {}),
+        ...(departmentCategory != null ? { departmentCategory } : {}),
       };
-      inmemItemCategories[idx] = updated;
-      return res.json(updated);
+      return res.json(memItemCategories[idx]);
     } catch (err) {
-      console.error("PUT /api/item-categories/:id error:", err);
-      res
-        .status(500)
-        .json({ message: "Failed to update item category" });
+      console.error("PUT /api/item-categories/:id error", err);
+      res.status(500).json({ message: "Failed to update item category" });
     }
   });
 
   // DELETE
   router.delete("/api/item-categories/:id", async (req, res) => {
     try {
-      const id = req.params.id;
+      const { id } = req.params;
 
       if (ItemCategoryModel) {
-        const ic = await ItemCategoryModel.findByIdAndDelete(id);
-        if (!ic) {
+        const deleted = await ItemCategoryModel.findByIdAndDelete(id);
+        if (!deleted) {
           return res
             .status(404)
             .json({ message: "Item category not found" });
         }
-        return res.json({ ok: true, message: "Item category deleted" });
+        return res.json({ ok: true });
       }
 
-      // in-memory
-      const before = inmemItemCategories.length;
-      inmemItemCategories = inmemItemCategories.filter(
-        (x) => x._id !== id
-      );
-      if (inmemItemCategories.length === before) {
+      const before = memItemCategories.length;
+      memItemCategories = memItemCategories.filter((c) => c._id !== id);
+      if (memItemCategories.length === before) {
         return res
           .status(404)
           .json({ message: "Item category not found" });
       }
-      return res.json({ ok: true, message: "Item category deleted" });
+      return res.json({ ok: true });
     } catch (err) {
-      console.error("DELETE /api/item-categories/:id error:", err);
-      res
-        .status(500)
-        .json({ message: "Failed to delete item category" });
+      console.error("DELETE /api/item-categories/:id error", err);
+      res.status(500).json({ message: "Failed to delete item category" });
     }
   });
 
-  // ------------------------
-  // 📦 REQUISITIONS (demo)
-  // ------------------------
-  router.get("/requisitions", controllers.listRequisitions);
-  router.post("/requisitions", controllers.createRequisition);
+  // =======================================================
+  // 📦 ITEMS  (FULL CRUD, DIRECTLY HERE)
+  // =======================================================
 
-  // ------------------------
-  // 📑 PURCHASE ORDERS (demo)
-  // ------------------------
-  router.get("/po", controllers.listPOs);
+  const listItemsHandler = async (req, res) => {
+    try {
+      if (ItemModel) {
+        const docs = await ItemModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memItems);
+    } catch (err) {
+      console.error("GET /items error", err);
+      res.status(500).json({ message: "Failed to list items" });
+    }
+  };
 
-  // ------------------------
-  // 📦 ITEMS (demo)
-  // ------------------------
-  router.get("/items", controllers.listItems);
+  const createItemHandler = async (req, res) => {
+    try {
+      const { name, code, itemCategory, uom, brand, indicativePrice } =
+        req.body || {};
+
+      if (!name || !code) {
+        return res
+          .status(400)
+          .json({ message: "name & code are required" });
+      }
+
+      if (ItemModel) {
+        const doc = await ItemModel.create({
+          name,
+          code,
+          itemCategory: itemCategory || "",
+          uom: uom || "",
+          brand: brand || "",
+          indicativePrice:
+            indicativePrice === "" || indicativePrice == null
+              ? undefined
+              : Number(indicativePrice),
+        });
+        return res.status(201).json(doc);
+      }
+
+      const created = {
+        _id: `it_${Date.now()}`,
+        name,
+        code,
+        itemCategory: itemCategory || "",
+        uom: uom || "",
+        brand: brand || "",
+        indicativePrice:
+          indicativePrice === "" || indicativePrice == null
+            ? undefined
+            : Number(indicativePrice),
+      };
+      memItems.push(created);
+      return res.status(201).json(created);
+    } catch (err) {
+      console.error("POST /api/items error", err);
+      res.status(500).json({ message: "Failed to create item" });
+    }
+  };
+
+  const updateItemHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, code, itemCategory, uom, brand, indicativePrice } =
+        req.body || {};
+
+      const update = {};
+      if (name != null) update.name = name;
+      if (code != null) update.code = code;
+      if (itemCategory != null) update.itemCategory = itemCategory;
+      if (uom != null) update.uom = uom;
+      if (brand != null) update.brand = brand;
+      if (indicativePrice != null && indicativePrice !== "")
+        update.indicativePrice = Number(indicativePrice);
+
+      if (ItemModel) {
+        const updated = await ItemModel.findByIdAndUpdate(
+          id,
+          { $set: update },
+          { new: true }
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Item not found" });
+        }
+        return res.json(updated);
+      }
+
+      const idx = memItems.findIndex((i) => i._id === id);
+      if (idx === -1) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      memItems[idx] = { ...memItems[idx], ...update };
+      return res.json(memItems[idx]);
+    } catch (err) {
+      console.error("PUT /api/items/:id error", err);
+      res.status(500).json({ message: "Failed to update item" });
+    }
+  };
+
+  const deleteItemHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (ItemModel) {
+        const deleted = await ItemModel.findByIdAndDelete(id);
+        if (!deleted) {
+          return res.status(404).json({ message: "Item not found" });
+        }
+        return res.json({ ok: true });
+      }
+
+      const before = memItems.length;
+      memItems = memItems.filter((i) => i._id !== id);
+      if (memItems.length === before) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE /api/items/:id error", err);
+      res.status(500).json({ message: "Failed to delete item" });
+    }
+  };
+
+  // Purana plain path bhi same handler use kare
+  router.get("/items", listItemsHandler);
+
+  // /api style endpoints (jo tumhare React me use ho rahe)
+  router.get("/api/items", listItemsHandler);
+  router.post("/api/items", createItemHandler);
+  router.put("/api/items/:id", updateItemHandler);
+  router.delete("/api/items/:id", deleteItemHandler);
 
   // ------------------------
   // 👥 ROLES / USERS (demo)
   // ------------------------
-  router.get("/roles", controllers.listRoles);
-  router.get("/users", controllers.listUsers);
+  router.get("/roles", safe("listRoles"));
+  router.get("/users", safe("listUsers"));
 
   return router;
 }
