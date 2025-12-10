@@ -78,7 +78,7 @@ const RecipeMaster = () => {
       let serverItemCats = [];
       if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
         serverItemCats = icatRes.data.map((c) => ({
-          id: c._id || c.id || c.code || c.name,
+          id: (c._id || c.id || c.code || c.name).toString(),
           name: c.name || c.code || c._id || c.id,
         }));
       }
@@ -94,8 +94,9 @@ const RecipeMaster = () => {
             it.item_category ||
             it.group ||
             "Uncategorized";
-          if (!map.has(id)) {
-            map.set(id, { id: id.toString(), name: id.toString() });
+          const idStr = id.toString();
+          if (!map.has(idStr)) {
+            map.set(idStr, { id: idStr, name: idStr });
           }
         });
         serverItemCats = Array.from(map.values());
@@ -143,7 +144,23 @@ const RecipeMaster = () => {
       });
 
       // ---------- Recipe Categories from master ----------
-      const serverRecipeCats = Array.isArray(rcatRes.data) ? rcatRes.data : [];
+      let serverRecipeCats = [];
+      if (Array.isArray(rcatRes.data)) {
+        serverRecipeCats = rcatRes.data.map((c) =>
+          typeof c === "string"
+            ? {
+                _id: c,
+                id: c,
+                name: c,
+              }
+            : {
+                ...c,
+                _id: c._id || c.id || c.code || c.name,
+                id: c._id || c.id || c.code || c.name,
+                name: c.name || c.code || "",
+              }
+        );
+      }
 
       // ---------- Recipes ----------
       const normalizedRecipes = serverRecipes.map((r) => ({
@@ -187,7 +204,7 @@ const RecipeMaster = () => {
       setRecipeCategories([]);
       const fallbackCats = Array.from(
         new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
-      ).map((id) => ({ id, name: id }));
+      ).map((id) => ({ id: id.toString(), name: id.toString() }));
       setItemCategories(fallbackCats);
     } finally {
       setLoading(false);
@@ -201,7 +218,10 @@ const RecipeMaster = () => {
 
   const getCategoryById = (id) =>
     recipeCategories.find(
-      (c) => c._id === id || c.id === id || (c._id || c.id)?.toString() === id
+      (c) =>
+        c._id === id ||
+        c.id === id ||
+        (c._id || c.id)?.toString() === (id || "").toString()
     ) || null;
 
   const getItemCategoryName = (id) => {
@@ -218,16 +238,18 @@ const RecipeMaster = () => {
 
   // ✅ Recipe Category dropdown:
   //    - master se aayega
-  //    - jisko name = "Lumpsum" ya type = "LUMPSUM" ho, usko HIDE kar diya
-  const categoryOptions = useMemo(
-    () =>
-      recipeCategories.filter((c) => {
-        const t = (c.type || "").toUpperCase();
-        const n = (c.name || "").toLowerCase();
-        return t !== "LUMPSUM" && n !== "lumpsum";
-      }),
-    [recipeCategories]
-  );
+  //    - jiska name "Lumpsum" / "Lump Sum" ho, usko hide
+  const categoryOptions = useMemo(() => {
+    if (!recipeCategories.length) return [];
+
+    const filtered = recipeCategories.filter((c) => {
+      const n = (c.name || "").toLowerCase().trim();
+      return n !== "lumpsum" && n !== "lump sum";
+    });
+
+    // Agar filter ke baad kuch nahi bacha to sab dikha do, taaki dropdown empty na rahe
+    return filtered.length ? filtered : recipeCategories;
+  }, [recipeCategories]);
 
   const filteredRecipes = useMemo(
     () =>
@@ -310,7 +332,11 @@ const RecipeMaster = () => {
     updateLine(idx, "itemId", itemId);
 
     if (it && (it.itemCategoryId || it.itemCategory)) {
-      updateLine(idx, "itemCategory", (it.itemCategoryId || it.itemCategory).toString());
+      updateLine(
+        idx,
+        "itemCategory",
+        (it.itemCategoryId || it.itemCategory).toString()
+      );
     }
 
     const allowed = it ? mapToAllowedUom(it.uom) : undefined;
