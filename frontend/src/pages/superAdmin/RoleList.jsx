@@ -75,7 +75,7 @@ const RoleList = () => {
     key: "",
     description: "",
     type: "CUSTOM",
-    storeMode: "MULTI", // SINGLE | MULTI (store allocation type)
+    storeMode: "MULTI", // SINGLE | MULTI
     permissions: [],
   });
 
@@ -143,7 +143,7 @@ const RoleList = () => {
       key: role.key || "",
       description: role.description || "",
       type: role.type || "CUSTOM",
-      storeMode: role.storeMode || "MULTI", // load from backend or default
+      storeMode: role.storeMode || "MULTI",
       permissions: role.permissions || [],
     });
     setTemplateKey("");
@@ -298,6 +298,7 @@ const RoleList = () => {
 
   const prettyModule = (m) => (typeof m === "string" ? m.replace(/_/g, " ") : m);
 
+  // ---- RENDER ----
   return (
     <div className="sa-page sa-page-roles">
       <div className="sa-page-header">
@@ -308,12 +309,12 @@ const RoleList = () => {
       </div>
 
       <div className="sa-roles-layout">
-        {/* LEFT LIST */}
+        {/* LEFT SIDE: list of roles */}
         <div className="sa-roles-left">
           <div className="sa-roles-section-title">Roles</div>
 
           {loading ? (
-            <div>Loading roles...</div>
+            <div style={{ fontSize: "0.9rem" }}>Loading roles...</div>
           ) : (
             <ul className="sa-roles-list">
               {roles.map((r) => (
@@ -344,46 +345,24 @@ const RoleList = () => {
           <button className="sa-primary-button" onClick={startNewRole}>
             <i className="ri-add-line" /> New Custom Role
           </button>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 13, marginBottom: 6 }}>Quick Templates</div>
-            {Object.keys(ROLE_TEMPLATES).map((k) => (
-              <button
-                key={k}
-                type="button"
-                className="sa-secondary-button"
-                style={{
-                  display: "block",
-                  marginBottom: 6,
-                  width: "100%",
-                  textAlign: "left",
-                }}
-                onClick={() => {
-                  startNewRole();
-                  applyTemplate(k, true);
-                }}
-                title={ROLE_TEMPLATES[k].label}
-              >
-                {k} — {ROLE_TEMPLATES[k].label}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* RIGHT DETAILS */}
+        {/* RIGHT SIDE: details panel */}
         <div className="sa-roles-right">
+          {/* BASIC DETAILS CARD */}
           <div className="sa-card" style={{ marginBottom: 12 }}>
             <h3>Basic Details</h3>
 
+            {/* top row like user form: Role Name / Key / Type */}
             <div
               style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                flexWrap: "wrap",
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)",
+                gap: 16,
+                marginTop: 8,
               }}
             >
-              <div style={{ flex: 1, minWidth: 220 }}>
+              <div>
                 <label>Role Name</label>
                 <input
                   name="name"
@@ -393,7 +372,7 @@ const RoleList = () => {
                 />
               </div>
 
-              <div style={{ width: 220, minWidth: 160 }}>
+              <div>
                 <label>Key</label>
                 <input
                   name="key"
@@ -404,7 +383,7 @@ const RoleList = () => {
                 />
               </div>
 
-              <div style={{ width: 180, minWidth: 140 }}>
+              <div>
                 <label>Type</label>
                 <select
                   name="type"
@@ -418,12 +397,12 @@ const RoleList = () => {
               </div>
             </div>
 
-            {/* Store access: single / multi */}
-            <div style={{ marginTop: 12 }}>
+            {/* store access block */}
+            <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
                 Store Access
               </div>
-              <div style={{ display: "flex", gap: 24, fontSize: 14 }}>
+              <div style={{ display: "flex", gap: 24, fontSize: 14, flexWrap: "wrap" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input
                     type="radio"
@@ -447,7 +426,8 @@ const RoleList = () => {
               </div>
             </div>
 
-            <div style={{ marginTop: 8 }}>
+            {/* description field */}
+            <div style={{ marginTop: 16 }}>
               <label>Description</label>
               <textarea
                 name="description"
@@ -458,47 +438,65 @@ const RoleList = () => {
               />
             </div>
 
+            {/* template dropdown - subtle, like helper */}
             <div
               style={{
-                marginTop: 8,
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
+                marginTop: 16,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.05)",
               }}
             >
-              <select
-                value={templateKey}
-                onChange={(e) => setTemplateKey(e.target.value)}
-                style={{ flex: 1, minWidth: 240 }}
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
               >
-                <option value="">-- Use role template (optional) --</option>
-                {Object.keys(ROLE_TEMPLATES).map((k) => (
-                  <option key={k} value={k}>
-                    {k} — {ROLE_TEMPLATES[k].label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="sa-secondary-button"
-                onClick={() => applyTemplate(templateKey, true)}
-                disabled={!templateKey}
+                Copy permissions from template (optional)
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
               >
-                Apply Template
-              </button>
-              <button
-                type="button"
-                className="sa-secondary-button"
-                onClick={() => applyTemplate(templateKey, false)}
-                disabled={!templateKey}
-                title="Merge template with existing permissions"
-              >
-                Merge
-              </button>
+                <select
+                  value={templateKey}
+                  onChange={(e) => setTemplateKey(e.target.value)}
+                  style={{ flex: 1, minWidth: 240 }}
+                >
+                  <option value="">-- Select a template --</option>
+                  {Object.keys(ROLE_TEMPLATES).map((k) => (
+                    <option key={k} value={k}>
+                      {k} — {ROLE_TEMPLATES[k].label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => applyTemplate(templateKey, true)}
+                  disabled={!templateKey}
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => applyTemplate(templateKey, false)}
+                  disabled={!templateKey}
+                  title="Merge template with existing permissions"
+                >
+                  Merge
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* PERMISSIONS CARD */}
           <div className="sa-card">
             <h3>Permissions</h3>
             <p className="sa-modal-sub">
