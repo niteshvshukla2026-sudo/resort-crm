@@ -4,8 +4,6 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-
-
 const emptyForm = () => ({
   _id: undefined,
   code: "",
@@ -67,17 +65,8 @@ const VendorList = () => {
     try {
       setLoading(true);
       setError("");
-      const res = await axios
-        .get(`${API_BASE}/api/vendors`)
-        .catch(() => ({ data: [] }));
+      const res = await axios.get(`${API_BASE}/api/vendors`);
       const serverVendors = Array.isArray(res.data) ? res.data : [];
-      const existingIdsOrCodes = new Set(
-        serverVendors.map((v) => v._id || v.id || v.code)
-      );
-      const toAdd = DEV_VENDORS.filter(
-        (s) => !existingIdsOrCodes.has(s._id) && !existingIdsOrCodes.has(s.code)
-      );
-      // ensure each vendor has categories/resorts fields
       const normalized = serverVendors.map((v) => ({
         ...v,
         categories:
@@ -93,11 +82,11 @@ const VendorList = () => {
             ? [v.resort]
             : [],
       }));
-      setVendors([...normalized, ...toAdd]);
+      setVendors(normalized);
     } catch (err) {
-      console.error("load vendors error", err);
-      setError("Failed to load vendors; using sample data");
-      setVendors(DEV_VENDORS);
+      console.error("load vendors error", err?.response?.status, err?.response?.data);
+      setError("Failed to load vendors");
+      setVendors([]); // no demo data
     } finally {
       setLoading(false);
     }
@@ -119,7 +108,7 @@ const VendorList = () => {
     }
   };
 
-  // IMPORTANT: resort API -> { ok: true, resorts: [...] }
+  // resort API = { ok: true, resorts: [ ... ] }
   const loadResorts = async () => {
     try {
       const res = await axios
@@ -128,10 +117,8 @@ const VendorList = () => {
 
       let arr = [];
       if (Array.isArray(res.data)) {
-        // in case backend directly returns array
         arr = res.data;
       } else if (res.data && Array.isArray(res.data.resorts)) {
-        // your actual shape: { ok, resorts: [...] }
         arr = res.data.resorts;
       }
 
@@ -176,14 +163,14 @@ const VendorList = () => {
     whatsapp: /^\d{10}$/,
     alternatePhone: /^\d{10}$/,
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    gst: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, // common GSTIN format
+    gst: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
     pan: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
     ifsc: /^[A-Z]{4}0[A-Z0-9]{6}$/,
     pincode: /^[1-9][0-9]{5}$/,
     accountNumber: /^[0-9]{6,20}$/,
     integer: /^\d+$/,
     decimal: /^\d+(\.\d+)?$/,
-    codeAllowed: /^[A-Z0-9_]+$/, // generated code will be uppercase + digits + underscore
+    codeAllowed: /^[A-Z0-9_]+$/,
   };
 
   // Generate vendor code from name: initials of up to 4 words + last 4 digits of timestamp
@@ -219,7 +206,7 @@ const VendorList = () => {
     return `${up}_${Date.now().toString().slice(-4)}`;
   };
 
-  // --- validators (strict) ---
+  // validators
   const validators = {
     code: (v) => {
       if (!v) return "Vendor code is required";
@@ -323,7 +310,7 @@ const VendorList = () => {
     return Object.keys(newErr).length === 0;
   };
 
-  // --- form handlers & sanitizing on input ---
+  // --- form handlers ---
   const openCreateForm = () => {
     setForm(emptyForm());
     setFieldErrors({});
@@ -380,10 +367,6 @@ const VendorList = () => {
     setShowForm(true);
   };
 
-  const sanitizeLettersField = (value) =>
-    String(value || "").replace(/[^A-Za-z ]+/g, "");
-
-  // updated handleChange with sanitization
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -413,7 +396,6 @@ const VendorList = () => {
 
       const updated = { ...p, [name]: newVal };
 
-      // auto-generate code when name changes AND code is empty
       if (name === "name" && (p.code === "" || p.code === undefined)) {
         const gen = generateCodeFromName(newVal);
         updated.code = ensureUniqueCode(gen);
@@ -422,7 +404,6 @@ const VendorList = () => {
       return updated;
     });
 
-    // clear field error
     setFieldErrors((prev) => {
       const copy = { ...prev };
       delete copy[name];
@@ -430,7 +411,6 @@ const VendorList = () => {
     });
   };
 
-  // toggle category checkbox
   const toggleCategory = (cat) => {
     setForm((p) => {
       const set = new Set(p.categories || []);
@@ -446,7 +426,6 @@ const VendorList = () => {
     });
   };
 
-  // toggle resort checkbox
   const toggleResort = (resId) => {
     setForm((p) => {
       const set = new Set(p.resorts || []);
@@ -456,11 +435,10 @@ const VendorList = () => {
     });
   };
 
-  // paste handlers for extra safety
   const handlePasteLetters = (ev, fieldName) => {
     ev.preventDefault();
     const text = (ev.clipboardData || window.clipboardData).getData("text");
-    const sanitized = sanitizeLettersField(text);
+    const sanitized = sanitizeLetters(text);
     setForm((p) => {
       const updated = { ...p, [fieldName]: sanitized };
       if (fieldName === "name" && (p.code === "" || p.code === undefined)) {
@@ -601,7 +579,6 @@ const VendorList = () => {
     }
   };
 
-  // CSV upload & parsing (multi categories/resorts supported as semicolon/comma separated)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -732,7 +709,6 @@ const VendorList = () => {
     reader.readAsText(file);
   };
 
-  // export CSV (categories & resorts exported as semicolon separated strings)
   const handleExportCSV = (list) => {
     const cols = [
       "code",
@@ -798,7 +774,6 @@ const VendorList = () => {
     URL.revokeObjectURL(url);
   };
 
-  // filtered vendors
   const filtered = useMemo(() => {
     return vendors.filter((v) => {
       if (
@@ -835,7 +810,6 @@ const VendorList = () => {
     [vendors]
   );
 
-  // small helper to lookup resort name by id
   const findResortName = (id) => {
     const r = resorts.find(
       (x) => x.id === id || x._id === id || x.id === String(id)
