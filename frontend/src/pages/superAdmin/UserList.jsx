@@ -19,7 +19,7 @@ const emptyForm = () => ({
   password: "",
   isdCode: "+91",
   phone: "",
-  status: "ACTIVE", // ACTIVE | INACTIVE
+  status: "ACTIVE",
   role: "RESORT_USER",
   resorts: [],
   defaultResort: "",
@@ -29,7 +29,7 @@ const emptyForm = () => ({
 const UserList = () => {
   const [users, setUsers] = useState([]);
   const [resorts, setResorts] = useState([]);
-  const [roles, setRoles] = useState([]); // roles for dropdown (merged)
+  const [roles, setRoles] = useState([]); // merged roles (with storeMode)
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -39,21 +39,19 @@ const UserList = () => {
 
   // Merge backend roles with predefined roles (avoid duplicates)
   const mergeAndSetRoles = (backendRoles = []) => {
-    // backendRoles expected shape: [{ _id, name, key, type, permissions }]
     const backendByKey = (backendRoles || []).reduce((acc, r) => {
       if (r.key) acc[r.key] = r;
       return acc;
     }, {});
 
-    // Start with predefined, then add backend-only roles
     const merged = PREDEFINED_ROLES.map((p) => ({
       key: p.key,
       label: p.label,
       _id: backendByKey[p.key]?._id || null,
       fromBackend: !!backendByKey[p.key],
+      storeMode: backendByKey[p.key]?.storeMode || "MULTI", // default multi if not set
     }));
 
-    // Add any backend roles that are not in predefined
     backendRoles.forEach((r) => {
       if (!merged.find((m) => m.key === r.key)) {
         merged.push({
@@ -61,19 +59,18 @@ const UserList = () => {
           label: r.name || r.key,
           _id: r._id,
           fromBackend: true,
+          storeMode: r.storeMode || "MULTI",
         });
       }
     });
 
     setRoles(merged);
-    // Ensure current form.role exists, otherwise default to RESORT_USER
     setForm((f) => ({
       ...f,
       role: merged.find((x) => x.key === f.role) ? f.role : "RESORT_USER",
     }));
   };
 
-  // Load users, resorts and roles
   const loadData = async () => {
     try {
       setLoading(true);
@@ -94,14 +91,12 @@ const UserList = () => {
     }
   };
 
-  // Load only roles (when opening Add User screen)
   const loadRoles = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/roles`);
       mergeAndSetRoles(res.data || []);
     } catch (err) {
       console.error("Failed to load roles:", err);
-      // fall back to predefined only
       mergeAndSetRoles([]);
     }
   };
@@ -126,7 +121,21 @@ const UserList = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      let next = { ...prev, [name]: value };
+
+      if (name === "role") {
+        const roleMeta = roles.find((r) => r.key === value);
+        const isSingle = roleMeta?.storeMode === "SINGLE";
+        if (isSingle) {
+          const first = prev.resorts[0] || "";
+          next.resorts = first ? [first] : [];
+          next.defaultResort = first || "";
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleCheckboxChange = (e) => {
@@ -141,7 +150,6 @@ const UserList = () => {
         ? prev.resorts.filter((r) => r !== id)
         : [...prev.resorts, id];
 
-      // if defaultResort was removed, reset it
       const nextDefault =
         prev.defaultResort && !nextResorts.includes(prev.defaultResort)
           ? ""
@@ -167,7 +175,15 @@ const UserList = () => {
     }));
   };
 
-  // Create user (used by both bottom buttons)
+  const handleSingleResortChange = (e) => {
+    const value = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      resorts: value ? [value] : [],
+      defaultResort: value || "",
+    }));
+  };
+
   const createUser = async (sendPassword = false) => {
     setError("");
 
@@ -181,14 +197,13 @@ const UserList = () => {
     try {
       setSaving(true);
 
-      // keep backend payload same as old version to avoid breaking API
       const payload = {
         name: fullName,
         email: form.email,
         password: form.password,
         role: form.role,
         resorts: form.resorts,
-        // You can later add: status, phone, isdCode, accountAdmin, defaultResort, sendPassword, etc.
+        // optionally: status, phone, isdCode, accountAdmin, defaultResort, sendPassword
       };
 
       const res = await axios.post(`${API_BASE}/api/users`, payload);
@@ -197,13 +212,9 @@ const UserList = () => {
         setUsers((prev) => [...prev, res.data]);
         setShowForm(false);
       } else {
-        // fallback: reload users list
         await loadData();
         setShowForm(false);
       }
-
-      // If you add backend support for sending password:
-      // you can include sendPassword flag in payload above.
     } catch (err) {
       console.error("create user error:", err);
       setError(err.response?.data?.message || "Failed to create user");
@@ -214,8 +225,7 @@ const UserList = () => {
 
   const getResortNames = (user) => {
     if (!user.resorts || user.resorts.length === 0) return "-";
-    // populated array or ids
-    return user.resorts
+    return (user.resorts || [])
       .map((r) =>
         typeof r === "object" ? r.name : resorts.find((x) => x._id === r)?.name
       )
@@ -223,9 +233,7 @@ const UserList = () => {
       .join(", ");
   };
 
-  // ---------- RENDER ----------
-
-  // LIST VIEW (existing page)
+  // LIST VIEW
   if (!showForm) {
     return (
       <div className="sa-page">
@@ -281,7 +289,10 @@ const UserList = () => {
     );
   }
 
-  // ADD STAFF VIEW (Djubo-style layout)
+  // ADD STAFF VIEW
+  const selectedRoleMeta = roles.find((r) => r.key === form.role);
+  const isSingleStoreRole = selectedRoleMeta?.storeMode === "SINGLE";
+
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -310,7 +321,6 @@ const UserList = () => {
           style={{ maxWidth: 700 }}
           onSubmit={(e) => e.preventDefault()}
         >
-          {/* Top basic details */}
           <label>
             First Name
             <input
@@ -344,7 +354,6 @@ const UserList = () => {
             />
           </label>
 
-          {/* Password (not in Djubo UI, but needed for your backend) */}
           <label>
             Password
             <input
@@ -377,7 +386,6 @@ const UserList = () => {
             />
           </label>
 
-          {/* Status radio like screenshot */}
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>Status</div>
             <div
@@ -411,7 +419,6 @@ const UserList = () => {
             </div>
           </div>
 
-          {/* Account Admin checkbox */}
           <div
             style={{
               marginTop: 20,
@@ -438,7 +445,6 @@ const UserList = () => {
             </label>
           </div>
 
-          {/* Role selection (global role) */}
           <label style={{ marginTop: 12 }}>
             Role
             <select
@@ -455,7 +461,14 @@ const UserList = () => {
             </select>
           </label>
 
-          {/* Property / Default Property area to mimic Djubo */}
+          {selectedRoleMeta && (
+            <div style={{ fontSize: 12, marginTop: 4, color: "#777" }}>
+              Store access for this role:{" "}
+              {isSingleStoreRole ? "Single Store" : "Multi Store"}
+            </div>
+          )}
+
+          {/* Property / Store allocation */}
           <div
             style={{
               marginTop: 18,
@@ -476,65 +489,101 @@ const UserList = () => {
                 <div style={{ fontSize: "0.8rem", color: "#777" }}>
                   1. All-Properties
                 </div>
-                {/* Multi-select using checkboxes (assign multiple resorts) */}
-                <div
-                  style={{
-                    marginTop: 6,
-                    maxHeight: 140,
-                    overflowY: "auto",
-                    padding: "6px 10px",
-                    border: "1px solid #ddd",
-                    borderRadius: 4,
-                  }}
-                >
-                  {resorts.length === 0 ? (
-                    <div style={{ fontSize: "0.8rem", color: "#777" }}>
-                      No resorts found.
-                    </div>
-                  ) : (
-                    resorts.map((r) => (
-                      <label
-                        key={r._id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: "0.8rem",
-                          marginBottom: 4,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.resorts.includes(r._id)}
-                          onChange={() => handleResortToggle(r._id)}
-                        />
-                        {r.name}
-                      </label>
-                    ))
-                  )}
-                </div>
 
-                <div style={{ marginTop: 8, fontWeight: 600 }}>
-                  Default Property
-                </div>
-                <select
-                  name="defaultResort"
-                  value={form.defaultResort}
-                  onChange={handleDefaultResortChange}
-                  style={{ marginTop: 4, width: "100%" }}
-                >
-                  <option value="">Select</option>
-                  {resorts.map((r) => (
-                    <option key={r._id} value={r._id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                {/* SINGLE STORE MODE */}
+                {isSingleStoreRole ? (
+                  <>
+                    <select
+                      style={{ marginTop: 6, width: "100%" }}
+                      value={form.resorts[0] || ""}
+                      onChange={handleSingleResortChange}
+                    >
+                      <option value="">Select</option>
+                      {resorts.map((r) => (
+                        <option key={r._id} value={r._id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div style={{ marginTop: 8, fontWeight: 600 }}>
+                      Default Property
+                    </div>
+                    <select
+                      style={{ marginTop: 4, width: "100%" }}
+                      value={form.defaultResort || form.resorts[0] || ""}
+                      onChange={handleSingleResortChange}
+                    >
+                      <option value="">Select</option>
+                      {resorts.map((r) => (
+                        <option key={r._id} value={r._id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    {/* MULTI STORE MODE */}
+                    <div
+                      style={{
+                        marginTop: 6,
+                        maxHeight: 140,
+                        overflowY: "auto",
+                        padding: "6px 10px",
+                        border: "1px solid #ddd",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {resorts.length === 0 ? (
+                        <div style={{ fontSize: "0.8rem", color: "#777" }}>
+                          No resorts found.
+                        </div>
+                      ) : (
+                        resorts.map((r) => (
+                          <label
+                            key={r._id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              fontSize: "0.8rem",
+                              marginBottom: 4,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.resorts.includes(r._id)}
+                              onChange={() => handleResortToggle(r._id)}
+                            />
+                            {r.name}
+                          </label>
+                        ))
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: 8, fontWeight: 600 }}>
+                      Default Property
+                    </div>
+                    <select
+                      name="defaultResort"
+                      value={form.defaultResort}
+                      onChange={handleDefaultResortChange}
+                      style={{ marginTop: 4, width: "100%" }}
+                    >
+                      <option value="">Select</option>
+                      {resorts.map((r) => (
+                        <option key={r._id} value={r._id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </div>
 
               <div>
-                {/* Placeholder block to visually match "Product / Default Product" area in screenshot.
-                    Hook it up to actual data later if needed. */}
+                {/* Product area – placeholder like Djubo */}
                 <div style={{ fontWeight: 600 }}>Product</div>
                 <div style={{ fontSize: "0.8rem", color: "#777" }}>
                   1. All-Products
@@ -559,7 +608,8 @@ const UserList = () => {
             </div>
           </div>
 
-          {/* Bottom buttons like screenshot */}
+          {error && <div className="sa-modal-error">{error}</div>}
+
           <div
             className="sa-modal-actions"
             style={{
