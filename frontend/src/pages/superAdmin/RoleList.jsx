@@ -6,19 +6,11 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 /**
  * Predefined role templates.
- * Keys here are the role keys you'll use (e.g. SUPER_ADMIN).
- * For each template define module -> actions array. Module names should match backend modules.
- *
- * When you press "Apply Template", we will iterate backend-returned `modules` and `actions`
- * and apply intersection (i.e. only actions that actually exist in `actions` are used).
- *
- * You can adjust these templates to match your business policies.
  */
 const ROLE_TEMPLATES = {
   SUPER_ADMIN: {
     label: "Super Admin (full access)",
     modules: {
-      // example modules - may be filtered by actual modules from backend
       USERS: ["CREATE", "READ", "UPDATE", "DELETE"],
       ROLES: ["CREATE", "READ", "UPDATE", "DELETE"],
       RESORTS: ["CREATE", "READ", "UPDATE", "DELETE"],
@@ -76,14 +68,15 @@ const RoleList = () => {
   const [actions, setActions] = useState([]);
   const [selectedRoleId, setSelectedRoleId] = useState(null);
 
-  const [templateKey, setTemplateKey] = useState(""); // template dropdown
+  const [templateKey, setTemplateKey] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     key: "",
     description: "",
     type: "CUSTOM",
-    permissions: [], // [{ module: 'MODULE_KEY', actions: ['CREATE','READ'] }]
+    storeMode: "MULTI", // SINGLE | MULTI (store allocation type)
+    permissions: [],
   });
 
   const [loading, setLoading] = useState(false);
@@ -95,14 +88,28 @@ const RoleList = () => {
   const loadMeta = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/roles/meta`);
-      // Expect res.data = { modules: ['MODULE1','MODULE2'], actions: ['CREATE','READ', ...] }
       setModules(res.data.modules || []);
       setActions(res.data.actions || []);
     } catch (err) {
       console.error("Failed to load roles meta", err);
-      // fallback minimal modules/actions if backend doesn't provide meta
-      setModules((prev) => prev.length ? prev : ["USERS","ROLES","RESORTS","REQUISITIONS","PO","GRN","ITEMS","VENDORS","REPORTS"]);
-      setActions((prev) => prev.length ? prev : ["CREATE","READ","UPDATE","DELETE","APPROVE","COMMENT"]);
+      setModules((prev) =>
+        prev.length
+          ? prev
+          : [
+              "USERS",
+              "ROLES",
+              "RESORTS",
+              "REQUISITIONS",
+              "PO",
+              "GRN",
+              "ITEMS",
+              "VENDORS",
+              "REPORTS",
+            ]
+      );
+      setActions((prev) =>
+        prev.length ? prev : ["CREATE", "READ", "UPDATE", "DELETE", "APPROVE", "COMMENT"]
+      );
     }
   };
 
@@ -120,12 +127,8 @@ const RoleList = () => {
   };
 
   useEffect(() => {
-    try {
-      loadMeta();
-      loadRoles();
-    } catch (e) {
-      console.error("init error", e);
-    }
+    loadMeta();
+    loadRoles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,9 +143,10 @@ const RoleList = () => {
       key: role.key || "",
       description: role.description || "",
       type: role.type || "CUSTOM",
+      storeMode: role.storeMode || "MULTI", // load from backend or default
       permissions: role.permissions || [],
     });
-    setTemplateKey(""); // reset template selection when selecting saved role
+    setTemplateKey("");
     clearError();
   };
 
@@ -153,6 +157,7 @@ const RoleList = () => {
       key: "",
       description: "",
       type: "CUSTOM",
+      storeMode: "MULTI",
       permissions: [],
     });
     setTemplateKey("");
@@ -161,7 +166,6 @@ const RoleList = () => {
 
   const handleBasicChange = (e) => {
     const { name, value } = e.target;
-    // prevent changing key for saved system roles
     if (selectedRoleId && form.type === "SYSTEM" && name === "key") return;
     setForm((prev) => ({ ...prev, [name]: value }));
     clearError();
@@ -192,28 +196,31 @@ const RoleList = () => {
     clearError();
   };
 
-  // Apply a predefined role template (merge/replace permissions)
   const applyTemplate = (tplKey, replaceExisting = true) => {
     if (!tplKey) return;
     const tpl = ROLE_TEMPLATES[tplKey];
     if (!tpl) return;
 
-    // build permissions array aligned with backend modules/actions
-    const newPerms = modules.map((mod) => {
-      const allowed = (tpl.modules && tpl.modules[mod]) || tpl.modules && tpl.modules[mod.toUpperCase()] || [];
-      // filter allowed by actual actions available
-      const finalActions = allowed.filter((a) => actions.includes(a));
-      return finalActions.length ? { module: mod, actions: finalActions } : null;
-    }).filter(Boolean);
+    const newPerms = modules
+      .map((mod) => {
+        const allowed =
+          (tpl.modules && tpl.modules[mod]) ||
+          (tpl.modules && tpl.modules[mod.toUpperCase()]) ||
+          [];
+        const finalActions = allowed.filter((a) => actions.includes(a));
+        return finalActions.length ? { module: mod, actions: finalActions } : null;
+      })
+      .filter(Boolean);
 
     setForm((prev) => {
-      const updated = replaceExisting ? newPerms : mergePermissions(prev.permissions, newPerms);
+      const updated = replaceExisting
+        ? newPerms
+        : mergePermissions(prev.permissions, newPerms);
       return {
         ...prev,
         permissions: updated,
-        // if applying a system template, set type to SYSTEM and set key (if not editing existing)
         type: tplKey === "SUPER_ADMIN" ? "SYSTEM" : prev.type,
-        key: prev.key || tplKey, // only prefill key if creating new role
+        key: prev.key || tplKey,
         name: prev.name || tpl.label || prev.name,
       };
     });
@@ -221,7 +228,6 @@ const RoleList = () => {
     clearError();
   };
 
-  // merge existing perms with template perms (union)
   const mergePermissions = (existing = [], addition = []) => {
     const map = new Map();
     existing.forEach((p) => map.set(p.module, new Set(p.actions || [])));
@@ -230,13 +236,18 @@ const RoleList = () => {
       (p.actions || []).forEach((a) => s.add(a));
       map.set(p.module, s);
     });
-    const merged = Array.from(map.entries()).map(([module, set]) => ({ module, actions: Array.from(set) }));
+    const merged = Array.from(map.entries()).map(([module, set]) => ({
+      module,
+      actions: Array.from(set),
+    }));
     return merged;
   };
 
-  // Remove a specific module permission entirely
   const removeModulePermissions = (moduleKey) => {
-    setForm((prev) => ({ ...prev, permissions: prev.permissions.filter((p) => p.module !== moduleKey) }));
+    setForm((prev) => ({
+      ...prev,
+      permissions: prev.permissions.filter((p) => p.module !== moduleKey),
+    }));
   };
 
   const handleSave = async () => {
@@ -245,7 +256,6 @@ const RoleList = () => {
       return;
     }
 
-    // Do not allow creating/editing reserved SYSTEM keys unless allowed
     if (form.type === "SYSTEM" && selectedRoleId === null) {
       setError("Cannot create new SYSTEM role from UI. Use custom roles or ask system admin.");
       return;
@@ -260,9 +270,11 @@ const RoleList = () => {
           name: form.name,
           description: form.description,
           permissions: form.permissions,
-          // do not allow key/type change for system roles
+          storeMode: form.storeMode,
         });
-        setRoles((prev) => prev.map((r) => (r._id === selectedRoleId ? res.data : r)));
+        setRoles((prev) =>
+          prev.map((r) => (r._id === selectedRoleId ? res.data : r))
+        );
       } else {
         const res = await axios.post(`${API_BASE}/api/roles`, {
           name: form.name,
@@ -270,6 +282,7 @@ const RoleList = () => {
           description: form.description,
           type: "CUSTOM",
           permissions: form.permissions,
+          storeMode: form.storeMode,
         });
         setRoles((prev) => [...prev, res.data]);
         setSelectedRoleId(res.data._id);
@@ -283,7 +296,6 @@ const RoleList = () => {
     }
   };
 
-  // UI helpers: display friendly label for a module
   const prettyModule = (m) => (typeof m === "string" ? m.replace(/_/g, " ") : m);
 
   return (
@@ -291,7 +303,7 @@ const RoleList = () => {
       <div className="sa-page-header">
         <div>
           <h2>User Roles</h2>
-          <p>Define system & custom roles with module-wise permissions.</p>
+          <p>Define system & custom roles with module-wise permissions and store access.</p>
         </div>
       </div>
 
@@ -316,7 +328,10 @@ const RoleList = () => {
                 >
                   <div className="sa-role-name">{r.name}</div>
                   <div className="sa-role-sub">
-                    {(r.type || "CUSTOM").toLowerCase()} • {r.key}
+                    {(r.type || "CUSTOM").toLowerCase()} • {r.key} •{" "}
+                    {(r.storeMode || "MULTI") === "SINGLE"
+                      ? "Single Store"
+                      : "Multi Store"}
                   </div>
                 </li>
               ))}
@@ -330,7 +345,6 @@ const RoleList = () => {
             <i className="ri-add-line" /> New Custom Role
           </button>
 
-          {/* Quick templates list (small) */}
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 13, marginBottom: 6 }}>Quick Templates</div>
             {Object.keys(ROLE_TEMPLATES).map((k) => (
@@ -338,7 +352,12 @@ const RoleList = () => {
                 key={k}
                 type="button"
                 className="sa-secondary-button"
-                style={{ display: "block", marginBottom: 6, width: "100%", textAlign: "left" }}
+                style={{
+                  display: "block",
+                  marginBottom: 6,
+                  width: "100%",
+                  textAlign: "left",
+                }}
                 onClick={() => {
                   startNewRole();
                   applyTemplate(k, true);
@@ -356,8 +375,15 @@ const RoleList = () => {
           <div className="sa-card" style={{ marginBottom: 12 }}>
             <h3>Basic Details</h3>
 
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ flex: 1 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 220 }}>
                 <label>Role Name</label>
                 <input
                   name="name"
@@ -367,7 +393,7 @@ const RoleList = () => {
                 />
               </div>
 
-              <div style={{ width: 220 }}>
+              <div style={{ width: 220, minWidth: 160 }}>
                 <label>Key</label>
                 <input
                   name="key"
@@ -378,12 +404,46 @@ const RoleList = () => {
                 />
               </div>
 
-              <div style={{ width: 180 }}>
+              <div style={{ width: 180, minWidth: 140 }}>
                 <label>Type</label>
-                <select name="type" value={form.type} onChange={handleBasicChange} disabled={!!selectedRoleId && form.type === "SYSTEM"}>
+                <select
+                  name="type"
+                  value={form.type}
+                  onChange={handleBasicChange}
+                  disabled={!!selectedRoleId && form.type === "SYSTEM"}
+                >
                   <option value="CUSTOM">CUSTOM</option>
                   <option value="SYSTEM">SYSTEM</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Store access: single / multi */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                Store Access
+              </div>
+              <div style={{ display: "flex", gap: 24, fontSize: 14 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="radio"
+                    name="storeMode"
+                    value="SINGLE"
+                    checked={form.storeMode === "SINGLE"}
+                    onChange={handleBasicChange}
+                  />
+                  Single Store (user can be mapped to only one store)
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="radio"
+                    name="storeMode"
+                    value="MULTI"
+                    checked={form.storeMode === "MULTI"}
+                    onChange={handleBasicChange}
+                  />
+                  Multi Store (user can be mapped to multiple stores)
+                </label>
               </div>
             </div>
 
@@ -398,12 +458,19 @@ const RoleList = () => {
               />
             </div>
 
-            {/* Template dropdown (for new or editing custom roles) */}
-            <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <select
                 value={templateKey}
                 onChange={(e) => setTemplateKey(e.target.value)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 240 }}
               >
                 <option value="">-- Use role template (optional) --</option>
                 {Object.keys(ROLE_TEMPLATES).map((k) => (
@@ -434,7 +501,9 @@ const RoleList = () => {
 
           <div className="sa-card">
             <h3>Permissions</h3>
-            <p className="sa-modal-sub">Tick what this role can do in each module.</p>
+            <p className="sa-modal-sub">
+              Tick what this role can do in each module.
+            </p>
 
             <div className="sa-role-permission-table" style={{ overflowX: "auto" }}>
               <table>
@@ -476,7 +545,9 @@ const RoleList = () => {
                   ))}
                   {modules.length === 0 && (
                     <tr>
-                      <td colSpan={actions.length + 2}>No modules metadata loaded.</td>
+                      <td colSpan={actions.length + 2}>
+                        No modules metadata loaded.
+                      </td>
                     </tr>
                   )}
                 </tbody>
