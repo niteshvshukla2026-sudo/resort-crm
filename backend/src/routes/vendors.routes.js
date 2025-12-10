@@ -1,12 +1,15 @@
-import express from "express";
-import { createVendor, listVendors } from "../controllers/vendor.controller.js";
-import { protect, requireRole } from "../middleware/auth.js";
-
+// backend/routes/vendorRoutes.js
+const express = require("express");
 const router = express.Router();
+const vendorController = require("../controllers/vendorController");
 
-router.use(protect);
+// /api/vendors
+router.get("/", vendorController.getVendors);
+router.post("/", vendorController.createVendor);
 
-router.get("/", listVendors);
-router.post("/", requireRole("SUPER_ADMIN"), createVendor);
+// /api/vendors/:idOrCode
+router.get("/:id", vendorController.getVendorByIdOrCode);
+router.put("/:id", vendorController.updateVendor);
+router.delete("/:id", vendorController.deleteVendor);
 
-export default router;
+module.exports = router;

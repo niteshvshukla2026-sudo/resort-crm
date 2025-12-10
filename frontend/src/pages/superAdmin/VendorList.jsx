@@ -4,48 +4,7 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// --- small dev sample vendors ---
-// fallback ke liye
-const DEV_VENDORS = [
-  {
-    _id: "dev_vendor_1",
-    code: "FFP_1234",
-    name: "FreshFoods",
-    contactPerson: "Ravi Kumar",
-    phone: "9876500011",
-    whatsapp: "9876500011",
-    email: "sales@freshfoods.com",
-    addressLine1: "123 Food St.",
-    city: "Mumbai",
-    state: "Maharashtra",
-    pincode: "400001",
-    country: "India",
-    vendorType: "Company",
-    category: "Food",
-    categories: ["Food"],
-    gstNumber: "27AAAAA0000A1Z5",
-    panNumber: "AAAAA0000A",
-    paymentTerms: "30 Days",
-    creditLimit: "50000",
-    paymentMode: "Bank Transfer",
-    status: "Active",
-    resorts: ["resort_a"],
-    notes: "Priority supplier",
-  },
-  {
-    _id: "dev_vendor_2",
-    code: "GLB_2345",
-    name: "GlobalSupplies",
-    phone: "9876500022",
-    email: "contact@globalsupplies.com",
-    city: "Goa",
-    vendorType: "Distributor",
-    category: "Housekeeping",
-    categories: ["Housekeeping"],
-    status: "Active",
-    resorts: [],
-  },
-];
+
 
 const emptyForm = () => ({
   _id: undefined,
