@@ -4,45 +4,13 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-/* Dev fallback items */
+/* Dev fallback items (sirf items ke liye, jab tak backend /api/items ready na ho) */
 const DEV_ITEMS = [
   { _id: "item_rice", name: "Rice", uom: "Kg", itemCategory: "Pantry" },
   { _id: "item_oil", name: "Oil", uom: "Ltr", itemCategory: "Cooking Oil" },
   { _id: "item_chicken", name: "Chicken", uom: "Kg", itemCategory: "Meat" },
   { _id: "item_paneer", name: "Paneer", uom: "Kg", itemCategory: "Dairy" },
   { _id: "item_spice", name: "Spice Mix", uom: "Kg", itemCategory: "Pantry" },
-];
-
-const DEV_RECIPE_CATS = [
-  { _id: "rc_cat_1", name: "Lumpsum", code: "LUMP", type: "LUMPSUM" },
-  { _id: "rc_cat_2", name: "By Portion", code: "PORT", type: "RECIPE_PORTION" },
-  { _id: "rc_cat_3", name: "By Recipe Lumpsum", code: "R_LUMP", type: "RECIPE_LUMPSUM" },
-];
-
-const DEV_RECIPES = [
-  {
-    _id: "dev_rcp_1",
-    code: "RCP-001",
-    name: "Plain Rice",
-    recipeCategoryId: "rc_cat_1",
-    type: "LUMPSUM",
-    yieldQty: 1,
-    yieldUom: "Kg",
-    lines: [{ itemId: "item_rice", qty: 10, itemCategory: "Pantry" }],
-  },
-  {
-    _id: "dev_rcp_3",
-    code: "RCP-003",
-    name: "Chicken Curry (50 portions)",
-    recipeCategoryId: "rc_cat_2",
-    type: "RECIPE_PORTION",
-    yieldQty: 50,
-    yieldUom: "Nos",
-    lines: [
-      { itemId: "item_chicken", qty: 10, itemCategory: "Meat" },
-      { itemId: "item_spice", qty: 0.3, itemCategory: "Pantry" },
-    ],
-  },
 ];
 
 const emptyLine = () => ({
@@ -58,8 +26,8 @@ const UOM_OPTIONS = ["Kg", "Ltr", "Nos", "Pax"];
 const RecipeMaster = () => {
   const [recipes, setRecipes] = useState([]);
   const [items, setItems] = useState([]);
-  const [itemCategories, setItemCategories] = useState([]);
-  const [recipeCategories, setRecipeCategories] = useState([]);
+  const [itemCategories, setItemCategories] = useState([]); // names from Item Category master
+  const [recipeCategories, setRecipeCategories] = useState([]); // from Recipe Category master
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -74,7 +42,7 @@ const RecipeMaster = () => {
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
-    type: "", // still kept internally, derived from category
+    type: "", // internal only (if backend use kare)
     name: "",
     yieldQty: "",
     yieldUom: "",
@@ -89,15 +57,17 @@ const RecipeMaster = () => {
     try {
       setLoading(true);
       setError("");
-      const [recRes, itemRes, catRes, icatRes] = await Promise.all([
+      const [recRes, itemRes, rcatRes, icatRes] = await Promise.all([
         axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
-        axios.get(`${API_BASE}/api/recipe-categories`).catch(() => ({ data: DEV_RECIPE_CATS })),
-        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: null })),
+        axios.get(`${API_BASE}/api/recipe-categories`).catch(() => ({ data: [] })), // ✅ recipe categories master se
+        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: null })), // ✅ item category master se
       ]);
 
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
-      const serverItemsRaw = Array.isArray(itemRes.data) ? itemRes.data : DEV_ITEMS;
+      const serverItemsRaw = Array.isArray(itemRes.data)
+        ? itemRes.data
+        : DEV_ITEMS;
 
       const serverItems = serverItemsRaw.map((it) => {
         const uom =
@@ -114,30 +84,42 @@ const RecipeMaster = () => {
           id: it.id || it._id,
           name: it.name || it.title || "",
           uom,
-          itemCategory: it.itemCategory || it.category || it.item_category || it.group || "",
+          // itemCategory yahan string hi rakhenge (master se aane wali name ya code)
+          itemCategory:
+            it.itemCategory || it.category || it.item_category || it.group || "",
           ...it,
         };
       });
 
-      const serverCats = Array.isArray(catRes.data) ? catRes.data : DEV_RECIPE_CATS;
+      // ✅ Recipe Category master se, koi demo nahi
+      const serverRecipeCats = Array.isArray(rcatRes.data)
+        ? rcatRes.data
+        : [];
 
+      // ✅ Item Category master se names
       let serverItemCats = [];
       if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
+        // master objects ko sirf display name me convert kiya
         serverItemCats = icatRes.data.map((c) =>
           typeof c === "string" ? c : c.name || c.code || c._id || c.id
         );
       } else {
+        // agar master khali ho to items se infer karo (dev ke liye)
         serverItemCats = Array.from(
-          new Set((serverItems || DEV_ITEMS).map((it) => it.itemCategory || "Uncategorized"))
+          new Set(
+            (serverItems.length ? serverItems : DEV_ITEMS).map(
+              (it) => it.itemCategory || "Uncategorized"
+            )
+          )
         );
       }
 
-      const normalized = (Array.isArray(serverRecipes) ? serverRecipes : []).map((r) => ({
+      const normalizedRecipes = serverRecipes.map((r) => ({
         _id: r._id || r.id,
         code: r.code || "",
         name: r.name || "",
         recipeCategoryId: r.recipeCategoryId || r.recipeCategory || "",
-        type: r.type || "", // kept for backend/list if needed
+        type: r.type || "",
         yieldQty: r.yieldQty ?? r.yield_qty ?? "",
         yieldUom: r.yieldUom || r.yield_uom || "",
         lines: Array.isArray(r.lines)
@@ -147,7 +129,7 @@ const RecipeMaster = () => {
                 ln.itemCategory ||
                 ln.item_category ||
                 (() => {
-                  const item = (serverItems || DEV_ITEMS).find(
+                  const item = (serverItems.length ? serverItems : DEV_ITEMS).find(
                     (it) => it._id === ln.itemId || it.id === ln.itemId
                   );
                   return item?.itemCategory || item?.category || "";
@@ -158,22 +140,28 @@ const RecipeMaster = () => {
           : [],
       }));
 
-      setRecipes(normalized.length ? normalized : DEV_RECIPES);
+      setRecipes(normalizedRecipes); // ❌ koi DEV_RECIPES nahi
       setItems(serverItems);
-      setRecipeCategories(serverCats);
+      setRecipeCategories(serverRecipeCats);
       setItemCategories(
         serverItemCats.length
           ? serverItemCats
-          : Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")))
+          : Array.from(
+              new Set(
+                DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")
+              )
+            )
       );
     } catch (err) {
       console.error(err);
-      setError("Failed to load recipe data; using sample data");
-      setRecipes(DEV_RECIPES);
+      setError("Failed to load recipe data");
+      setRecipes([]);
       setItems(DEV_ITEMS);
-      setRecipeCategories(DEV_RECIPE_CATS);
+      setRecipeCategories([]);
       setItemCategories(
-        Array.from(new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")))
+        Array.from(
+          new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
+        )
       );
     } finally {
       setLoading(false);
@@ -187,15 +175,31 @@ const RecipeMaster = () => {
 
   const getCategoryById = (id) =>
     recipeCategories.find((c) => c._id === id || c.id === id) || null;
-  const getItem = (id) => items.find((it) => it._id === id || it.id === id) || null;
+  const getItem = (id) =>
+    items.find((it) => it._id === id || it.id === id) || null;
   const getItemName = (id) => (getItem(id) ? getItem(id).name : id);
 
-  const categoryOptions = useMemo(() => recipeCategories, [recipeCategories]);
+  // ✅ Recipe Category dropdown ke options
+  //  - master se aayenge
+  //  - jinka type "LUMPSUM" ya name "Lumpsum" hai wo HIDE
+  const categoryOptions = useMemo(
+    () =>
+      recipeCategories.filter((c) => {
+        const t = (c.type || "").toUpperCase();
+        const n = (c.name || "").toLowerCase();
+        return t !== "LUMPSUM" && n !== "lumpsum";
+      }),
+    [recipeCategories]
+  );
 
   const filteredRecipes = useMemo(
     () =>
       recipes.filter((r) => {
-        if (categoryFilter && (r.recipeCategoryId || "") !== categoryFilter) return false;
+        if (
+          categoryFilter &&
+          (r.recipeCategoryId || "").toString() !== categoryFilter.toString()
+        )
+          return false;
         if (searchText && searchText.trim()) {
           const q = searchText.trim().toLowerCase();
           const hay = [r.code, r.name, r._id].filter(Boolean).join(" ").toLowerCase();
@@ -231,6 +235,7 @@ const RecipeMaster = () => {
       lines: p.lines.filter((_, i) => i !== idx),
     }));
 
+  // ✅ Items ko filter karo by selected Item Category (string match)
   const itemsForCategory = (cat) =>
     items.filter(
       (it) =>
@@ -242,7 +247,7 @@ const RecipeMaster = () => {
   const mapToAllowedUom = (uom) =>
     UOM_OPTIONS.includes(uom) ? uom : undefined;
 
-  // when itemCategory changes: auto-select single item if only one exists in that category
+  // when itemCategory changes: auto-select single item if only one exists
   const onLineCategoryChange = (idx, catVal) => {
     updateLine(idx, "itemCategory", catVal);
     updateLine(idx, "itemId", "");
@@ -269,7 +274,8 @@ const RecipeMaster = () => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
 
-    if (it && it.itemCategory) updateLine(idx, "itemCategory", it.itemCategory);
+    if (it && it.itemCategory)
+      updateLine(idx, "itemCategory", it.itemCategory);
 
     const allowed = it ? mapToAllowedUom(it.uom) : undefined;
     if (allowed) {
@@ -306,7 +312,7 @@ const RecipeMaster = () => {
     setForm((p) => ({
       ...p,
       recipeCategoryId: catId,
-      type: cat ? cat.type || p.type : p.type, // only internal, not shown
+      type: cat ? cat.type || p.type : p.type,
     }));
   };
 
@@ -330,7 +336,8 @@ const RecipeMaster = () => {
         (rcp.lines &&
           rcp.lines.map((ln) => ({
             id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
-            itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
+            itemCategory:
+              ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || ln.item || "",
             qty: ln.qty ?? "",
           }))) || [emptyLine()],
@@ -357,7 +364,8 @@ const RecipeMaster = () => {
         (rcp.lines &&
           rcp.lines.map((ln) => ({
             id: `dup_${Math.floor(Math.random() * 100000)}`,
-            itemCategory: ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
+            itemCategory:
+              ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
             itemId: ln.itemId || "",
             qty: ln.qty ?? "",
           }))) || [emptyLine()],
@@ -370,9 +378,11 @@ const RecipeMaster = () => {
     if (!form.code || !form.code.trim()) return "Recipe code required";
     if (!form.name || !form.name.trim()) return "Recipe name required";
     if (!form.recipeCategoryId) return "Select Recipe Category";
-    if (!form.lines || form.lines.length === 0) return "Add at least one ingredient";
+    if (!form.lines || form.lines.length === 0)
+      return "Add at least one ingredient";
     for (const ln of form.lines) {
-      if (!ln.itemCategory) return "Each ingredient must have an item category";
+      if (!ln.itemCategory)
+        return "Each ingredient must have an item category";
       if (!ln.itemId) return "Each ingredient must have an item";
       if (!ln.qty || Number(ln.qty) <= 0)
         return "Each ingredient must have quantity > 0";
@@ -394,7 +404,7 @@ const RecipeMaster = () => {
       code: form.code,
       name: form.name,
       recipeCategoryId: form.recipeCategoryId,
-      type: form.type || undefined, // still send if backend expects
+      type: form.type || undefined,
       yieldQty: form.yieldQty ? Number(form.yieldQty) : undefined,
       yieldUom: form.yieldUom || undefined,
       lines: (form.lines || []).map((ln) => ({
@@ -423,7 +433,11 @@ const RecipeMaster = () => {
           .post(`${API_BASE}/api/recipes`, payload)
           .catch(() => null);
         if (res && res.data) setRecipes((p) => [res.data, ...p]);
-        else setRecipes((p) => [{ ...payload, _id: `local_${Date.now()}` }, ...p]);
+        else
+          setRecipes((p) => [
+            { ...payload, _id: `local_${Date.now()}` },
+            ...p,
+          ]);
       }
 
       setShowForm(false);
@@ -440,7 +454,9 @@ const RecipeMaster = () => {
     if (!window.confirm(`Delete recipe ${rcp.code || rcp.name}?`)) return;
     try {
       setRecipes((p) => p.filter((x) => x._id !== rcp._id));
-      await axios.delete(`${API_BASE}/api/recipes/${rcp._id}`).catch(() => null);
+      await axios
+        .delete(`${API_BASE}/api/recipes/${rcp._id}`)
+        .catch(() => null);
     } catch (err) {
       console.error(err);
       setError("Failed to delete recipe");
@@ -485,7 +501,7 @@ const RecipeMaster = () => {
           >
             <option value="">All</option>
             {categoryOptions.map((c) => (
-              <option key={c._id} value={c._id}>
+              <option key={c._id || c.id} value={c._id || c.id}>
                 {c.name}
               </option>
             ))}
@@ -519,7 +535,6 @@ const RecipeMaster = () => {
                 <th>Code</th>
                 <th>Name</th>
                 <th>Category</th>
-                {/* Type column removed as requested */}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -609,14 +624,12 @@ const RecipeMaster = () => {
                   >
                     <option value="">-- Select Recipe Category --</option>
                     {categoryOptions.map((c) => (
-                      <option key={c._id} value={c._id}>
+                      <option key={c._id || c.id} value={c._id || c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
                 </label>
-
-                {/* Type field removed from UI */}
 
                 <label>
                   Name
@@ -765,7 +778,11 @@ const RecipeMaster = () => {
                   className="sa-primary-button"
                   disabled={saving}
                 >
-                  {saving ? "Saving..." : editing ? "Update Recipe" : "Save Recipe"}
+                  {saving
+                    ? "Saving..."
+                    : editing
+                    ? "Update Recipe"
+                    : "Save Recipe"}
                 </button>
               </div>
             </form>
