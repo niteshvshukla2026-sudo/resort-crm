@@ -2,30 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
-// --- 10 sample stores for dev/demo ---
-const DEV_STORE_SAMPLES = [
-  { _id: "dev_store_1", resort: "resort_1", name: "Main Store", code: "MAIN" },
-  { _id: "dev_store_2", resort: "resort_1", name: "Bar Store", code: "BAR" },
-  { _id: "dev_store_3", resort: "resort_1", name: "Cold Room", code: "COLD" },
-  { _id: "dev_store_4", resort: "resort_2", name: "Housekeeping Store", code: "HK" },
-  { _id: "dev_store_5", resort: "resort_2", name: "Engineering Store", code: "ENG" },
-  { _id: "dev_store_6", resort: "resort_3", name: "F&B Store", code: "FB" },
-  { _id: "dev_store_7", resort: "resort_3", name: "Banquet Store", code: "BANQ" },
-  { _id: "dev_store_8", resort: "resort_4", name: "Pool Bar Store", code: "PBAR" },
-  { _id: "dev_store_9", resort: "resort_4", name: "Linen Store", code: "LIN" },
-  { _id: "dev_store_10", resort: "resort_5", name: "Outlet Store", code: "OUT" },
-];
-
-// Minimal sample resorts (used when backend returns none)
-const DEV_RESORTS = [
-  { _id: "resort_1", name: "Resort A" },
-  { _id: "resort_2", name: "Resort B" },
-  { _id: "resort_3", name: "Resort C" },
-  { _id: "resort_4", name: "Resort D" },
-  { _id: "resort_5", name: "Resort E" },
-];
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
 
 const emptyForm = () => ({ _id: undefined, resort: "", name: "", code: "" });
 
@@ -49,31 +27,40 @@ const StoreList = () => {
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvError, setCsvError] = useState("");
 
-  // load stores + resorts (merge with dev samples if server empty)
+  // ---------- Helpers ----------
+
+  // Normalize resort array from API (handle {data:[]} or [] forms)
+  const normalizeList = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw.data)) return raw.data;
+    return [];
+  };
+
+  // Load stores + resorts from backend
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
       const [storeRes, resortRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/resorts`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/stores`),
+        axios.get(`${API_BASE}/resorts`),
       ]);
 
-      const serverStores = Array.isArray(storeRes.data) ? storeRes.data : [];
-      const serverResorts = Array.isArray(resortRes.data) ? resortRes.data : [];
+      const serverStores = normalizeList(storeRes.data);
+      const serverResorts = normalizeList(resortRes.data);
 
-      // merge stores: avoid duplicate _id
-      const existingIds = new Set(serverStores.map((s) => s._id || s.id));
-      const toAdd = DEV_STORE_SAMPLES.filter((s) => !existingIds.has(s._id));
-      setStores([...serverStores, ...toAdd]);
-
-      setResorts(serverResorts.length ? serverResorts : DEV_RESORTS);
+      setStores(serverStores);
+      setResorts(serverResorts);
     } catch (err) {
       console.error("Failed to load stores/resorts", err);
-      setError("Failed to load stores; using sample data");
-      setStores(DEV_STORE_SAMPLES);
-      setResorts(DEV_RESORTS);
+      setError(
+        err?.response?.data?.message ||
+          "Failed to load stores/resorts from server"
+      );
+      setStores([]);
+      setResorts([]);
     } finally {
       setLoading(false);
     }
@@ -84,24 +71,48 @@ const StoreList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Helpers
+  // Get resort name from id/object
   const getResortName = (resortRef) => {
     if (!resortRef) return "-";
-    const r = resorts.find((x) => x._id === resortRef || x.id === resortRef || x.name === resortRef);
+
+    // If backend populated resort as object
+    if (typeof resortRef === "object") {
+      if (resortRef.name) return resortRef.name;
+      const id = resortRef._id || resortRef.id;
+      const r = resorts.find((x) => (x._id || x.id) === id);
+      return r ? r.name : id || "-";
+    }
+
+    // resortRef is probably an id string
+    const r = resorts.find((x) => (x._id || x.id) === resortRef);
     return r ? r.name : resortRef;
   };
 
   // Filters applied list
   const filtered = useMemo(() => {
     return stores.filter((s) => {
-      if (filterResort && (s.resort !== filterResort && s.resort !== getResortName(filterResort))) return false;
-      if (filterName && !s.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
-      if (filterCode && !s.code?.toLowerCase().includes(filterCode.toLowerCase())) return false;
+      const resortId =
+        typeof s.resort === "object"
+          ? s.resort._id || s.resort.id
+          : s.resort || s.resortId;
+
+      if (filterResort && resortId !== filterResort) return false;
+      if (
+        filterName &&
+        !s.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
+        return false;
+      if (
+        filterCode &&
+        !s.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
+        return false;
       return true;
     });
-  }, [stores, filterResort, filterName, filterCode, resorts]);
+  }, [stores, filterResort, filterName, filterCode]);
 
-  // CRUD: create / edit
+  // ---------- CRUD: create / edit ----------
+
   const openCreateForm = () => {
     setForm(emptyForm());
     setError("");
@@ -109,9 +120,14 @@ const StoreList = () => {
   };
 
   const openEditForm = (s) => {
+    const resortId =
+      typeof s.resort === "object"
+        ? s.resort._id || s.resort.id
+        : s.resort || s.resortId || "";
+
     setForm({
       _id: s._id || s.id,
-      resort: s.resort || s.resortId || s.resortName || "",
+      resort: resortId,
       name: s.name || "",
       code: s.code || "",
     });
@@ -127,22 +143,40 @@ const StoreList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!form.resort || !form.name) return setError("Resort and Store name required");
+
+    if (!form.resort || !form.name)
+      return setError("Resort and Store name required");
 
     try {
       setSaving(true);
-      const payload = { resort: form.resort, name: form.name, code: form.code || undefined };
+
+      const payload = {
+        resort: form.resort, // backend should treat this as resort _id
+        name: form.name,
+        code: form.code || undefined,
+      };
 
       if (form._id) {
-        const res = await axios.put(`${API_BASE}/api/stores/${form._id}`, payload).catch(() => null);
+        const res = await axios
+          .put(`${API_BASE}/stores/${form._id}`, payload)
+          .catch(() => null);
+
         if (res?.data) {
-          setStores((p) => p.map((x) => (x._id === form._id || x.id === form._id ? res.data : x)));
+          setStores((p) =>
+            p.map((x) => (x._id === form._id || x.id === form._id ? res.data : x))
+          );
         } else {
           // optimistic local update
-          setStores((p) => p.map((x) => (x._id === form._id || x.id === form._id ? { ...x, ...payload } : x)));
+          setStores((p) =>
+            p.map((x) =>
+              x._id === form._id || x.id === form._id ? { ...x, ...payload } : x
+            )
+          );
         }
       } else {
-        const res = await axios.post(`${API_BASE}/api/stores`, payload).catch(() => null);
+        const res = await axios
+          .post(`${API_BASE}/stores`, payload)
+          .catch(() => null);
         const created = res?.data || { ...payload, _id: `local_${Date.now()}` };
         setStores((p) => [created, ...p]);
       }
@@ -161,7 +195,7 @@ const StoreList = () => {
     if (!window.confirm(`Delete store ${s.name || s._id}?`)) return;
     try {
       setStores((p) => p.filter((x) => (x._id || x.id) !== (s._id || s.id)));
-      await axios.delete(`${API_BASE}/api/stores/${s._id || s.id}`).catch(() => null);
+      await axios.delete(`${API_BASE}/stores/${s._id || s.id}`).catch(() => null);
     } catch (err) {
       console.error("delete error", err);
       setError("Failed to delete store");
@@ -169,7 +203,10 @@ const StoreList = () => {
     }
   };
 
-  // CSV upload: expects columns: resort,name,code  (resort may be resort _id or resort name)
+  // ---------- CSV Upload / Export ----------
+
+  // CSV upload: columns: resort,name,code
+  // resort = resort _id (not name)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -178,14 +215,20 @@ const StoreList = () => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const text = ev.target.result;
-      const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+      const rows = text
+        .split(/\r?\n/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+
       if (rows.length <= 1) {
         setCsvError("CSV has no data");
         setCsvLoading(false);
         return;
       }
 
-      const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+      const header = rows[0]
+        .split(",")
+        .map((h) => h.trim().toLowerCase());
       const required = ["name", "resort"];
       for (const r of required) {
         if (!header.includes(r)) {
@@ -213,7 +256,7 @@ const StoreList = () => {
       // optimistic local add
       const localAdded = parsed.map((p) => ({
         _id: `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        resort: p.resort,
+        resort: p.resort, // resort id
         name: p.name,
         code: p.code || "",
       }));
@@ -222,10 +265,13 @@ const StoreList = () => {
       // attempt server create for each row
       try {
         for (const p of parsed) {
-          const payload = { resort: p.resort, name: p.name, code: p.code || undefined };
+          const payload = {
+            resort: p.resort,
+            name: p.name,
+            code: p.code || undefined,
+          };
           try {
-            await axios.post(`${API_BASE}/api/stores`, payload).catch(() => null);
-            // we keep optimistic entries — or refetch on demand
+            await axios.post(`${API_BASE}/stores`, payload).catch(() => null);
           } catch (err) {
             console.warn("store csv create failed for", p, err);
           }
@@ -252,9 +298,16 @@ const StoreList = () => {
         cols
           .map((c) => {
             let val = s[c];
-            if (c === "resort") val = getResortName(s.resort) || s.resort;
+            if (c === "resort") {
+              // export resort id
+              val =
+                typeof s.resort === "object"
+                  ? s.resort._id || s.resort.id
+                  : s.resort;
+            }
             const str = String(val ?? "");
-            if (str.includes(",") || str.includes("\n")) return `"${str.replace(/"/g, '""')}"`;
+            if (str.includes(",") || str.includes("\n"))
+              return `"${str.replace(/"/g, '""')}"`;
             return str;
           })
           .join(",")
@@ -270,16 +323,15 @@ const StoreList = () => {
     URL.revokeObjectURL(url);
   };
 
-  // unique resort dropdown values (use resort objects if available)
+  // Resort dropdown options
   const resortOptions = useMemo(() => {
-    const names = new Map();
-    for (const r of resorts) names.set(r._id || r.id || r.name, r.name);
-    // also collect resort names present in stores if needed
-    for (const s of stores) {
-      if (s.resort && !names.has(s.resort)) names.set(s.resort, String(s.resort));
-    }
-    return Array.from(names.entries()).map(([id, name]) => ({ id, name }));
-  }, [resorts, stores]);
+    return resorts.map((r) => ({
+      id: r._id || r.id,
+      name: r.name,
+    }));
+  }, [resorts]);
+
+  // ---------- UI ----------
 
   return (
     <div className="sa-page">
@@ -299,44 +351,86 @@ const StoreList = () => {
                 handleCSVUpload(f);
                 e.target.value = "";
               }}
-              title="Upload CSV (columns: resort,name,code)"
+              title="Upload CSV (columns: resort(name _id),name,code)"
             />
-            <span style={{ marginLeft: 6 }}>{csvLoading ? "Uploading..." : "Upload CSV"}</span>
+            <span style={{ marginLeft: 6 }}>
+              {csvLoading ? "Uploading..." : "Upload CSV"}
+            </span>
           </label>
 
-          <button className="sa-secondary-button" onClick={() => handleExportCSV(filtered)}>
+          <button
+            className="sa-secondary-button"
+            onClick={() => handleExportCSV(filtered)}
+          >
             Export CSV
           </button>
 
-          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreateForm}
+          >
             <i className="ri-add-line" /> New Store
           </button>
         </div>
       </div>
 
-      {error && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{error}</div>}
-      {csvError && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{csvError}</div>}
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+      {csvError && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {csvError}
+        </div>
+      )}
 
       {/* Filters */}
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <label>
           Resort
-          <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={filterResort}
+            onChange={(e) => setFilterResort(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
             {resortOptions.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
             ))}
           </select>
         </label>
 
         <label>
           Store Name
-          <input value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Search name..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            placeholder="Search name..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           Code
-          <input value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="Code..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterCode}
+            onChange={(e) => setFilterCode(e.target.value)}
+            placeholder="Code..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
@@ -363,18 +457,32 @@ const StoreList = () => {
 
             <tbody>
               {filtered.map((s) => (
-                <tr key={s._id || s.id || `${s.resort}_${s.name}`}>
+                <tr key={s._id || s.id}>
                   <td>{getResortName(s.resort)}</td>
                   <td>{s.name}</td>
                   <td>{s.code}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="sa-secondary-button" onClick={() => openEditForm(s)} title="Edit">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => openEditForm(s)}
+                      title="Edit"
+                    >
                       <i className="ri-edit-line" />
                     </button>
-                    <button className="sa-secondary-button" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(s)); }} title="Copy JSON">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(s));
+                      }}
+                      title="Copy JSON"
+                    >
                       <i className="ri-file-copy-line" />
                     </button>
-                    <button className="sa-secondary-button" onClick={() => handleDelete(s)} title="Delete">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => handleDelete(s)}
+                      title="Delete"
+                    >
                       <i className="ri-delete-bin-6-line" />
                     </button>
                   </td>
@@ -387,17 +495,27 @@ const StoreList = () => {
 
       {/* Modal: Create / Edit */}
       {showForm && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
           <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{form._id ? "Edit Store" : "New Store"}</h3>
-            <p className="sa-modal-sub">Add a physical store for a resort (Main Store / Bar Store / HK Store).</p>
+            <p className="sa-modal-sub">
+              Add a physical store for a resort (Main Store / Bar Store / HK
+              Store).
+            </p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
                 Resort
-                <select name="resort" value={form.resort} onChange={handleFormChange} required>
+                <select
+                  name="resort"
+                  value={form.resort}
+                  onChange={handleFormChange}
+                  required
+                >
                   <option value="">Select resort</option>
-                  {/* prefer server resorts but include resortOptions */}
                   {resortOptions.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
@@ -408,19 +526,46 @@ const StoreList = () => {
 
               <label>
                 Store Name
-                <input name="name" value={form.name} onChange={handleFormChange} placeholder="Main Store / Bar Store..." required />
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleFormChange}
+                  placeholder="Main Store / Bar Store..."
+                  required
+                />
               </label>
 
               <label>
                 Code
-                <input name="code" value={form.code} onChange={handleFormChange} placeholder="MAIN / BAR / HK" />
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleFormChange}
+                  placeholder="MAIN / BAR / HK"
+                />
               </label>
 
               {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>Cancel</button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : form._id ? "Update Store" : "Save Store"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : form._id
+                    ? "Update Store"
+                    : "Save Store"}
+                </button>
               </div>
             </form>
           </div>
