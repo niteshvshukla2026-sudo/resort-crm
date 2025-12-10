@@ -116,11 +116,12 @@ const VendorList = () => {
       // ensure each vendor has categories/resorts fields
       const normalized = serverVendors.map((v) => ({
         ...v,
-        categories: v.categories && Array.isArray(v.categories)
-          ? v.categories
-          : v.category
-          ? [v.category]
-          : [],
+        categories:
+          v.categories && Array.isArray(v.categories)
+            ? v.categories
+            : v.category
+            ? [v.category]
+            : [],
         resorts: v.resorts && Array.isArray(v.resorts) ? v.resorts : v.resort ? [v.resort] : [],
       }));
       setVendors([...normalized, ...toAdd]);
@@ -135,9 +136,13 @@ const VendorList = () => {
 
   const loadCategories = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] }));
+      const res = await axios
+        .get(`${API_BASE}/api/item-categories`)
+        .catch(() => ({ data: [] }));
       const cats = Array.isArray(res.data) ? res.data : [];
-      const mapped = cats.map((c) => (typeof c === "string" ? c : c.name || c.code || JSON.stringify(c)));
+      const mapped = cats.map((c) =>
+        typeof c === "string" ? c : c.name || c.code || JSON.stringify(c)
+      );
       setCategories(mapped);
     } catch (err) {
       console.warn("Failed to load categories", err);
@@ -149,7 +154,10 @@ const VendorList = () => {
     try {
       const res = await axios.get(`${API_BASE}/api/resorts`).catch(() => ({ data: [] }));
       const list = Array.isArray(res.data)
-        ? res.data.map((r) => ({ id: r._id || r.id || r.code || r.name, name: r.name || r.code || r._id }))
+        ? res.data.map((r) => ({
+            id: r._id || r.id || r.code || r.name,
+            name: r.name || r.code || r._id,
+          }))
         : [];
       // fallback minimal demo (if none)
       const fallback = [
@@ -187,8 +195,7 @@ const VendorList = () => {
     whatsapp: /^\d{10}$/,
     alternatePhone: /^\d{10}$/,
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    gst:
-      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, // common GSTIN format
+    gst: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, // common GSTIN format
     pan: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
     ifsc: /^[A-Z]{4}0[A-Z0-9]{6}$/,
     pincode: /^[1-9][0-9]{5}$/,
@@ -210,7 +217,9 @@ const VendorList = () => {
     const initials = words.map((w) => w[0].toUpperCase()).join("");
     const suffix = String(Date.now()).slice(-4);
     let base = `${initials}_${suffix}`;
-    const existingCodes = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
+    const existingCodes = new Set(
+      vendors.map((v) => (v.code || "").toUpperCase())
+    );
     if (!existingCodes.has(base)) return base;
     return `${initials}_${suffix}${Math.floor(Math.random() * 90 + 10)}`;
   };
@@ -218,7 +227,9 @@ const VendorList = () => {
   const ensureUniqueCode = (candidate) => {
     if (!candidate) return candidate;
     const up = candidate.toUpperCase();
-    const existing = new Set(vendors.map((v) => (v.code || "").toUpperCase()));
+    const existing = new Set(
+      vendors.map((v) => (v.code || "").toUpperCase())
+    );
     if (!existing.has(up)) return up;
     for (let i = 1; i < 1000; i++) {
       const tryCode = `${up}_${i}`;
@@ -231,77 +242,92 @@ const VendorList = () => {
   const validators = {
     code: (v) => {
       if (!v) return "Vendor code is required";
-      if (!regex.codeAllowed.test(String(v).toUpperCase())) return "Code may contain only A-Z,0-9 and underscore";
+      if (!regex.codeAllowed.test(String(v).toUpperCase()))
+        return "Code may contain only A-Z,0-9 and underscore";
       return undefined;
     },
     name: (v) => {
       if (!v) return "Vendor name is required";
-      if (!regex.name.test(String(v).trim())) return "Name must contain only letters and spaces";
+      if (!regex.name.test(String(v).trim()))
+        return "Name must contain only letters and spaces";
       return undefined;
     },
     phone: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.phone.test(String(v).trim())) return "Phone must be exactly 10 digits";
+      if (!regex.phone.test(String(v).trim()))
+        return "Phone must be exactly 10 digits";
       return undefined;
     },
     whatsapp: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.whatsapp.test(String(v).trim())) return "WhatsApp must be exactly 10 digits";
+      if (!regex.whatsapp.test(String(v).trim()))
+        return "WhatsApp must be exactly 10 digits";
       return undefined;
     },
     alternatePhone: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.alternatePhone.test(String(v).trim())) return "Alternate phone must be exactly 10 digits";
+      if (!regex.alternatePhone.test(String(v).trim()))
+        return "Alternate phone must be exactly 10 digits";
       return undefined;
     },
     email: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.email.test(String(v).trim())) return "Invalid email format";
+      if (!regex.email.test(String(v).trim()))
+        return "Invalid email format";
       return undefined;
     },
     gstNumber: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.gst.test(String(v).trim())) return "GSTIN invalid (must follow 15-char GSTIN pattern)";
+      if (!regex.gst.test(String(v).trim()))
+        return "GSTIN invalid (must follow 15-char GSTIN pattern)";
       return undefined;
     },
     panNumber: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.pan.test(String(v).trim())) return "PAN invalid (format AAAAA9999A)";
+      if (!regex.pan.test(String(v).trim()))
+        return "PAN invalid (format AAAAA9999A)";
       return undefined;
     },
     ifsc: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.ifsc.test(String(v).trim())) return "IFSC invalid (e.g. SBIN0000001)";
+      if (!regex.ifsc.test(String(v).trim()))
+        return "IFSC invalid (e.g. SBIN0000001)";
       return undefined;
     },
     pincode: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.pincode.test(String(v).trim())) return "Pincode must be 6 digits and not start with 0";
+      if (!regex.pincode.test(String(v).trim()))
+        return "Pincode must be 6 digits and not start with 0";
       return undefined;
     },
     accountNumber: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.accountNumber.test(String(v).trim())) return "Account number must be 6-20 digits";
+      if (!regex.accountNumber.test(String(v).trim()))
+        return "Account number must be 6-20 digits";
       return undefined;
     },
     creditLimit: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.decimal.test(String(v).trim())) return "Credit limit must be a number";
+      if (!regex.decimal.test(String(v).trim()))
+        return "Credit limit must be a number";
       return undefined;
     },
     deliveryTime: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.integer.test(String(v).trim())) return "Delivery time must be whole days (integer)";
+      if (!regex.integer.test(String(v).trim()))
+        return "Delivery time must be whole days (integer)";
       return undefined;
     },
     minOrderQty: (v) => {
       if (isEmpty(v)) return undefined;
-      if (!regex.integer.test(String(v).trim())) return "MOQ must be a whole number";
+      if (!regex.integer.test(String(v).trim()))
+        return "MOQ must be a whole number";
       return undefined;
     },
     category: (v) => {
       // v is expected to be array for categories
-      if (!v || !Array.isArray(v) || v.length === 0) return "At least one category is required";
+      if (!v || !Array.isArray(v) || v.length === 0)
+        return "At least one category is required";
       return undefined;
     },
   };
@@ -331,8 +357,18 @@ const VendorList = () => {
       code: v.code || "",
       name: v.name || "",
       vendorType: v.vendorType || "",
-      categories: v.categories && Array.isArray(v.categories) ? v.categories : v.category ? [v.category] : [],
-      resorts: v.resorts && Array.isArray(v.resorts) ? v.resorts : v.resort ? [v.resort] : [],
+      categories:
+        v.categories && Array.isArray(v.categories)
+          ? v.categories
+          : v.category
+          ? [v.category]
+          : [],
+      resorts:
+        v.resorts && Array.isArray(v.resorts)
+          ? v.resorts
+          : v.resort
+          ? [v.resort]
+          : [],
       contactPerson: v.contactPerson || "",
       phone: v.phone || "",
       whatsapp: v.whatsapp || "",
@@ -364,7 +400,6 @@ const VendorList = () => {
     setShowForm(true);
   };
 
-  // updated handleChange with sanitization
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -388,7 +423,10 @@ const VendorList = () => {
         newVal = sanitizeDecimal(value);
       } else if (name === "code") {
         // normalize code: uppercase, replace spaces with underscore, remove other invalid chars
-        newVal = String(value || "").toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+        newVal = String(value || "")
+          .toUpperCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^A-Z0-9_]/g, "");
       }
 
       const updated = { ...p, [name]: newVal };
@@ -410,31 +448,20 @@ const VendorList = () => {
     });
   };
 
-  // toggle category checkbox
-  const toggleCategory = (cat) => {
-    setForm((p) => {
-      const set = new Set(p.categories || []);
-      if (set.has(cat)) set.delete(cat);
-      else set.add(cat);
-      const updated = { ...p, categories: Array.from(set) };
-      // clear category error if any
-      setFieldErrors((prev) => {
-        const c = { ...prev };
-        delete c.category;
-        return c;
-      });
-      return updated;
+  // 🔹 NEW: multi-select change handlers
+  const handleCategoriesChange = (e) => {
+    const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+    setForm((p) => ({ ...p, categories: selected }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.category;
+      return copy;
     });
   };
 
-  // toggle resort checkbox
-  const toggleResort = (resId) => {
-    setForm((p) => {
-      const set = new Set(p.resorts || []);
-      if (set.has(resId)) set.delete(resId);
-      else set.add(resId);
-      return { ...p, resorts: Array.from(set) };
-    });
+  const handleResortsChange = (e) => {
+    const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+    setForm((p) => ({ ...p, resorts: selected }));
   };
 
   // paste handlers for extra safety
@@ -515,23 +542,50 @@ const VendorList = () => {
       if (!payload.code) delete payload.code;
       if (form._id) {
         // update
-        const res = await axios.put(`${API_BASE}/api/vendors/${form._id}`, payload).catch(() => null);
+        const res = await axios
+          .put(`${API_BASE}/api/vendors/${form._id}`, payload)
+          .catch(() => null);
         if (res?.data) {
-          const updated = { ...res.data, categories: res.data.categories || (res.data.category ? [res.data.category] : []), resorts: res.data.resorts || (res.data.resort ? [res.data.resort] : []) };
-          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? updated : x)));
+          const updated = {
+            ...res.data,
+            categories:
+              res.data.categories ||
+              (res.data.category ? [res.data.category] : []),
+            resorts:
+              res.data.resorts || (res.data.resort ? [res.data.resort] : []),
+          };
+          setVendors((p) =>
+            p.map((x) =>
+              x._id === form._id || x.id === form._id ? updated : x
+            )
+          );
         } else {
           // optimistic local update
-          const updated = { ...(vendors.find((x) => x._id === form._id) || {}), ...payload };
-          setVendors((p) => p.map((x) => (x._id === form._id || x.id === form._id ? updated : x)));
+          const updated = {
+            ...(vendors.find((x) => x._id === form._id) || {}),
+            ...payload,
+          };
+          setVendors((p) =>
+            p.map((x) =>
+              x._id === form._id || x.id === form._id ? updated : x
+            )
+          );
         }
       } else {
         // create
-        payload.code = ensureUniqueCode(String(payload.code || "").toUpperCase());
-        const res = await axios.post(`${API_BASE}/api/vendors`, payload).catch(() => null);
+        payload.code = ensureUniqueCode(
+          String(payload.code || "").toUpperCase()
+        );
+        const res = await axios
+          .post(`${API_BASE}/api/vendors`, payload)
+          .catch(() => null);
         const created = res?.data || { ...payload, _id: `local_${Date.now()}` };
         // normalize
-        created.categories = created.categories || (created.category ? [created.category] : []);
-        created.resorts = created.resorts || (created.resort ? [created.resort] : []);
+        created.categories =
+          created.categories ||
+          (created.category ? [created.category] : []);
+        created.resorts =
+          created.resorts || (created.resort ? [created.resort] : []);
         setVendors((p) => [created, ...p]);
       }
 
@@ -549,8 +603,15 @@ const VendorList = () => {
   const handleDelete = async (v) => {
     if (!window.confirm(`Delete vendor ${v.name || v.code}?`)) return;
     try {
-      setVendors((p) => p.filter((x) => (x._id || x.id || x.code) !== (v._id || v.id || v.code)));
-      await axios.delete(`${API_BASE}/api/vendors/${v._id || v.id || v.code}`).catch(() => null);
+      setVendors((p) =>
+        p.filter(
+          (x) =>
+            (x._id || x.id || x.code) !== (v._id || v.id || v.code)
+        )
+      );
+      await axios
+        .delete(`${API_BASE}/api/vendors/${v._id || v.id || v.code}`)
+        .catch(() => null);
     } catch (err) {
       console.error("delete vendor error", err);
       setError("Failed to delete vendor");
@@ -558,7 +619,7 @@ const VendorList = () => {
     }
   };
 
-  // CSV upload & parsing (multi categories/resorts supported as semicolon/comma separated)
+  // CSV upload & parsing (same as before)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -567,14 +628,19 @@ const VendorList = () => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const text = ev.target.result;
-      const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+      const rows = text
+        .split(/\r?\n/)
+        .map((r) => r.trim())
+        .filter(Boolean);
       if (rows.length === 0) {
         setCsvError("Empty CSV file");
         setCsvLoading(false);
         return;
       }
 
-      const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+      const header = rows[0]
+        .split(",")
+        .map((h) => h.trim().toLowerCase());
       const headerSet = new Set(header);
       if (!headerSet.has("code") || !headerSet.has("name")) {
         setCsvError("CSV must contain at least: code,name columns");
@@ -602,9 +668,19 @@ const VendorList = () => {
         const codeVal = p.code || generateCodeFromName(nameVal);
         // categories may be "Food;Housekeeping" or "Food,Housekeeping"
         const catsRaw = p.categories || p.category || "";
-        const cats = catsRaw ? catsRaw.split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+        const cats = catsRaw
+          ? catsRaw
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
         const resortsRaw = p.resorts || p.resort || "";
-        const rlist = resortsRaw ? resortsRaw.split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+        const rlist = resortsRaw
+          ? resortsRaw
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
 
         return {
           code: ensureUniqueCode(String(codeVal).toUpperCase()),
@@ -616,7 +692,8 @@ const VendorList = () => {
           contactPerson: p.contactperson || p.contact_person || p.contact || "",
           phone: p.phone || p.contact || "",
           whatsapp: p.whatsapp || "",
-          alternatePhone: p.alternatephone || p.altphone || p.alt_phone || "",
+          alternatePhone:
+            p.alternatephone || p.altphone || p.alt_phone || "",
           email: p.email || "",
           addressLine1: p.address || "",
           addressLine2: p.addressline2 || "",
@@ -641,16 +718,23 @@ const VendorList = () => {
       });
 
       // optimistic add locally
-      const localAdded = payloads.map((pl) => ({ ...pl, _id: `local_${Date.now()}_${Math.floor(Math.random() * 1000)}` }));
+      const localAdded = payloads.map((pl) => ({
+        ...pl,
+        _id: `local_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      }));
       setVendors((prev) => [...localAdded, ...prev]);
 
       // attempt server creates sequentially
       try {
         for (const pl of payloads) {
           try {
-            const res = await axios.post(`${API_BASE}/api/vendors`, pl).catch(() => null);
+            const res = await axios
+              .post(`${API_BASE}/api/vendors`, pl)
+              .catch(() => null);
             if (res?.data) {
-              setVendors((prev) => prev.map((it) => (it.code === pl.code ? res.data : it)));
+              setVendors((prev) =>
+                prev.map((it) => (it.code === pl.code ? res.data : it))
+              );
             }
           } catch (err) {
             console.warn("vendor CSV create failed for", pl.code, err);
@@ -712,11 +796,16 @@ const VendorList = () => {
           .map((c) => {
             const value =
               c === "categories"
-                ? (Array.isArray(v.categories) ? v.categories.join(";") : v.categories || v.category || "")
+                ? Array.isArray(v.categories)
+                  ? v.categories.join(";")
+                  : v.categories || v.category || ""
                 : c === "resorts"
-                ? (Array.isArray(v.resorts) ? v.resorts.join(";") : v.resorts || v.resort || "")
+                ? Array.isArray(v.resorts)
+                  ? v.resorts.join(";")
+                  : v.resorts || v.resort || ""
                 : String(v[c] ?? "");
-            if (value.includes(",") || value.includes("\n")) return `"${value.replace(/"/g, '""')}"`;
+            if (value.includes(",") || value.includes("\n"))
+              return `"${value.replace(/"/g, '""')}"`;
             return value;
           })
           .join(",")
@@ -733,23 +822,51 @@ const VendorList = () => {
   };
 
   // filtered vendors
-  const filtered = useMemo(() => {
-    return vendors.filter((v) => {
-      if (filterName && !v.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
-      if (filterCode && !v.code?.toLowerCase().includes(filterCode.toLowerCase())) return false;
-      if (filterCity && !v.city?.toLowerCase().includes(filterCity.toLowerCase())) return false;
-      if (filterPhone && !v.phone?.toLowerCase().includes(filterPhone.toLowerCase())) return false;
-      if (filterEmail && !v.email?.toLowerCase().includes(filterEmail.toLowerCase())) return false;
-      return true;
-    });
-  }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
+  const filtered = useMemo(
+    () =>
+      vendors.filter((v) => {
+        if (
+          filterName &&
+          !v.name?.toLowerCase().includes(filterName.toLowerCase())
+        )
+          return false;
+        if (
+          filterCode &&
+          !v.code?.toLowerCase().includes(filterCode.toLowerCase())
+        )
+          return false;
+        if (
+          filterCity &&
+          !v.city?.toLowerCase().includes(filterCity.toLowerCase())
+        )
+          return false;
+        if (
+          filterPhone &&
+          !v.phone?.toLowerCase().includes(filterPhone.toLowerCase())
+        )
+          return false;
+        if (
+          filterEmail &&
+          !v.email?.toLowerCase().includes(filterEmail.toLowerCase())
+        )
+          return false;
+        return true;
+      }),
+    [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]
+  );
 
-  const cities = useMemo(() => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))), [vendors]);
+  const cities = useMemo(
+    () => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))),
+    [vendors]
+  );
 
   // small helper to lookup resort name by id
   const findResortName = (id) => {
-    const r = resorts.find((x) => x.id === id || x._id === id || x.id === String(id));
-    return r ? r.name : id;
+    const r =
+      resorts.find(
+        (x) => x.id === id || x._id === id || x.id === String(id)
+      ) || {};
+    return r.name || id;
   };
 
   return (
@@ -772,52 +889,106 @@ const VendorList = () => {
               }}
               title="Upload CSV (columns: code,name,... )"
             />
-            {csvLoading ? <span style={{ marginLeft: 6 }}>Uploading...</span> : <span style={{ marginLeft: 6 }}>Upload CSV</span>}
+            {csvLoading ? (
+              <span style={{ marginLeft: 6 }}>Uploading...</span>
+            ) : (
+              <span style={{ marginLeft: 6 }}>Upload CSV</span>
+            )}
           </label>
 
-          <button className="sa-secondary-button" onClick={() => handleExportCSV(filtered)}>
+          <button
+            className="sa-secondary-button"
+            onClick={() => handleExportCSV(filtered)}
+          >
             Export CSV
           </button>
 
-          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreateForm}
+          >
             <i className="ri-add-line" /> New Vendor
           </button>
         </div>
       </div>
 
-      {error && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{error}</div>}
-      {csvError && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{csvError}</div>}
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+      {csvError && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {csvError}
+        </div>
+      )}
 
       {/* Filters */}
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <label>
           Name
-          <input value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Search name..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            placeholder="Search name..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           Code
-          <input value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="Code..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterCode}
+            onChange={(e) => setFilterCode(e.target.value)}
+            placeholder="Code..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           City
-          <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
             {cities.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
         </label>
 
         <label>
           Phone
-          <input value={filterPhone} onChange={(e) => setFilterPhone(e.target.value)} placeholder="Phone..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterPhone}
+            onChange={(e) => setFilterPhone(e.target.value)}
+            placeholder="Phone..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           Email
-          <input value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} placeholder="Email..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterEmail}
+            onChange={(e) => setFilterEmail(e.target.value)}
+            placeholder="Email..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
@@ -855,23 +1026,50 @@ const VendorList = () => {
                   <td>{v.name}</td>
                   <td>
                     {v.contactPerson ? <div>{v.contactPerson}</div> : null}
-                    <div>{v.phone}{v.whatsapp ? ` (wa: ${v.whatsapp})` : ""}</div>
+                    <div>
+                      {v.phone}
+                      {v.whatsapp ? ` (wa: ${v.whatsapp})` : ""}
+                    </div>
                   </td>
                   <td>{v.email}</td>
                   <td>{v.city}</td>
-                  <td>{(Array.isArray(v.categories) ? v.categories.join(", ") : v.category || "")}</td>
-                  <td>{(Array.isArray(v.resorts) ? v.resorts.map(findResortName).join(", ") : (v.resort ? findResortName(v.resort) : ""))}</td>
+                  <td>
+                    {Array.isArray(v.categories)
+                      ? v.categories.join(", ")
+                      : v.category || ""}
+                  </td>
+                  <td>
+                    {Array.isArray(v.resorts)
+                      ? v.resorts.map(findResortName).join(", ")
+                      : v.resort
+                      ? findResortName(v.resort)
+                      : ""}
+                  </td>
                   <td>{v.gstNumber}</td>
                   <td>{v.paymentTerms}</td>
                   <td>{v.status}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="sa-secondary-button" onClick={() => openEditForm(v)} title="Edit">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => openEditForm(v)}
+                      title="Edit"
+                    >
                       <i className="ri-edit-line" />
                     </button>
-                    <button className="sa-secondary-button" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(v)); }} title="Copy JSON">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(v));
+                      }}
+                      title="Copy JSON"
+                    >
                       <i className="ri-file-copy-line" />
                     </button>
-                    <button className="sa-secondary-button" onClick={() => handleDelete(v)} title="Delete">
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => handleDelete(v)}
+                      title="Delete"
+                    >
                       <i className="ri-delete-bin-6-line" />
                     </button>
                   </td>
@@ -884,10 +1082,20 @@ const VendorList = () => {
 
       {/* Modal: create/edit */}
       {showForm && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
-          <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
+          <div
+            className="sa-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 980 }}
+          >
             <h3>{form._id ? "Edit Vendor" : "New Vendor"}</h3>
-            <p className="sa-modal-sub">Add or update a supplier used in purchase orders. (Strict validations enabled)</p>
+            <p className="sa-modal-sub">
+              Add or update a supplier used in purchase orders. (Strict
+              validations enabled)
+            </p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -900,34 +1108,66 @@ const VendorList = () => {
                     onPaste={(e) => handlePasteLetters(e, "name")}
                     placeholder="Only letters and spaces"
                   />
-                  {fieldErrors.name && <div className="sa-field-error">{fieldErrors.name}</div>}
+                  {fieldErrors.name && (
+                    <div className="sa-field-error">{fieldErrors.name}</div>
+                  )}
                 </label>
 
                 <label style={{ width: 260 }}>
                   Code *
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
                     <input
                       name="code"
                       value={form.code}
                       onChange={handleChange}
                       onPaste={(e) => {
                         e.preventDefault();
-                        const text = (e.clipboardData || window.clipboardData).getData("text");
-                        const sanitized = String(text || "").toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
-                        setForm((p) => ({ ...p, code: ensureUniqueCode(sanitized) }));
-                        setFieldErrors((prev) => { const c = { ...prev }; delete c.code; return c; });
+                        const text = (
+                          e.clipboardData || window.clipboardData
+                        ).getData("text");
+                        const sanitized = String(text || "")
+                          .toUpperCase()
+                          .replace(/\s+/g, "_")
+                          .replace(/[^A-Z0-9_]/g, "");
+                        setForm((p) => ({
+                          ...p,
+                          code: ensureUniqueCode(sanitized),
+                        }));
+                        setFieldErrors((prev) => {
+                          const c = { ...prev };
+                          delete c.code;
+                          return c;
+                        });
                       }}
                       placeholder="Auto generated from name"
                     />
-                    <button type="button" className="sa-secondary-button" onClick={handleGenerateCode}>Generate</button>
+                    <button
+                      type="button"
+                      className="sa-secondary-button"
+                      onClick={handleGenerateCode}
+                    >
+                      Generate
+                    </button>
                   </div>
-                  {fieldErrors.code && <div className="sa-field-error">{fieldErrors.code}</div>}
+                  {fieldErrors.code && (
+                    <div className="sa-field-error">{fieldErrors.code}</div>
+                  )}
                 </label>
               </div>
 
               <label>
                 Vendor Type
-                <select name="vendorType" value={form.vendorType} onChange={handleChange}>
+                <select
+                  name="vendorType"
+                  value={form.vendorType}
+                  onChange={handleChange}
+                >
                   <option value="">Select type</option>
                   <option value="Company">Company</option>
                   <option value="Individual">Individual</option>
@@ -936,35 +1176,45 @@ const VendorList = () => {
                 </select>
               </label>
 
-              {/* Categories (multi-select checkboxes) */}
+              {/* 🔹 Categories multi-select dropdown */}
               <label>
                 Categories * (select one or more)
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                <select
+                  multiple
+                  value={form.categories}
+                  onChange={handleCategoriesChange}
+                  style={{ marginTop: 6, minHeight: 80 }}
+                >
                   {categories.length === 0 ? (
-                    <div style={{ color: "#9ca3af" }}>(no categories)</div>
+                    <option disabled>(no categories)</option>
                   ) : (
                     categories.map((c) => (
-                      <label key={c} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <input type="checkbox" checked={form.categories.includes(c)} onChange={() => toggleCategory(c)} />
-                        <span>{c}</span>
-                      </label>
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
                     ))
                   )}
-                </div>
-                {fieldErrors.category && <div className="sa-field-error">{fieldErrors.category}</div>}
+                </select>
+                {fieldErrors.category && (
+                  <div className="sa-field-error">{fieldErrors.category}</div>
+                )}
               </label>
 
-              {/* Resorts (multi-select checkboxes) */}
+              {/* 🔹 Resorts multi-select dropdown */}
               <label>
                 Resorts (which this vendor supplies) — select one or more
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                <select
+                  multiple
+                  value={form.resorts}
+                  onChange={handleResortsChange}
+                  style={{ marginTop: 6, minHeight: 80 }}
+                >
                   {resorts.map((r) => (
-                    <label key={r.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <input type="checkbox" checked={(form.resorts || []).includes(r.id)} onChange={() => toggleResort(r.id)} />
-                      <span>{r.name}</span>
-                    </label>
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
                   ))}
-                </div>
+                </select>
               </label>
 
               <label>
@@ -976,7 +1226,14 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteLetters(e, "contactPerson")}
                   placeholder="Only letters and spaces"
                 />
-                {form.contactPerson && !/^[A-Za-z ]+$/.test(String(form.contactPerson).trim()) && <div className="sa-field-error">Contact person must be letters and spaces only</div>}
+                {form.contactPerson &&
+                  !/^[A-Za-z ]+$/.test(
+                    String(form.contactPerson).trim()
+                  ) && (
+                    <div className="sa-field-error">
+                      Contact person must be letters and spaces only
+                    </div>
+                  )}
               </label>
 
               <label>
@@ -988,7 +1245,9 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDigits(e, "phone", 10)}
                   placeholder="10 digits"
                 />
-                {fieldErrors.phone && <div className="sa-field-error">{fieldErrors.phone}</div>}
+                {fieldErrors.phone && (
+                  <div className="sa-field-error">{fieldErrors.phone}</div>
+                )}
               </label>
 
               <label>
@@ -1000,7 +1259,9 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDigits(e, "whatsapp", 10)}
                   placeholder="10 digits"
                 />
-                {fieldErrors.whatsapp && <div className="sa-field-error">{fieldErrors.whatsapp}</div>}
+                {fieldErrors.whatsapp && (
+                  <div className="sa-field-error">{fieldErrors.whatsapp}</div>
+                )}
               </label>
 
               <label>
@@ -1009,26 +1270,48 @@ const VendorList = () => {
                   name="alternatePhone"
                   value={form.alternatePhone}
                   onChange={handleChange}
-                  onPaste={(e) => handlePasteDigits(e, "alternatePhone", 10)}
+                  onPaste={(e) =>
+                    handlePasteDigits(e, "alternatePhone", 10)
+                  }
                   placeholder="10 digits"
                 />
-                {fieldErrors.alternatePhone && <div className="sa-field-error">{fieldErrors.alternatePhone}</div>}
+                {fieldErrors.alternatePhone && (
+                  <div className="sa-field-error">
+                    {fieldErrors.alternatePhone}
+                  </div>
+                )}
               </label>
 
               <label>
                 Email
-                <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="vendor@example.com" />
-                {fieldErrors.email && <div className="sa-field-error">{fieldErrors.email}</div>}
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="vendor@example.com"
+                />
+                {fieldErrors.email && (
+                  <div className="sa-field-error">{fieldErrors.email}</div>
+                )}
               </label>
 
               <label>
                 Address Line 1
-                <input name="addressLine1" value={form.addressLine1} onChange={handleChange} />
+                <input
+                  name="addressLine1"
+                  value={form.addressLine1}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
                 Address Line 2
-                <input name="addressLine2" value={form.addressLine2} onChange={handleChange} />
+                <input
+                  name="addressLine2"
+                  value={form.addressLine2}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
@@ -1038,7 +1321,11 @@ const VendorList = () => {
 
               <label>
                 State
-                <input name="state" value={form.state} onChange={handleChange} />
+                <input
+                  name="state"
+                  value={form.state}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
@@ -1050,34 +1337,64 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDigits(e, "pincode", 6)}
                   placeholder="6 digits"
                 />
-                {fieldErrors.pincode && <div className="sa-field-error">{fieldErrors.pincode}</div>}
+                {fieldErrors.pincode && (
+                  <div className="sa-field-error">{fieldErrors.pincode}</div>
+                )}
               </label>
 
               <label>
                 Country
-                <input name="country" value={form.country} onChange={handleChange} />
+                <input
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
                 GST Number
-                <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="15 char GSTIN" />
-                {fieldErrors.gstNumber && <div className="sa-field-error">{fieldErrors.gstNumber}</div>}
+                <input
+                  name="gstNumber"
+                  value={form.gstNumber}
+                  onChange={handleChange}
+                  placeholder="15 char GSTIN"
+                />
+                {fieldErrors.gstNumber && (
+                  <div className="sa-field-error">
+                    {fieldErrors.gstNumber}
+                  </div>
+                )}
               </label>
 
               <label>
                 PAN Number
-                <input name="panNumber" value={form.panNumber} onChange={handleChange} placeholder="PAN (AAAAA9999A)" />
-                {fieldErrors.panNumber && <div className="sa-field-error">{fieldErrors.panNumber}</div>}
+                <input
+                  name="panNumber"
+                  value={form.panNumber}
+                  onChange={handleChange}
+                  placeholder="PAN (AAAAA9999A)"
+                />
+                {fieldErrors.panNumber && (
+                  <div className="sa-field-error">{fieldErrors.panNumber}</div>
+                )}
               </label>
 
               <label>
                 FSSAI Number
-                <input name="fssaiNumber" value={form.fssaiNumber} onChange={handleChange} />
+                <input
+                  name="fssaiNumber"
+                  value={form.fssaiNumber}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
                 Payment Terms
-                <select name="paymentTerms" value={form.paymentTerms} onChange={handleChange}>
+                <select
+                  name="paymentTerms"
+                  value={form.paymentTerms}
+                  onChange={handleChange}
+                >
                   <option value="">Select</option>
                   <option value="Advance">Advance</option>
                   <option value="7 Days">7 Days</option>
@@ -1095,17 +1412,30 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDecimal(e, "creditLimit")}
                   placeholder="Numeric"
                 />
-                {fieldErrors.creditLimit && <div className="sa-field-error">{fieldErrors.creditLimit}</div>}
+                {fieldErrors.creditLimit && (
+                  <div className="sa-field-error">
+                    {fieldErrors.creditLimit}
+                  </div>
+                )}
               </label>
 
               <label>
                 Payment Mode
-                <input name="paymentMode" value={form.paymentMode} onChange={handleChange} placeholder="UPI / Bank / Cash" />
+                <input
+                  name="paymentMode"
+                  value={form.paymentMode}
+                  onChange={handleChange}
+                  placeholder="UPI / Bank / Cash"
+                />
               </label>
 
               <label>
                 Bank Name
-                <input name="bankName" value={form.bankName} onChange={handleChange} />
+                <input
+                  name="bankName"
+                  value={form.bankName}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
@@ -1114,21 +1444,38 @@ const VendorList = () => {
                   name="accountNumber"
                   value={form.accountNumber}
                   onChange={handleChange}
-                  onPaste={(e) => handlePasteDigits(e, "accountNumber", 20)}
+                  onPaste={(e) =>
+                    handlePasteDigits(e, "accountNumber", 20)
+                  }
                   placeholder="6-20 digits"
                 />
-                {fieldErrors.accountNumber && <div className="sa-field-error">{fieldErrors.accountNumber}</div>}
+                {fieldErrors.accountNumber && (
+                  <div className="sa-field-error">
+                    {fieldErrors.accountNumber}
+                  </div>
+                )}
               </label>
 
               <label>
                 IFSC
-                <input name="ifsc" value={form.ifsc} onChange={handleChange} placeholder="IFSC" />
-                {fieldErrors.ifsc && <div className="sa-field-error">{fieldErrors.ifsc}</div>}
+                <input
+                  name="ifsc"
+                  value={form.ifsc}
+                  onChange={handleChange}
+                  placeholder="IFSC"
+                />
+                {fieldErrors.ifsc && (
+                  <div className="sa-field-error">{fieldErrors.ifsc}</div>
+                )}
               </label>
 
               <label>
                 Branch
-                <input name="branch" value={form.branch} onChange={handleChange} />
+                <input
+                  name="branch"
+                  value={form.branch}
+                  onChange={handleChange}
+                />
               </label>
 
               <label>
@@ -1140,7 +1487,11 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDigits(e, "deliveryTime")}
                   placeholder="Integer days"
                 />
-                {fieldErrors.deliveryTime && <div className="sa-field-error">{fieldErrors.deliveryTime}</div>}
+                {fieldErrors.deliveryTime && (
+                  <div className="sa-field-error">
+                    {fieldErrors.deliveryTime}
+                  </div>
+                )}
               </label>
 
               <label>
@@ -1152,12 +1503,20 @@ const VendorList = () => {
                   onPaste={(e) => handlePasteDigits(e, "minOrderQty")}
                   placeholder="Integer"
                 />
-                {fieldErrors.minOrderQty && <div className="sa-field-error">{fieldErrors.minOrderQty}</div>}
+                {fieldErrors.minOrderQty && (
+                  <div className="sa-field-error">
+                    {fieldErrors.minOrderQty}
+                  </div>
+                )}
               </label>
 
               <label>
                 Status
-                <select name="status" value={form.status} onChange={handleChange}>
+                <select
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
                   <option value="Blacklisted">Blacklisted</option>
@@ -1166,14 +1525,35 @@ const VendorList = () => {
 
               <label>
                 Notes
-                <textarea name="notes" value={form.notes} onChange={handleChange} rows={3} />
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={handleChange}
+                  rows={3}
+                />
               </label>
 
               {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>Cancel</button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : form._id ? "Update Vendor" : "Save Vendor"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : form._id
+                    ? "Update Vendor"
+                    : "Save Vendor"}
+                </button>
               </div>
             </form>
           </div>
