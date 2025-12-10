@@ -1,14 +1,29 @@
-import mongoose from "mongoose";
+// backend/models/storeModel.js
+const mongoose = require("mongoose");
 
 const storeSchema = new mongoose.Schema(
   {
-    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
-    name: { type: String, required: true },
-    code: String,
-    isActive: { type: Boolean, default: true },
+    // Resort ko abhi simple string rakh rahe hain
+    // Isme tum Resort ka _id ya name dono store kar sakte ho
+    resort: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    code: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-const Store = mongoose.model("Store", storeSchema);
-export default Store;
+module.exports = mongoose.model("Store", storeSchema);

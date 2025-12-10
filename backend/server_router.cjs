@@ -11,7 +11,7 @@ function createRouter({ useMongo, mongoose }) {
   // Helpers
   // ------------------------
 
-  // Safe wrapper for old controllers-based routes
+  // Safe wrapper for controllers-based routes
   const safe = (name) => {
     const fn = controllers[name];
     if (typeof fn === "function") return fn;
@@ -25,33 +25,47 @@ function createRouter({ useMongo, mongoose }) {
     };
   };
 
-  // --- ItemCategory & Item models (Mongo or in-memory) ---
+  // --- Models / in-memory for ItemCategory, Item, Store ---
   let ItemCategoryModel = null;
   let ItemModel = null;
+  let StoreModel = null;
+
   let memItemCategories = [];
   let memItems = [];
+  let memStores = [];
 
   if (useMongo && mongoose) {
     const { Schema } = mongoose;
 
+    // Item Category
     const itemCategorySchema = new Schema(
       {
         name: { type: String, required: true },
         code: { type: String, required: true },
-        // yahi field tum frontend se bhej rahe ho
-        departmentCategory: { type: String, default: "" },
+        departmentCategory: { type: String, default: "" }, // frontend se aata hai
       },
       { timestamps: true }
     );
 
+    // Item
     const itemSchema = new Schema(
       {
         name: { type: String, required: true },
         code: { type: String, required: true },
-        itemCategory: { type: String, default: "" }, // sirf string store kar rahe
+        itemCategory: { type: String, default: "" },
         uom: { type: String, default: "" },
         brand: { type: String, default: "" },
         indicativePrice: { type: Number },
+      },
+      { timestamps: true }
+    );
+
+    // Store
+    const storeSchema = new Schema(
+      {
+        resort: { type: String, required: true }, // resort _id as string
+        name: { type: String, required: true },
+        code: { type: String, default: "" },
       },
       { timestamps: true }
     );
@@ -62,10 +76,13 @@ function createRouter({ useMongo, mongoose }) {
 
     ItemModel = mongoose.models.Item || mongoose.model("Item", itemSchema);
 
-    console.log("ItemCategory & Item models initialised (Mongo)");
+    StoreModel =
+      mongoose.models.Store || mongoose.model("Store", storeSchema);
+
+    console.log("ItemCategory, Item & Store models initialised (Mongo)");
   } else {
     console.warn(
-      "Mongo DB not enabled for ItemCategory/Item; using in-memory arrays (data lost on restart)."
+      "Mongo DB not enabled; ItemCategory/Item/Store will use in-memory arrays (data lost on restart)."
     );
   }
 
@@ -123,7 +140,123 @@ function createRouter({ useMongo, mongoose }) {
   router.delete("/api/departments/:id", safe("deleteDepartment"));
 
   // =======================================================
-  // 📁 ITEM CATEGORIES  (FULL CRUD, DIRECTLY HERE)
+  // 🏪 STORES (FULL CRUD)
+  // =======================================================
+
+  const listStoresHandler = async (req, res) => {
+    try {
+      if (StoreModel) {
+        const docs = await StoreModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memStores);
+    } catch (err) {
+      console.error("GET /api/stores error", err);
+      res.status(500).json({ message: "Failed to list stores" });
+    }
+  };
+
+  const createStoreHandler = async (req, res) => {
+    try {
+      const { resort, name, code } = req.body || {};
+
+      if (!resort || !name) {
+        return res
+          .status(400)
+          .json({ message: "resort & name are required" });
+      }
+
+      if (StoreModel) {
+        const doc = await StoreModel.create({
+          resort,
+          name,
+          code: code || "",
+        });
+        return res.status(201).json(doc);
+      }
+
+      const created = {
+        _id: `store_${Date.now()}`,
+        resort,
+        name,
+        code: code || "",
+      };
+      memStores.push(created);
+      return res.status(201).json(created);
+    } catch (err) {
+      console.error("POST /api/stores error", err);
+      res.status(500).json({ message: "Failed to create store" });
+    }
+  };
+
+  const updateStoreHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { resort, name, code } = req.body || {};
+
+      const update = {};
+      if (resort != null) update.resort = resort;
+      if (name != null) update.name = name;
+      if (code != null) update.code = code;
+
+      if (StoreModel) {
+        const updated = await StoreModel.findByIdAndUpdate(
+          id,
+          { $set: update },
+          { new: true }
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Store not found" });
+        }
+        return res.json(updated);
+      }
+
+      const idx = memStores.findIndex((s) => s._id === id);
+      if (idx === -1) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+      memStores[idx] = { ...memStores[idx], ...update };
+      return res.json(memStores[idx]);
+    } catch (err) {
+      console.error("PUT /api/stores/:id error", err);
+      res.status(500).json({ message: "Failed to update store" });
+    }
+  };
+
+  const deleteStoreHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (StoreModel) {
+        const deleted = await StoreModel.findByIdAndDelete(id);
+        if (!deleted) {
+          return res.status(404).json({ message: "Store not found" });
+        }
+        return res.json({ ok: true });
+      }
+
+      const before = memStores.length;
+      memStores = memStores.filter((s) => s._id !== id);
+      if (memStores.length === before) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE /api/stores/:id error", err);
+      res.status(500).json({ message: "Failed to delete store" });
+    }
+  };
+
+  // plain path + /api path — dono ko support karte hai
+  router.get("/stores", listStoresHandler);
+
+  router.get("/api/stores", listStoresHandler);
+  router.post("/api/stores", createStoreHandler);
+  router.put("/api/stores/:id", updateStoreHandler);
+  router.delete("/api/stores/:id", deleteStoreHandler);
+
+  // =======================================================
+  // 📁 ITEM CATEGORIES (FULL CRUD)
   // =======================================================
 
   // LIST
@@ -249,7 +382,7 @@ function createRouter({ useMongo, mongoose }) {
   });
 
   // =======================================================
-  // 📦 ITEMS  (FULL CRUD, DIRECTLY HERE)
+  // 📦 ITEMS (FULL CRUD)
   // =======================================================
 
   const listItemsHandler = async (req, res) => {
@@ -260,7 +393,7 @@ function createRouter({ useMongo, mongoose }) {
       }
       return res.json(memItems);
     } catch (err) {
-      console.error("GET /items error", err);
+      console.error("GET /api/items error", err);
       res.status(500).json({ message: "Failed to list items" });
     }
   };
@@ -374,10 +507,8 @@ function createRouter({ useMongo, mongoose }) {
     }
   };
 
-  // Purana plain path bhi same handler use kare
   router.get("/items", listItemsHandler);
 
-  // /api style endpoints (jo tumhare React me use ho rahe)
   router.get("/api/items", listItemsHandler);
   router.post("/api/items", createItemHandler);
   router.put("/api/items/:id", updateItemHandler);
