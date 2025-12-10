@@ -87,9 +87,15 @@ const ItemCategoryMaster = () => {
         ? icRes.data.map(mapItemCategory)
         : [];
 
-      const serverDepts = Array.isArray(deptRes.data)
-        ? deptRes.data.map(mapDepartment)
-        : [];
+      // 🔥 IMPORTANT FIX: handle { ok:true, departments:[...] } shape
+      const deptDataRaw = deptRes.data || {};
+      let deptArray = [];
+      if (Array.isArray(deptDataRaw)) {
+        deptArray = deptDataRaw;
+      } else if (Array.isArray(deptDataRaw.departments)) {
+        deptArray = deptDataRaw.departments;
+      }
+      const serverDepts = deptArray.map(mapDepartment);
 
       const finalIC = serverIC.length ? serverIC : DEV_ITEM_CATEGORIES;
       setItemCategories(finalIC);
@@ -106,7 +112,6 @@ const ItemCategoryMaster = () => {
 
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // filters
