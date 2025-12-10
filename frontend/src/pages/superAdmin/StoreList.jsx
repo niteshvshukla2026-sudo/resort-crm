@@ -2,8 +2,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
-
+// tumhara backend items ke liye /api/items use kar raha hai
+// isliye yahan bhi /api hi rakhenge
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 const emptyForm = () => ({ _id: undefined, resort: "", name: "", code: "" });
 
@@ -27,40 +29,56 @@ const StoreList = () => {
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvError, setCsvError] = useState("");
 
-  // ---------- Helpers ----------
+  // ---------- helpers ----------
 
-  // Normalize resort array from API (handle {data:[]} or [] forms)
-  const normalizeList = (raw) => {
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (Array.isArray(raw.data)) return raw.data;
+  const normalizeResortList = (payload) => {
+    // resort API different shapes handle karega
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.resorts)) return payload.resorts;
     return [];
   };
 
-  // Load stores + resorts from backend
+  const normalizeStoreList = (payload) => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.stores)) return payload.stores;
+    return [];
+  };
+
+  // backend se data lana (stores + resorts)
   const loadData = async () => {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      setError("");
+      // alag-alag try/catch taki ek fail ho to doosra chale
+      let loadedStores = [];
+      let loadedResorts = [];
 
-      const [storeRes, resortRes] = await Promise.all([
-        axios.get(`${API_BASE}/stores`),
-        axios.get(`${API_BASE}/resorts`),
-      ]);
+      // STORES
+      try {
+        const storeRes = await axios.get(`${API_BASE}/stores`);
+        console.log("STORES API DATA:", storeRes.data);
+        loadedStores = normalizeStoreList(storeRes.data);
+      } catch (e) {
+        console.error("Error loading stores:", e);
+        setError((prev) => prev || "Failed to load stores from server");
+      }
 
-      const serverStores = normalizeList(storeRes.data);
-      const serverResorts = normalizeList(resortRes.data);
+      // RESORTS
+      try {
+        const resortRes = await axios.get(`${API_BASE}/resorts`);
+        console.log("RESORTS API DATA:", resortRes.data);
+        loadedResorts = normalizeResortList(resortRes.data);
+      } catch (e) {
+        console.error("Error loading resorts:", e);
+        setError((prev) => prev || "Failed to load resorts from server");
+      }
 
-      setStores(serverStores);
-      setResorts(serverResorts);
-    } catch (err) {
-      console.error("Failed to load stores/resorts", err);
-      setError(
-        err?.response?.data?.message ||
-          "Failed to load stores/resorts from server"
-      );
-      setStores([]);
-      setResorts([]);
+      setStores(loadedStores);
+      setResorts(loadedResorts);
     } finally {
       setLoading(false);
     }
@@ -71,11 +89,11 @@ const StoreList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Get resort name from id/object
+  // resort id se resort ka name nikalna
   const getResortName = (resortRef) => {
     if (!resortRef) return "-";
 
-    // If backend populated resort as object
+    // agar backend ne resort ko object ki tarah bheja ho
     if (typeof resortRef === "object") {
       if (resortRef.name) return resortRef.name;
       const id = resortRef._id || resortRef.id;
@@ -83,12 +101,12 @@ const StoreList = () => {
       return r ? r.name : id || "-";
     }
 
-    // resortRef is probably an id string
+    // normally resortRef sirf id string hoga
     const r = resorts.find((x) => (x._id || x.id) === resortRef);
-    return r ? r.name : resortRef;
+    return r ? r.name : resortRef; // agar na mila to id hi dikha dega
   };
 
-  // Filters applied list
+  // filters
   const filtered = useMemo(() => {
     return stores.filter((s) => {
       const resortId =
@@ -111,7 +129,7 @@ const StoreList = () => {
     });
   }, [stores, filterResort, filterName, filterCode]);
 
-  // ---------- CRUD: create / edit ----------
+  // ---------- CRUD ----------
 
   const openCreateForm = () => {
     setForm(emptyForm());
@@ -144,14 +162,16 @@ const StoreList = () => {
     e.preventDefault();
     setError("");
 
-    if (!form.resort || !form.name)
-      return setError("Resort and Store name required");
+    if (!form.resort || !form.name) {
+      setError("Resort and Store name required");
+      return;
+    }
 
     try {
       setSaving(true);
 
       const payload = {
-        resort: form.resort, // backend should treat this as resort _id
+        resort: form.resort, // yahan resort _id bhej rahe hain
         name: form.name,
         code: form.code || undefined,
       };
@@ -166,7 +186,6 @@ const StoreList = () => {
             p.map((x) => (x._id === form._id || x.id === form._id ? res.data : x))
           );
         } else {
-          // optimistic local update
           setStores((p) =>
             p.map((x) =>
               x._id === form._id || x.id === form._id ? { ...x, ...payload } : x
@@ -203,10 +222,8 @@ const StoreList = () => {
     }
   };
 
-  // ---------- CSV Upload / Export ----------
+  // ---------- CSV Upload / Export (same as before) ----------
 
-  // CSV upload: columns: resort,name,code
-  // resort = resort _id (not name)
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -253,16 +270,14 @@ const StoreList = () => {
         return;
       }
 
-      // optimistic local add
       const localAdded = parsed.map((p) => ({
         _id: `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        resort: p.resort, // resort id
+        resort: p.resort,
         name: p.name,
         code: p.code || "",
       }));
       setStores((prev) => [...localAdded, ...prev]);
 
-      // attempt server create for each row
       try {
         for (const p of parsed) {
           const payload = {
@@ -299,7 +314,6 @@ const StoreList = () => {
           .map((c) => {
             let val = s[c];
             if (c === "resort") {
-              // export resort id
               val =
                 typeof s.resort === "object"
                   ? s.resort._id || s.resort.id
@@ -323,13 +337,15 @@ const StoreList = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Resort dropdown options
-  const resortOptions = useMemo(() => {
-    return resorts.map((r) => ({
-      id: r._id || r.id,
-      name: r.name,
-    }));
-  }, [resorts]);
+  // resort dropdown options
+  const resortOptions = useMemo(
+    () =>
+      resorts.map((r) => ({
+        id: r._id || r.id,
+        name: r.name,
+      })),
+    [resorts]
+  );
 
   // ---------- UI ----------
 
@@ -351,7 +367,7 @@ const StoreList = () => {
                 handleCSVUpload(f);
                 e.target.value = "";
               }}
-              title="Upload CSV (columns: resort(name _id),name,code)"
+              title="Upload CSV (columns: resort,name,code)"
             />
             <span style={{ marginLeft: 6 }}>
               {csvLoading ? "Uploading..." : "Upload CSV"}
