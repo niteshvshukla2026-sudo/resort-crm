@@ -4,6 +4,7 @@ import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/users.routes.js";
 import resortRoutes from "./routes/resorts.routes.js";
@@ -19,11 +20,12 @@ import consumptionRoutes from "./routes/consumption.routes.js";
 import storeTransferRuleRoutes from "./routes/storeTransferRule.routes.js";
 import resortUserRoutes from "./routes/resortUser.routes.js";
 
+// 🔹 NEW: Item Category routes import
+import itemCategoryRoutes from "./routes/itemCategories.routes.js";
+
 // If running in demo mode, seed an in-memory DB
 if (process.env.USE_INMEMORY === "true") {
   try {
-    // use CommonJS require for the in-memory module if necessary
-    // (this file appears to expect require; keep as-is to avoid breaking)
     // eslint-disable-next-line no-undef
     const inmem = require("./inmemoryDb");
     if (inmem && typeof inmem.seed === "function") {
@@ -42,25 +44,18 @@ const app = express();
 
 /**
  * CORS configuration
- *
- * Set FRONTEND_ORIGINS in your Render environment variables as a comma-separated list
- * e.g. FRONTEND_ORIGINS="https://resort-crm.vercel.app,https://staging-resort.vercel.app"
- *
- * If FRONTEND_ORIGINS is not provided, it falls back to the main Vercel URL used earlier.
  */
 const defaultFrontend = "https://resort-crm.vercel.app";
-const allowedOriginsEnv = process.env.FRONTEND_ORIGINS || defaultFrontend;
-const ALLOWED_ORIGINS = allowedOriginsEnv.split(",").map(s => s.trim()).filter(Boolean);
+const allowedOriginsEnv =
+  process.env.FRONTEND_ORIGINS || defaultFrontend;
+const ALLOWED_ORIGINS = allowedOriginsEnv
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
-/**
- * origin function for cors
- * - allows exact matches from ALLOWED_ORIGINS
- * - allows undefined origin (curl/postman) by returning true
- */
 const corsOptions = {
   origin: function (origin, callback) {
-    // allow non-browser tools like curl/postman (no origin)
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // allow tools like curl/postman
 
     if (ALLOWED_ORIGINS.indexOf(origin) !== -1) {
       callback(null, true);
@@ -70,8 +65,13 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-  optionsSuccessStatus: 204 // some legacy browsers choke on 204 for preflight
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+  ],
+  optionsSuccessStatus: 204,
 };
 
 // Apply CORS middleware before routes
@@ -106,6 +106,9 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/consumption", consumptionRoutes);
 app.use("/api/resort-user", resortUserRoutes);
 app.use("/api/store-transfer-rules", storeTransferRuleRoutes);
+
+// 🔹 NEW: Item Categories API base path
+app.use("/api/item-categories", itemCategoryRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {
