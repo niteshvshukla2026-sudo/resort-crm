@@ -1,36 +1,43 @@
-const express = require("express");
+// backend/src/routes/itemCategories.routes.js
+import express from "express";
+import ItemCategory from "../models/itemCategory.model.js";
+
 const router = express.Router();
-const ItemCategory = require("../models/itemCategoryModel");
-const Department = require("../models/departmentModel"); // tumhara department model ka path
-const { generateCodeFromName } = require("../utils/codeGenerator");
 
-/**
- * FRONTEND expectation:
- * GET /api/item-categories  -> plain array []
- * Each item with populated department object.
- */
+// simple helper: if code diya hai to use karo, warna auto bana do
+function makeCode(name = "", code = "") {
+  if (code && code.trim()) return code.trim();
 
-// GET all item categories (optionally by resort)
-router.get("/", async (req, res) => {
+  const base =
+    (name || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => (w.length <= 4 ? w : w.slice(0, 4)))
+      .join("_") || "IC";
+
+  const suffix = Math.floor(Math.random() * 900 + 100); // 100..999
+  return `${base}_${suffix}`.slice(0, 20);
+}
+
+// GET all
+router.get("/", async (req, res, next) => {
   try {
-    const { resort } = req.query;
-    const filter = {};
-
-    if (resort) filter.resort = resort;
-
-    const list = await ItemCategory.find(filter)
+    const list = await ItemCategory.find()
       .populate("department", "name code resort")
       .sort({ name: 1 });
 
-    res.json(list); // array
+    res.json(list); // plain array
   } catch (err) {
-    console.error("GET /api/item-categories error:", err);
-    res.status(500).json({ message: "Failed to fetch item categories" });
+    next(err);
   }
 });
 
-// CREATE new item category
-router.post("/", async (req, res) => {
+// CREATE
+router.post("/", async (req, res, next) => {
   try {
     const { name, code, department, departmentCategory } = req.body;
 
@@ -38,43 +45,30 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Item category name required" });
     }
 
-    // frontend kabhi "department", kabhi "departmentCategory" bhej sakta hai (humne dono bheje)
     const departmentId = department || departmentCategory;
     if (!departmentId) {
       return res.status(400).json({ message: "Department is required" });
     }
 
-    const deptDoc = await Department.findById(departmentId);
-    if (!deptDoc) {
-      return res.status(400).json({ message: "Invalid department" });
-    }
-
-    const finalCode =
-      code && code.trim().length
-        ? code.trim()
-        : generateCodeFromName(name, "IC");
+    const finalCode = makeCode(name, code);
 
     const created = await ItemCategory.create({
       name: name.trim(),
       code: finalCode,
-      department: deptDoc._id,
-      resort: deptDoc.resort, // same resort as department
+      department: departmentId,
     });
 
     const populated = await created.populate("department", "name code resort");
-
-    res.status(201).json(populated); // single object (frontend map karega)
+    res.status(201).json(populated);
   } catch (err) {
-    console.error("POST /api/item-categories error:", err);
-    res.status(500).json({ message: "Failed to create item category" });
+    next(err);
   }
 });
 
-// UPDATE item category
-router.put("/:id", async (req, res) => {
+// UPDATE
+router.put("/:id", async (req, res, next) => {
   try {
     const { name, code, department, departmentCategory, isActive } = req.body;
-    const departmentId = department || departmentCategory;
 
     const ic = await ItemCategory.findById(req.params.id);
     if (!ic) {
@@ -82,33 +76,23 @@ router.put("/:id", async (req, res) => {
     }
 
     if (name && name.trim()) ic.name = name.trim();
-    if (code && code.trim()) ic.code = code.trim();
+    if (code || name) ic.code = makeCode(name || ic.name, code);
 
-    if (typeof isActive === "boolean") {
-      ic.isActive = isActive;
-    }
+    const departmentId = department || departmentCategory;
+    if (departmentId) ic.department = departmentId;
 
-    if (departmentId) {
-      const deptDoc = await Department.findById(departmentId);
-      if (!deptDoc) {
-        return res.status(400).json({ message: "Invalid department" });
-      }
-      ic.department = deptDoc._id;
-      ic.resort = deptDoc.resort;
-    }
+    if (typeof isActive === "boolean") ic.isActive = isActive;
 
     await ic.save();
     const populated = await ic.populate("department", "name code resort");
-
     res.json(populated);
   } catch (err) {
-    console.error("PUT /api/item-categories/:id error:", err);
-    res.status(500).json({ message: "Failed to update item category" });
+    next(err);
   }
 });
 
-// DELETE item category
-router.delete("/:id", async (req, res) => {
+// DELETE
+router.delete("/:id", async (req, res, next) => {
   try {
     const ic = await ItemCategory.findByIdAndDelete(req.params.id);
     if (!ic) {
@@ -116,9 +100,8 @@ router.delete("/:id", async (req, res) => {
     }
     res.json({ ok: true, message: "Item category deleted" });
   } catch (err) {
-    console.error("DELETE /api/item-categories/:id error:", err);
-    res.status(500).json({ message: "Failed to delete item category" });
+    next(err);
   }
 });
 
-module.exports = router;
+export default router;
