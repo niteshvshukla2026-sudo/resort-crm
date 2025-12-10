@@ -4,64 +4,25 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// dev-sample categories (used if server empty)
-const DEV_ITEM_CATEGORIES = [
-  { _id: "dev_ic_1", name: "Utensils", code: "UTEN_101", departmentId: "", departmentName: "" },
-  { _id: "dev_ic_2", name: "Glassware", code: "GLAS_102", departmentId: "", departmentName: "" },
-  { _id: "dev_ic_3", name: "Cleaning Tools", code: "CLEAN_103", departmentId: "", departmentName: "" },
-  { _id: "dev_ic_4", name: "Consumables", code: "CONS_104", departmentId: "", departmentName: "" },
-  { _id: "dev_ic_5", name: "Electrics", code: "ELEC_105", departmentId: "", departmentName: "" },
-];
-
-const emptyForm = () => ({
-  _id: undefined,
-  name: "",
-  code: "",
-  departmentId: "", // store department _id yaha
-});
+const emptyForm = () => ({ _id: undefined, name: "", code: "", departmentCategory: "" });
 
 const generateCodeFromName = (name = "") => {
-  const base =
-    name
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9\s]/g, "")
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => (w.length <= 4 ? w : w.slice(0, 4)))
-      .join("_") || "IC";
+  const base = name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => (w.length <= 4 ? w : w.slice(0, 4)))
+    .join("_") || "IC";
   const suffix = Math.floor(Math.random() * 900 + 100); // 100..999
   return `${base}_${suffix}`.slice(0, 20);
 };
 
-// helper: map server item-category into UI shape
-const mapItemCategory = (it) => {
-  const dept = it.department || it.departmentCategory || it.dept || "";
-  const departmentId =
-    typeof dept === "object" ? dept._id || dept.id || "" : dept || "";
-  const departmentName =
-    typeof dept === "object" ? dept.name || dept.code || "" : it.departmentName || "";
-
-  return {
-    _id: it._id || it.id,
-    name: it.name || "",
-    code: it.code || generateCodeFromName(it.name || ""),
-    departmentId,
-    departmentName,
-  };
-};
-
-// helper: map server department
-const mapDepartment = (d) => ({
-  _id: d._id || d.id,
-  name: d.name || d.departmentName || d.code || "",
-  code: d.code || "",
-});
-
 const ItemCategoryMaster = () => {
   const [itemCategories, setItemCategories] = useState([]);
-  const [departments, setDepartments] = useState([]); // used to populate department dropdown
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -71,40 +32,57 @@ const ItemCategoryMaster = () => {
 
   // filters
   const [filterName, setFilterName] = useState("");
-  const [filterDept, setFilterDept] = useState(""); // department _id
+  const [filterDept, setFilterDept] = useState("");
 
-  // load existing item-categories and departments
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
+
       const [icRes, deptRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/departments`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/api/item-categories`).catch((err) => {
+          console.error("load item-categories error:", err);
+          setError("Failed to load item categories");
+          return { data: [] };
+        }),
+        axios.get(`${API_BASE}/api/departments`).catch((err) => {
+          console.error("load departments error:", err);
+          setError("Failed to load departments");
+          return { data: [] };
+        }),
       ]);
 
+      // --- ITEM CATEGORIES from backend only (no demo fallback) ---
       const serverIC = Array.isArray(icRes.data)
-        ? icRes.data.map(mapItemCategory)
+        ? icRes.data.map((it) => ({
+            _id: it._id || it.id,
+            name: it.name || "",
+            code: it.code || generateCodeFromName(it.name || ""),
+            // backend might send department, departmentCategory, or dept
+            departmentCategory:
+              it.departmentCategory || it.department || it.dept || "",
+          }))
         : [];
 
-      // 🔥 IMPORTANT FIX: handle { ok:true, departments:[...] } shape
-      const deptDataRaw = deptRes.data || {};
-      let deptArray = [];
-      if (Array.isArray(deptDataRaw)) {
-        deptArray = deptDataRaw;
-      } else if (Array.isArray(deptDataRaw.departments)) {
-        deptArray = deptDataRaw.departments;
-      }
-      const serverDepts = deptArray.map(mapDepartment);
+      setItemCategories(serverIC);
 
-      const finalIC = serverIC.length ? serverIC : DEV_ITEM_CATEGORIES;
-      setItemCategories(finalIC);
+      // --- DEPARTMENTS ---
+      const deptData = Array.isArray(deptRes.data?.departments)
+        ? deptRes.data.departments
+        : Array.isArray(deptRes.data)
+        ? deptRes.data
+        : [];
+
+      const serverDepts = deptData.map((d) => ({
+        _id: d._id || d.id,
+        name: d.name || "",
+        code: d.code || "",
+      }));
+
       setDepartments(serverDepts);
     } catch (err) {
-      console.error("load error", err);
-      setError("Failed to load item categories / departments; using sample data");
-      setItemCategories(DEV_ITEM_CATEGORIES);
-      setDepartments([]);
+      console.error("loadData fatal error:", err);
+      setError("Failed to load item categories / departments");
     } finally {
       setLoading(false);
     }
@@ -112,17 +90,14 @@ const ItemCategoryMaster = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // filters
   const filtered = useMemo(() => {
     return itemCategories.filter((it) => {
-      if (
-        filterName &&
-        !it.name?.toLowerCase().includes(filterName.toLowerCase())
-      )
-        return false;
-      if (filterDept && it.departmentId !== filterDept) return false;
+      if (filterName && !it.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
+      if (filterDept && (it.departmentCategory || "").toString() !== filterDept) return false;
       return true;
     });
   }, [itemCategories, filterName, filterDept]);
@@ -140,7 +115,7 @@ const ItemCategoryMaster = () => {
       _id: it._id || it.id,
       name: it.name || "",
       code: it.code || generateCodeFromName(it.name),
-      departmentId: it.departmentId || "",
+      departmentCategory: it.departmentCategory || "",
     });
     setError("");
     setShowForm(true);
@@ -155,70 +130,63 @@ const ItemCategoryMaster = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!form.name || !form.name.trim())
-      return setError("Item Category name required");
-    if (!form.departmentId || !form.departmentId.trim())
-      return setError("Select Department Category");
+
+    if (!form.name || !form.name.trim()) return setError("Item Category name required");
+    if (!form.departmentCategory || !form.departmentCategory.trim())
+      return setError("Select Department");
 
     try {
       setSaving(true);
       const payload = {
         name: form.name.trim(),
-        code:
-          form.code && form.code.trim()
-            ? form.code.trim()
-            : generateCodeFromName(form.name),
-        // backend ke liye: department id ko dono naam se bhej diya
-        department: form.departmentId,
-        departmentCategory: form.departmentId,
+        code: form.code && form.code.trim() ? form.code.trim() : generateCodeFromName(form.name),
+        // backend: we send both names so whichever it expects will work
+        department: form.departmentCategory,
+        departmentCategory: form.departmentCategory,
       };
 
       if (form._id) {
         const res = await axios
           .put(`${API_BASE}/api/item-categories/${form._id}`, payload)
-          .catch(() => null);
+          .catch((err) => {
+            console.error("update item-category error:", err);
+            return null;
+          });
 
         if (res?.data) {
-          const mapped = mapItemCategory(res.data);
+          const updated = {
+            _id: res.data._id || res.data.id,
+            name: res.data.name,
+            code: res.data.code,
+            departmentCategory:
+              res.data.departmentCategory || res.data.department || res.data.dept || payload.department,
+          };
           setItemCategories((p) =>
-            p.map((x) =>
-              x._id === form._id || x.id === form._id ? mapped : x
-            )
+            p.map((x) => (x._id === form._id || x.id === form._id ? updated : x))
           );
         } else {
-          // optimistic update if server didn't respond with entity
-          const dept = departments.find((d) => d._id === form.departmentId);
+          // local fallback update
           setItemCategories((p) =>
-            p.map((x) =>
-              x._id === form._id || x.id === form._id
-                ? {
-                    ...x,
-                    name: payload.name,
-                    code: payload.code,
-                    departmentId: form.departmentId,
-                    departmentName: dept?.name || x.departmentName,
-                  }
-                : x
-            )
+            p.map((x) => (x._id === form._id || x.id === form._id ? { ...x, ...payload } : x))
           );
         }
       } else {
         const res = await axios
           .post(`${API_BASE}/api/item-categories`, payload)
-          .catch(() => null);
+          .catch((err) => {
+            console.error("create item-category error:", err);
+            return null;
+          });
 
         const created = res?.data
-          ? mapItemCategory(res.data)
-          : (() => {
-              const dept = departments.find((d) => d._id === form.departmentId);
-              return {
-                _id: `local_${Date.now()}`,
-                name: payload.name,
-                code: payload.code,
-                departmentId: form.departmentId,
-                departmentName: dept?.name || "",
-              };
-            })();
+          ? {
+              _id: res.data._id || res.data.id,
+              name: res.data.name,
+              code: res.data.code,
+              departmentCategory:
+                res.data.departmentCategory || res.data.department || res.data.dept || payload.department,
+            }
+          : { ...payload, _id: `local_${Date.now()}` };
 
         setItemCategories((p) => [created, ...p]);
       }
@@ -236,12 +204,8 @@ const ItemCategoryMaster = () => {
   const handleDelete = async (it) => {
     if (!window.confirm(`Delete item category ${it.name || it._id}?`)) return;
     try {
-      setItemCategories((p) =>
-        p.filter((x) => (x._id || x.id) !== (it._id || it.id))
-      );
-      await axios
-        .delete(`${API_BASE}/api/item-categories/${it._id || it.id}`)
-        .catch(() => null);
+      setItemCategories((p) => p.filter((x) => (x._id || x.id) !== (it._id || it.id)));
+      await axios.delete(`${API_BASE}/api/item-categories/${it._id || it.id}`).catch(() => null);
     } catch (err) {
       console.error("delete error", err);
       setError("Failed to delete item category");
@@ -249,30 +213,16 @@ const ItemCategoryMaster = () => {
     }
   };
 
-  const resolveDepartmentName = (departmentId, fallbackName = "") => {
-    if (!departmentId && fallbackName) return fallbackName;
-    if (!departmentId) return "-";
-    const d = departments.find((dept) => dept._id === departmentId);
-    return d?.name || fallbackName || "-";
-  };
-
   return (
     <div className="sa-page">
       <div className="sa-page-header">
         <div>
           <h2>Item Categories (Master)</h2>
-          <p>
-            Create and manage item categories. Assign each item-category to an
-            existing Department.
-          </p>
+          <p>Create and manage item categories. Assign each item-category to an existing Department.</p>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            className="sa-primary-button"
-            type="button"
-            onClick={openCreateForm}
-          >
+          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
             <i className="ri-add-line" /> Add Category
           </button>
         </div>
@@ -289,37 +239,39 @@ const ItemCategoryMaster = () => {
         className="sa-card"
         style={{
           display: "flex",
-          gap: 12,
+          gap: 8,
           flexWrap: "wrap",
           alignItems: "center",
           marginBottom: 12,
         }}
       >
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span>Item Category</span>
+        <label>
+          Item Category
           <input
             value={filterName}
             onChange={(e) => setFilterName(e.target.value)}
             placeholder="Search category..."
+            style={{ marginLeft: 8 }}
           />
         </label>
 
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span>Department Category</span>
+        <label>
+          Department
           <select
             value={filterDept}
             onChange={(e) => setFilterDept(e.target.value)}
+            style={{ marginLeft: 8 }}
           >
             <option value="">All</option>
             {departments.map((d) => (
-              <option key={d._id} value={d._id}>
-                {d.name}
+              <option key={d._id || d.code || d.name} value={d._id || d.code || d.name}>
+                {d.name || d.code || d._id}
               </option>
             ))}
           </select>
         </label>
 
-        <div style={{ marginLeft: "auto", color: "#9ca3af", fontSize: 13 }}>
+        <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
           Showing {filtered.length} / {itemCategories.length}
         </div>
       </div>
@@ -344,15 +296,9 @@ const ItemCategoryMaster = () => {
                 <tr key={it._id || it.id || it.code}>
                   <td>{it.name}</td>
                   <td>{it.code}</td>
-                  <td>
-                    {resolveDepartmentName(it.departmentId, it.departmentName)}
-                  </td>
+                  <td>{it.departmentCategory || "-"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="sa-secondary-button"
-                      onClick={() => openEditForm(it)}
-                      title="Edit"
-                    >
+                    <button className="sa-secondary-button" onClick={() => openEditForm(it)} title="Edit">
                       <i className="ri-edit-line" />
                     </button>
                     <button
@@ -365,11 +311,7 @@ const ItemCategoryMaster = () => {
                     >
                       <i className="ri-file-copy-line" />
                     </button>
-                    <button
-                      className="sa-secondary-button"
-                      onClick={() => handleDelete(it)}
-                      title="Delete"
-                    >
+                    <button className="sa-secondary-button" onClick={() => handleDelete(it)} title="Delete">
                       <i className="ri-delete-bin-6-line" />
                     </button>
                   </td>
@@ -382,21 +324,10 @@ const ItemCategoryMaster = () => {
 
       {/* Modal: Create / Edit */}
       {showForm && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={() => !saving && setShowForm(false)}
-        >
-          <div
-            className="sa-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 700 }}
-          >
-            <h3 style={{ marginBottom: 6 }}>
-              {form._id ? "Edit Item Category" : "Add Item Category"}
-            </h3>
-            <p className="sa-modal-sub">
-              Give a name, code (auto) and assign a Department Category.
-            </p>
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <h3 style={{ marginBottom: 6 }}>{form._id ? "Edit Item Category" : "Add Item Category"}</h3>
+            <p className="sa-modal-sub">Give a name, code (auto) and assign a Department.</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
@@ -416,21 +347,22 @@ const ItemCategoryMaster = () => {
                   name="code"
                   value={form.code || generateCodeFromName(form.name)}
                   disabled
+                  style={{ background: "#f3f4f6" }}
                 />
               </label>
 
               <label>
-                Department Category *
+                Department *
                 <select
-                  name="departmentId"
-                  value={form.departmentId}
+                  name="departmentCategory"
+                  value={form.departmentCategory}
                   onChange={handleFormChange}
                   required
                 >
                   <option value="">-- Select Department --</option>
                   {departments.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name}
+                    <option key={d._id || d.code || d.name} value={d._id || d.code || d.name}>
+                      {d.name || d.code || d._id}
                     </option>
                   ))}
                 </select>
@@ -450,16 +382,8 @@ const ItemCategoryMaster = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="sa-primary-button"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : form._id
-                    ? "Update Category"
-                    : "Save Category"}
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : form._id ? "Update Category" : "Save Category"}
                 </button>
               </div>
             </form>
