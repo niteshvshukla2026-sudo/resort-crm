@@ -1,12 +1,16 @@
 import express from "express";
-import { createItem, listItems } from "../controllers/item.controller.js";
-import { protect, requireRole } from "../middleware/auth.js";
+import {
+  getItems,
+  createItem,
+  updateItem,
+  deleteItem,
+} from "../controllers/items.controller.js";
 
 const router = express.Router();
 
-router.use(protect);
-
-router.get("/", listItems);
-router.post("/", requireRole("SUPER_ADMIN"), createItem);
+router.get("/", getItems);
+router.post("/", createItem);
+router.put("/:id", updateItem);
+router.delete("/:id", deleteItem);
 
 export default router;

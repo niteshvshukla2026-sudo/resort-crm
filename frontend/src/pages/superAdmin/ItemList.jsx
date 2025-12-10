@@ -4,33 +4,13 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// --- 10 dev sample items for quick dev/demo (no dept category) ---
-const DEV_ITEMS = [
-  { _id: "dev_item_1", code: "RICE1", name: "Basmati Rice 5kg", itemCategory: "Pantry", uom: "Kg", brand: "GrainCo", indicativePrice: 60 },
-  { _id: "dev_item_2", code: "OIL1L", name: "Sunflower Oil 1L", itemCategory: "Cooking Oil", uom: "Ltr", brand: "OilPure", indicativePrice: 120 },
-  { _id: "dev_item_3", code: "SALT1", name: "Iodized Salt 1kg", itemCategory: "Pantry", uom: "Kg", brand: "SaltWell", indicativePrice: 25 },
-  { _id: "dev_item_4", code: "MIL1L", name: "Fresh Milk 1L", itemCategory: "Dairy", uom: "Ltr", brand: "DairyBest", indicativePrice: 45 },
-  { _id: "dev_item_5", code: "EGG12", name: "Eggs Pack 12", itemCategory: "Dairy", uom: "Nos", brand: "FarmFresh", indicativePrice: 70 },
-  { _id: "dev_item_6", code: "SUGAR5", name: "Sugar 5kg", itemCategory: "Pantry", uom: "Kg", brand: "SweetCo", indicativePrice: 40 },
-  { _id: "dev_item_7", code: "SOAP1L", name: "Liquid Soap 1L", itemCategory: "Cleaning", uom: "Ltr", brand: "CleanPro", indicativePrice: 90 },
-  { _id: "dev_item_8", code: "BREAD1", name: "Bread Loaf", itemCategory: "Bakery", uom: "Nos", brand: "BakeHouse", indicativePrice: 35 },
-  { _id: "dev_item_9", code: "CHICK1", name: "Chicken (1kg)", itemCategory: "Meat", uom: "Kg", brand: "PoultryKing", indicativePrice: 200 },
-  { _id: "dev_item_10", code: "CUPP100", name: "Disposable Cups 100pcs", itemCategory: "Housekeeping", uom: "Nos", brand: "PackIt", indicativePrice: 50 },
-];
-
-// --- 10 dummy brands
-const DEV_BRANDS = ["GrainCo","OilPure","SaltWell","DairyBest","FarmFresh","SweetCo","CleanPro","BakeHouse","PoultryKing","PackIt"];
-
-// fallback categories if server empty
-const DEV_ITEM_CATEGORIES = ["Pantry", "Cooking Oil", "Dairy", "Cleaning", "Bakery", "Meat", "Housekeeping"];
-
 const UOM_OPTIONS = ["Kg", "Ltr", "Nos"];
 
 const emptyForm = () => ({
   _id: undefined,
   name: "",
   code: "",
-  itemCategory: "",
+  itemCategory: "", // will hold category _id
   uom: "",
   brand: "",
   indicativePrice: "",
@@ -38,7 +18,7 @@ const emptyForm = () => ({
 
 const ItemList = () => {
   const [items, setItems] = useState([]);
-  const [itemCategories, setItemCategories] = useState([]);
+  const [itemCategories, setItemCategories] = useState([]); // [{_id,name}]
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,57 +37,70 @@ const ItemList = () => {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // load items, categories, brands and merge dev samples (avoid duplicates)
+  // -------------------------
+  // helper: get category name
+  // -------------------------
+  const getCategoryName = (idOrName) => {
+    if (!idOrName) return "-";
+    const cat =
+      itemCategories.find(
+        (c) => c._id === idOrName || c.name === idOrName
+      ) || null;
+    return cat?.name || idOrName;
+  };
+
+  // -------------------------
+  // load items + categories
+  // -------------------------
   const loadItems = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [itemsRes, catsRes, brandsRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/brands`).catch(() => ({ data: [] })),
+      const [itemsRes, catsRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/items`).catch((err) => {
+          console.error("load items error", err);
+          return { data: [] };
+        }),
+        axios.get(`${API_BASE}/api/item-categories`).catch((err) => {
+          console.error("load item-categories error", err);
+          return { data: [] };
+        }),
       ]);
+
+      const cats = Array.isArray(catsRes.data)
+        ? catsRes.data.map((c) => ({
+            _id: c._id || c.id,
+            name: c.name || c.code || "",
+          }))
+        : [];
+      setItemCategories(cats);
 
       const serverItems = Array.isArray(itemsRes.data)
         ? itemsRes.data.map((it) => ({
-            _id: it._id || it.id || undefined,
-            code: it.code || it._id || it.id || "",
+            _id: it._id || it.id,
+            code: it.code || "",
             name: it.name || "",
-            itemCategory: it.itemCategory || it.item_category || it.category || "",
-            uom: it.uom || it.measurement || "",
-            brand: it.brand || it.manufacturer || "",
-            indicativePrice:
-              it.indicativePrice ??
-              it.indicative_price ??
-              it.price ??
-              (typeof it.indicative === "number" ? it.indicative : undefined) ??
-              "",
+            itemCategory:
+              typeof it.itemCategory === "object"
+                ? it.itemCategory._id || it.itemCategory.id
+                : it.itemCategory || "",
+            uom: it.uom || "",
+            brand: it.brand || "",
+            indicativePrice: it.indicativePrice ?? "",
           }))
         : [];
 
-      // merge - add dev items only if code not present
-      const existingCodes = new Set(serverItems.map((i) => (i.code || "").toString()));
-      const toAdd = DEV_ITEMS.filter((d) => !existingCodes.has(d.code));
-      setItems([...serverItems, ...toAdd]);
+      setItems(serverItems);
 
-      // categories
-      const serverCats = Array.isArray(catsRes.data)
-        ? catsRes.data.map((c) => (typeof c === "string" ? c : c.name || c.code || c._id || c.id))
-        : [];
-      setItemCategories(serverCats.length ? Array.from(new Set(serverCats)) : DEV_ITEM_CATEGORIES);
-
-      // brands
-      const serverBrands = Array.isArray(brandsRes.data)
-        ? brandsRes.data.map((b) => (typeof b === "string" ? b : b.name || b.code || b._id || b.id))
-        : [];
-      setBrands(serverBrands.length ? Array.from(new Set(serverBrands)) : DEV_BRANDS);
+      // distinct brands from items
+      const brandSet = new Set(
+        serverItems.map((i) => i.brand).filter(Boolean)
+      );
+      setBrands(Array.from(brandSet));
     } catch (err) {
-      console.error("load items error", err);
-      setError("Failed to load items; using sample data");
-      setItems(DEV_ITEMS);
-      setItemCategories(DEV_ITEM_CATEGORIES);
-      setBrands(DEV_BRANDS);
+      console.error("loadItems fatal error", err);
+      setError("Failed to load items");
     } finally {
       setLoading(false);
     }
@@ -157,26 +150,69 @@ const ItemList = () => {
       const payload = {
         name: form.name.trim(),
         code: form.code.trim(),
-        itemCategory: form.itemCategory || "",
+        itemCategory: form.itemCategory || undefined, // _id
         uom: form.uom,
         brand: form.brand || "",
-        indicativePrice: form.indicativePrice ? Number(form.indicativePrice) : undefined,
+        indicativePrice: form.indicativePrice
+          ? Number(form.indicativePrice)
+          : undefined,
       };
 
       if (form._id) {
-        const res = await axios.put(`${API_BASE}/api/items/${form._id}`, payload).catch(() => null);
+        // update
+        const res = await axios
+          .put(`${API_BASE}/api/items/${form._id}`, payload)
+          .catch(() => null);
         if (res?.data) {
-          setItems((p) => p.map((x) => (x._id === form._id || x.id === form._id ? res.data : x)));
+          const mapped = {
+            _id: res.data._id || res.data.id,
+            code: res.data.code || "",
+            name: res.data.name || "",
+            itemCategory:
+              typeof res.data.itemCategory === "object"
+                ? res.data.itemCategory._id || res.data.itemCategory.id
+                : res.data.itemCategory || "",
+            uom: res.data.uom || "",
+            brand: res.data.brand || "",
+            indicativePrice: res.data.indicativePrice ?? "",
+          };
+          setItems((p) =>
+            p.map((x) =>
+              x._id === form._id || x.id === form._id ? mapped : x
+            )
+          );
         } else {
-          setItems((p) => p.map((x) => (x._id === form._id || x.id === form._id ? { ...x, ...payload } : x)));
+          setItems((p) =>
+            p.map((x) =>
+              x._id === form._id || x.id === form._id
+                ? { ...x, ...payload }
+                : x
+            )
+          );
         }
       } else {
-        const res = await axios.post(`${API_BASE}/api/items`, payload).catch(() => null);
-        const created = res?.data ? res.data : { ...payload, _id: `local_${Date.now()}` };
-        setItems((p) => [created, ...p]);
+        // create
+        const res = await axios
+          .post(`${API_BASE}/api/items`, payload)
+          .catch(() => null);
+        const mapped = res?.data
+          ? {
+              _id: res.data._id || res.data.id,
+              code: res.data.code || "",
+              name: res.data.name || "",
+              itemCategory:
+                typeof res.data.itemCategory === "object"
+                  ? res.data.itemCategory._id || res.data.itemCategory.id
+                  : res.data.itemCategory || "",
+              uom: res.data.uom || "",
+              brand: res.data.brand || "",
+              indicativePrice: res.data.indicativePrice ?? "",
+            }
+          : { ...payload, _id: `local_${Date.now()}` };
+        setItems((p) => [mapped, ...p]);
       }
 
-      // if brand new brand typed, add to brands list (local)
+      // new brand add to list (local)
       if (form.brand && !brands.includes(form.brand)) {
         setBrands((b) => [form.brand, ...b]);
       }
@@ -194,8 +230,14 @@ const ItemList = () => {
   const handleDelete = async (it) => {
     if (!window.confirm(`Delete item ${it.name || it.code}?`)) return;
     try {
-      setItems((p) => p.filter((x) => (x._id || x.id || x.code) !== (it._id || it.id || it.code)));
-      await axios.delete(`${API_BASE}/api/items/${it._id || it.id || it.code}`).catch(() => null);
+      setItems((p) =>
+        p.filter(
+          (x) => (x._id || x.id || x.code) !== (it._id || it.id || it.code)
+        )
+      );
+      await axios
+        .delete(`${API_BASE}/api/items/${it._id || it.id || it.code}`)
+        .catch(() => null);
     } catch (err) {
       console.error("delete item error", err);
       setError("Failed to delete item");
@@ -203,19 +245,50 @@ const ItemList = () => {
     }
   };
 
+  // -------------------------
   // filters
+  // -------------------------
   const filteredItems = useMemo(() => {
     return items.filter((i) => {
-      if (filterName && !i.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
-      if (filterCode && !i.code?.toLowerCase().includes(filterCode.toLowerCase())) return false;
-      if (filterItemCategory && (i.itemCategory || "").toLowerCase() !== filterItemCategory.toLowerCase()) return false;
-      if (filterUOM && (i.uom || "").toLowerCase() !== filterUOM.toLowerCase()) return false;
-      if (filterBrand && (i.brand || "").toLowerCase() !== filterBrand.toLowerCase()) return false;
+      if (
+        filterName &&
+        !i.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
+        return false;
+      if (
+        filterCode &&
+        !i.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
+        return false;
+      if (
+        filterItemCategory &&
+        (i.itemCategory || "").toString() !== filterItemCategory
+      )
+        return false;
+      if (
+        filterUOM &&
+        (i.uom || "").toLowerCase() !== filterUOM.toLowerCase()
+      )
+        return false;
+      if (
+        filterBrand &&
+        (i.brand || "").toLowerCase() !== filterBrand.toLowerCase()
+      )
+        return false;
       return true;
     });
-  }, [items, filterName, filterCode, filterItemCategory, filterUOM, filterBrand]);
+  }, [
+    items,
+    filterName,
+    filterCode,
+    filterItemCategory,
+    filterUOM,
+    filterBrand,
+  ]);
 
-  // CSV upload parsing & submit (columns: code,name,itemCategory,uom,brand,indicativePrice)
+  // -------------------------
+  // CSV upload/export (minimal adjust: itemCategory is name in CSV)
+  // -------------------------
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -224,7 +297,6 @@ const ItemList = () => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const text = ev.target.result;
-      // ignore metadata/comment lines beginning with #
       const allRows = text.split(/\r?\n/).map((r) => r.trim());
       const rows = allRows.filter(Boolean).filter((r) => !r.startsWith("#"));
       if (rows.length === 0) {
@@ -258,25 +330,61 @@ const ItemList = () => {
         return;
       }
 
-      const payloads = parsed.map((p) => ({
-        code: p.code,
-        name: p.name,
-        itemCategory: p.itemcategory || p.itemCategory || "",
-        uom: p.uom,
-        brand: p.brand || "",
-        indicativePrice: p.indicativeprice ? Number(p.indicativeprice) : undefined,
-      }));
+      const payloads = parsed.map((p) => {
+        const catName =
+          p.itemcategory || p.itemCategory || p.category || "";
+        const cat =
+          itemCategories.find(
+            (c) =>
+              c.name.toLowerCase() === catName.toLowerCase() ||
+              c._id === catName
+          ) || null;
+
+        return {
+          code: p.code,
+          name: p.name,
+          itemCategory: cat?._id,
+          uom: p.uom,
+          brand: p.brand || "",
+          indicativePrice: p.indicativeprice
+            ? Number(p.indicativeprice)
+            : undefined,
+        };
+      });
 
       // optimistic local add
-      const addedLocal = payloads.map((pl) => ({ ...pl, _id: `local_${Date.now()}_${Math.floor(Math.random()*1000)}` }));
+      const addedLocal = payloads.map((pl) => ({
+        ...pl,
+        _id: `local_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      }));
       setItems((prev) => [...prev, ...addedLocal]);
 
       try {
         for (const pl of payloads) {
           try {
-            const res = await axios.post(`${API_BASE}/api/items`, pl).catch(() => null);
+            const res = await axios
+              .post(`${API_BASE}/api/items`, pl)
+              .catch(() => null);
             if (res?.data) {
-              setItems((prev) => prev.map((it) => (it._id?.startsWith("local_") && it.code === pl.code ? res.data : it)));
+              const mapped = {
+                _id: res.data._id || res.data.id,
+                code: res.data.code || "",
+                name: res.data.name || "",
+                itemCategory:
+                  typeof res.data.itemCategory === "object"
+                    ? res.data.itemCategory._id || res.data.itemCategory.id
+                    : res.data.itemCategory || "",
+                uom: res.data.uom || "",
+                brand: res.data.brand || "",
+                indicativePrice: res.data.indicativePrice ?? "",
+              };
+              setItems((prev) =>
+                prev.map((it) =>
+                  it._id?.startsWith("local_") && it.code === pl.code
+                    ? mapped
+                    : it
+                )
+              );
             }
           } catch (err) {
             console.warn("failed to create item from CSV:", pl.code, err);
@@ -298,14 +406,22 @@ const ItemList = () => {
   };
 
   const handleExportCSV = () => {
-    const cols = ["code","name","itemCategory","uom","brand","indicativePrice"];
+    const cols = ["code", "name", "itemCategory", "uom", "brand", "indicativePrice"];
     const rows = [cols.join(",")].concat(
-      filteredItems.map((i) => cols.map((c) => {
-        const val = i[c] ?? "";
-        const s = String(val ?? "");
-        if (s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g,'""')}"`;
-        return s;
-      }).join(","))
+      filteredItems.map((i) =>
+        cols
+          .map((c) => {
+            let val = i[c];
+            if (c === "itemCategory") {
+              val = getCategoryName(i.itemCategory);
+            }
+            const s = String(val ?? "");
+            if (s.includes(",") || s.includes("\n"))
+              return `"${s.replace(/"/g, '""')}"`;
+            return s;
+          })
+          .join(",")
+      )
     );
     const csv = rows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -317,19 +433,15 @@ const ItemList = () => {
     URL.revokeObjectURL(url);
   };
 
-  // new: download CSV format with metadata comments so user can see dropdown values
   const downloadCSVFormat = () => {
-    const cols = ["code","name","itemCategory","uom","brand","indicativePrice"];
-    const example = ["RICE1","Basmati Rice 5kg","Pantry","Kg","GrainCo","60"];
-    const metaCats = itemCategories.length ? itemCategories : DEV_ITEM_CATEGORIES;
-    const metaBrands = brands.length ? brands : DEV_BRANDS;
+    const cols = ["code", "name", "itemCategory", "uom", "brand", "indicativePrice"];
+    const cats = itemCategories.map((c) => c.name);
+    const example = ["RICE1", "Basmati Rice 5kg", cats[0] || "", "Kg", "BrandName", "60"];
 
     const rows = [];
     rows.push(cols.join(","));
     rows.push(example.join(","));
-    // metadata lines (start with # so parser ignores them)
-    rows.push(`#CATEGORIES:${metaCats.join("|")}`);
-    rows.push(`#BRANDS:${metaBrands.join("|")}`);
+    rows.push(`#CATEGORIES:${cats.join("|")}`);
 
     const csv = rows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -342,13 +454,17 @@ const ItemList = () => {
 
     try {
       navigator.clipboard?.writeText(csv);
-      alert("CSV format downloaded and copied to clipboard (categories & brands provided in metadata lines).");
+      alert(
+        "CSV format downloaded and copied to clipboard (categories provided in metadata lines)."
+      );
     } catch {
-      // ignore clipboard errors
-      alert("CSV format downloaded. (If supported, format was also copied to clipboard.)");
+      alert("CSV format downloaded.");
     }
   };
 
+  // -------------------------
+  // UI
+  // -------------------------
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -369,59 +485,126 @@ const ItemList = () => {
               }}
               title="Upload CSV (columns: code,name,itemCategory,uom,brand,indicativePrice)"
             />
-            {csvLoading ? <span style={{ marginLeft: 6 }}>Uploading...</span> : <span style={{ marginLeft: 6 }}>Upload CSV</span>}
+            {csvLoading ? (
+              <span style={{ marginLeft: 6 }}>Uploading...</span>
+            ) : (
+              <span style={{ marginLeft: 6 }}>Upload CSV</span>
+            )}
           </label>
 
-          <button className="sa-secondary-button" onClick={downloadCSVFormat} title="Download CSV format with sample row and allowed categories/brands">
+          <button
+            className="sa-secondary-button"
+            onClick={downloadCSVFormat}
+            title="Download CSV format with sample row and allowed categories"
+          >
             CSV Format
           </button>
 
-          <button className="sa-secondary-button" onClick={handleExportCSV} title="Export filtered items to CSV">
+          <button
+            className="sa-secondary-button"
+            onClick={handleExportCSV}
+            title="Export filtered items to CSV"
+          >
             Export CSV
           </button>
 
-          <button className="sa-primary-button" type="button" onClick={openCreate}>
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreate}
+          >
             <i className="ri-add-line" /> Add New Item
           </button>
         </div>
       </div>
 
-      {error && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{error}</div>}
-      {csvError && <div className="sa-modal-error" style={{ marginBottom: 8 }}>{csvError}</div>}
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+      {csvError && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {csvError}
+        </div>
+      )}
 
       {/* FILTERS */}
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <label>
           Name
-          <input value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Search name..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            placeholder="Search name..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           Code
-          <input value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="Search code..." style={{ marginLeft: 8 }} />
+          <input
+            value={filterCode}
+            onChange={(e) => setFilterCode(e.target.value)}
+            placeholder="Search code..."
+            style={{ marginLeft: 8 }}
+          />
         </label>
 
         <label>
           Item Category
-          <select value={filterItemCategory} onChange={(e) => setFilterItemCategory(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={filterItemCategory}
+            onChange={(e) => setFilterItemCategory(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
-            {itemCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {itemCategories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </label>
 
         <label>
           Measurement (UOM)
-          <select value={filterUOM} onChange={(e) => setFilterUOM(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={filterUOM}
+            onChange={(e) => setFilterUOM(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
-            {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+            {UOM_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
           </select>
         </label>
 
         <label>
           Brand
-          <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} style={{ marginLeft: 8 }}>
+          <select
+            value={filterBrand}
+            onChange={(e) => setFilterBrand(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
             <option value="">All</option>
-            {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+            {brands.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -434,7 +617,9 @@ const ItemList = () => {
         {loading ? (
           <div style={{ fontSize: "0.9rem" }}>Loading items...</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ fontSize: "0.9rem" }}>No items found. Add your first item or upload a CSV.</div>
+          <div style={{ fontSize: "0.9rem" }}>
+            No items found. Add your first item or upload a CSV.
+          </div>
         ) : (
           <table className="sa-table">
             <thead>
@@ -453,12 +638,26 @@ const ItemList = () => {
                 <tr key={i._id || i.id || i.code}>
                   <td>{i.code}</td>
                   <td>{i.name}</td>
-                  <td>{i.itemCategory || "-"}</td>
+                  <td>{getCategoryName(i.itemCategory)}</td>
                   <td>{i.uom || "-"}</td>
                   <td>{i.brand || "-"}</td>
-                  <td>{i.indicativePrice !== undefined && i.indicativePrice !== "" ? `₹${String(i.indicativePrice)}` : "-"}</td>
+                  <td>
+                    {i.indicativePrice !== undefined &&
+                    i.indicativePrice !== ""
+                      ? `₹${String(i.indicativePrice)}`
+                      : "-"}
+                  </td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <button className="sa-secondary-button" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(i)); alert("Copied"); }} title="Copy JSON">Copy</button>
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(i));
+                        alert("Copied");
+                      }}
+                      title="Copy JSON"
+                    >
+                      Copy
+                    </button>
 
                     <button
                       className="sa-secondary-button"
@@ -468,7 +667,13 @@ const ItemList = () => {
                       Edit
                     </button>
 
-                    <button className="sa-secondary-button" onClick={() => handleDelete(i)} title="Delete">Delete</button>
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => handleDelete(i)}
+                      title="Delete"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -479,57 +684,121 @@ const ItemList = () => {
 
       {/* Modal: Create / Edit Item */}
       {showForm && (
-        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
-          <div className="sa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
+          <div
+            className="sa-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 720 }}
+          >
             <h3>{form._id ? "Edit Item" : "Add New Item"}</h3>
-            <p className="sa-modal-sub">Define item — Item Category, Brand, UOM and Indicative Price.</p>
+            <p className="sa-modal-sub">
+              Define item — Item Category, Brand, UOM and Indicative Price.
+            </p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
                 Item Name
-                <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Basmati Rice 5kg" required />
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="e.g. Basmati Rice 5kg"
+                  required
+                />
               </label>
 
               <label>
                 Code
-                <input name="code" value={form.code} onChange={handleChange} placeholder="e.g. RICE1" required />
+                <input
+                  name="code"
+                  value={form.code}
+                  onChange={handleChange}
+                  placeholder="e.g. RICE1"
+                  required
+                />
               </label>
 
               <label>
                 Item Category
-                <select name="itemCategory" value={form.itemCategory} onChange={handleChange}>
+                <select
+                  name="itemCategory"
+                  value={form.itemCategory}
+                  onChange={handleChange}
+                >
                   <option value="">-- none --</option>
-                  {itemCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {itemCategories.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               <label>
                 Measurement (UOM)
-                <select name="uom" value={form.uom} onChange={handleChange} required>
+                <select
+                  name="uom"
+                  value={form.uom}
+                  onChange={handleChange}
+                  required
+                >
                   <option value="">-- Select --</option>
-                  {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {UOM_OPTIONS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               <label>
                 Brand
-                <select name="brand" value={form.brand} onChange={handleChange}>
-                  <option value="">-- none --</option>
-                  {brands.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <small style={{ display: "block", color: "#6b7280" }}>If brand not listed, type it in the Brand field and save (it will be added locally).</small>
+                <input
+                  name="brand"
+                  value={form.brand}
+                  onChange={handleChange}
+                  placeholder="Brand name (optional)"
+                />
+                <small
+                  style={{ display: "block", color: "#6b7280", marginTop: 2 }}
+                >
+                  Type a new brand name to add it.
+                </small>
               </label>
 
               <label>
                 Indicative Price (₹)
-                <input name="indicativePrice" type="number" min="0" step="0.01" value={form.indicativePrice} onChange={handleChange} placeholder="Numeric price per selected UOM" />
+                <input
+                  name="indicativePrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.indicativePrice}
+                  onChange={handleChange}
+                  placeholder="Numeric price per selected UOM"
+                />
               </label>
 
               {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>Cancel</button>
-                <button type="submit" className="sa-primary-button" disabled={saving}>{saving ? "Saving..." : "Save Item"}</button>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Item"}
+                </button>
               </div>
             </form>
           </div>
