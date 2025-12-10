@@ -1,4 +1,4 @@
-import ItemCategory from "../models/ItemCategory.js";
+import ItemCategory from "../models/itemCategory.js";
 import Department from "../models/Department.js";
 
 // GET all categories

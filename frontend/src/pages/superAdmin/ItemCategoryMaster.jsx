@@ -34,6 +34,9 @@ const ItemCategoryMaster = () => {
   const [filterName, setFilterName] = useState("");
   const [filterDept, setFilterDept] = useState("");
 
+  // -----------------------
+  // load data from backend
+  // -----------------------
   const loadData = async () => {
     try {
       setLoading(true);
@@ -52,13 +55,13 @@ const ItemCategoryMaster = () => {
         }),
       ]);
 
-      // --- ITEM CATEGORIES from backend only (no demo fallback) ---
+      // ITEM CATEGORIES (backend only)
       const serverIC = Array.isArray(icRes.data)
         ? icRes.data.map((it) => ({
             _id: it._id || it.id,
             name: it.name || "",
             code: it.code || generateCodeFromName(it.name || ""),
-            // backend might send department, departmentCategory, or dept
+            // we store whatever backend sends (id/code/name)
             departmentCategory:
               it.departmentCategory || it.department || it.dept || "",
           }))
@@ -66,7 +69,7 @@ const ItemCategoryMaster = () => {
 
       setItemCategories(serverIC);
 
-      // --- DEPARTMENTS ---
+      // DEPARTMENTS
       const deptData = Array.isArray(deptRes.data?.departments)
         ? deptRes.data.departments
         : Array.isArray(deptRes.data)
@@ -93,7 +96,11 @@ const ItemCategoryMaster = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // filters
+  // -----------------------
+  // helpers
+  // -----------------------
+
+  // filter list for search / dept
   const filtered = useMemo(() => {
     return itemCategories.filter((it) => {
       if (filterName && !it.name?.toLowerCase().includes(filterName.toLowerCase())) return false;
@@ -102,14 +109,12 @@ const ItemCategoryMaster = () => {
     });
   }, [itemCategories, filterName, filterDept]);
 
-  // open create form
   const openCreateForm = () => {
     setForm(emptyForm());
     setError("");
     setShowForm(true);
   };
 
-  // open edit
   const openEditForm = (it) => {
     setForm({
       _id: it._id || it.id,
@@ -126,7 +131,22 @@ const ItemCategoryMaster = () => {
     setForm((p) => ({ ...p, [name]: value }));
   };
 
-  // create / update
+  // id/code/value se department ka readable name nikalna
+  const getDeptName = (value) => {
+    if (!value) return "-";
+
+    const dept =
+      departments.find(
+        (d) =>
+          d._id === value || d.code === value || d.name === value
+      ) || null;
+
+    return dept?.name || value;
+  };
+
+  // -----------------------
+  // create / update submit
+  // -----------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -140,12 +160,13 @@ const ItemCategoryMaster = () => {
       const payload = {
         name: form.name.trim(),
         code: form.code && form.code.trim() ? form.code.trim() : generateCodeFromName(form.name),
-        // backend: we send both names so whichever it expects will work
+        // send both keys so backend whichever uses will work
         department: form.departmentCategory,
         departmentCategory: form.departmentCategory,
       };
 
       if (form._id) {
+        // UPDATE
         const res = await axios
           .put(`${API_BASE}/api/item-categories/${form._id}`, payload)
           .catch((err) => {
@@ -171,6 +192,7 @@ const ItemCategoryMaster = () => {
           );
         }
       } else {
+        // CREATE
         const res = await axios
           .post(`${API_BASE}/api/item-categories`, payload)
           .catch((err) => {
@@ -213,6 +235,9 @@ const ItemCategoryMaster = () => {
     }
   };
 
+  // -----------------------
+  // render
+  // -----------------------
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -296,7 +321,7 @@ const ItemCategoryMaster = () => {
                 <tr key={it._id || it.id || it.code}>
                   <td>{it.name}</td>
                   <td>{it.code}</td>
-                  <td>{it.departmentCategory || "-"}</td>
+                  <td>{getDeptName(it.departmentCategory)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="sa-secondary-button" onClick={() => openEditForm(it)} title="Edit">
                       <i className="ri-edit-line" />
