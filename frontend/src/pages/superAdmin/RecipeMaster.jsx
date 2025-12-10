@@ -4,7 +4,7 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-/* Dev fallback items (sirf items ke liye, jab tak backend /api/items ready na ho) */
+/* Dev fallback items ONLY if /api/items fails */
 const DEV_ITEMS = [
   { _id: "item_rice", name: "Rice", uom: "Kg", itemCategory: "Pantry" },
   { _id: "item_oil", name: "Oil", uom: "Ltr", itemCategory: "Cooking Oil" },
@@ -15,7 +15,7 @@ const DEV_ITEMS = [
 
 const emptyLine = () => ({
   id: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-  itemCategory: "",
+  itemCategory: "", // will hold itemCategoryId
   itemId: "",
   qty: "",
 });
@@ -26,8 +26,8 @@ const UOM_OPTIONS = ["Kg", "Ltr", "Nos", "Pax"];
 const RecipeMaster = () => {
   const [recipes, setRecipes] = useState([]);
   const [items, setItems] = useState([]);
-  const [itemCategories, setItemCategories] = useState([]); // names from Item Category master
-  const [recipeCategories, setRecipeCategories] = useState([]); // from Recipe Category master
+  const [itemCategories, setItemCategories] = useState([]); // [{id,name}]
+  const [recipeCategories, setRecipeCategories] = useState([]); // from master
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,7 +42,7 @@ const RecipeMaster = () => {
   const initialForm = () => ({
     code: "",
     recipeCategoryId: "",
-    type: "", // internal only (if backend use kare)
+    type: "", // internal only (if backend uses)
     name: "",
     yieldQty: "",
     yieldUom: "",
@@ -57,11 +57,16 @@ const RecipeMaster = () => {
     try {
       setLoading(true);
       setError("");
+
       const [recRes, itemRes, rcatRes, icatRes] = await Promise.all([
         axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
-        axios.get(`${API_BASE}/api/recipe-categories`).catch(() => ({ data: [] })), // ✅ recipe categories master se
-        axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: null })), // ✅ item category master se
+        axios
+          .get(`${API_BASE}/api/recipe-categories`)
+          .catch(() => ({ data: [] })), // recipe category master
+        axios
+          .get(`${API_BASE}/api/item-categories`)
+          .catch(() => ({ data: null })), // item category master
       ]);
 
       const serverRecipes = Array.isArray(recRes.data) ? recRes.data : [];
@@ -69,6 +74,38 @@ const RecipeMaster = () => {
         ? itemRes.data
         : DEV_ITEMS;
 
+      // ---------- Item Categories from master ----------
+      let serverItemCats = [];
+      if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
+        serverItemCats = icatRes.data.map((c) => ({
+          id: c._id || c.id || c.code || c.name,
+          name: c.name || c.code || c._id || c.id,
+        }));
+      }
+
+      // If no master, infer from items (dev only)
+      if (!serverItemCats.length) {
+        const map = new Map();
+        (serverItemsRaw.length ? serverItemsRaw : DEV_ITEMS).forEach((it) => {
+          const id =
+            it.itemCategoryId ||
+            it.itemCategory ||
+            it.categoryId ||
+            it.item_category ||
+            it.group ||
+            "Uncategorized";
+          if (!map.has(id)) {
+            map.set(id, { id: id.toString(), name: id.toString() });
+          }
+        });
+        serverItemCats = Array.from(map.values());
+      }
+
+      const itemCatNameById = new Map(
+        serverItemCats.map((c) => [c.id.toString(), c.name])
+      );
+
+      // ---------- Items ----------
       const serverItems = serverItemsRaw.map((it) => {
         const uom =
           it.uom ||
@@ -79,41 +116,36 @@ const RecipeMaster = () => {
           it.uomName ||
           it.measurementUnit ||
           "";
+
+        const catIdRaw =
+          it.itemCategoryId ||
+          it.itemCategory ||
+          it.categoryId ||
+          it.item_category ||
+          it.group ||
+          "";
+        const catId = catIdRaw ? catIdRaw.toString() : "";
+        const catName =
+          itemCatNameById.get(catId) ||
+          it.itemCategoryName ||
+          it.categoryName ||
+          catId;
+
         return {
           _id: it._id || it.id,
           id: it.id || it._id,
           name: it.name || it.title || "",
           uom,
-          // itemCategory yahan string hi rakhenge (master se aane wali name ya code)
-          itemCategory:
-            it.itemCategory || it.category || it.item_category || it.group || "",
+          itemCategoryId: catId, // for linking
+          itemCategoryName: catName, // for display
           ...it,
         };
       });
 
-      // ✅ Recipe Category master se, koi demo nahi
-      const serverRecipeCats = Array.isArray(rcatRes.data)
-        ? rcatRes.data
-        : [];
+      // ---------- Recipe Categories from master ----------
+      const serverRecipeCats = Array.isArray(rcatRes.data) ? rcatRes.data : [];
 
-      // ✅ Item Category master se names
-      let serverItemCats = [];
-      if (icatRes && Array.isArray(icatRes.data) && icatRes.data.length) {
-        // master objects ko sirf display name me convert kiya
-        serverItemCats = icatRes.data.map((c) =>
-          typeof c === "string" ? c : c.name || c.code || c._id || c.id
-        );
-      } else {
-        // agar master khali ho to items se infer karo (dev ke liye)
-        serverItemCats = Array.from(
-          new Set(
-            (serverItems.length ? serverItems : DEV_ITEMS).map(
-              (it) => it.itemCategory || "Uncategorized"
-            )
-          )
-        );
-      }
-
+      // ---------- Recipes ----------
       const normalizedRecipes = serverRecipes.map((r) => ({
         _id: r._id || r.id,
         code: r.code || "",
@@ -123,46 +155,40 @@ const RecipeMaster = () => {
         yieldQty: r.yieldQty ?? r.yield_qty ?? "",
         yieldUom: r.yieldUom || r.yield_uom || "",
         lines: Array.isArray(r.lines)
-          ? r.lines.map((ln) => ({
-              id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
-              itemCategory:
+          ? r.lines.map((ln) => {
+              const item = serverItems.find(
+                (it) => it._id === ln.itemId || it.id === ln.itemId
+              );
+              const lineCatId =
+                ln.itemCategoryId ||
                 ln.itemCategory ||
-                ln.item_category ||
-                (() => {
-                  const item = (serverItems.length ? serverItems : DEV_ITEMS).find(
-                    (it) => it._id === ln.itemId || it.id === ln.itemId
-                  );
-                  return item?.itemCategory || item?.category || "";
-                })(),
-              itemId: ln.itemId || ln.item || "",
-              qty: ln.qty ?? "",
-            }))
+                ln.categoryId ||
+                item?.itemCategoryId ||
+                "";
+              return {
+                id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
+                itemCategory: lineCatId ? lineCatId.toString() : "",
+                itemId: ln.itemId || ln.item || "",
+                qty: ln.qty ?? "",
+              };
+            })
           : [],
       }));
 
-      setRecipes(normalizedRecipes); // ❌ koi DEV_RECIPES nahi
+      setRecipes(normalizedRecipes);
       setItems(serverItems);
       setRecipeCategories(serverRecipeCats);
-      setItemCategories(
-        serverItemCats.length
-          ? serverItemCats
-          : Array.from(
-              new Set(
-                DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized")
-              )
-            )
-      );
+      setItemCategories(serverItemCats);
     } catch (err) {
       console.error(err);
       setError("Failed to load recipe data");
       setRecipes([]);
       setItems(DEV_ITEMS);
       setRecipeCategories([]);
-      setItemCategories(
-        Array.from(
-          new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
-        )
-      );
+      const fallbackCats = Array.from(
+        new Set(DEV_ITEMS.map((i) => i.itemCategory || "Uncategorized"))
+      ).map((id) => ({ id, name: id }));
+      setItemCategories(fallbackCats);
     } finally {
       setLoading(false);
     }
@@ -174,14 +200,25 @@ const RecipeMaster = () => {
   }, []);
 
   const getCategoryById = (id) =>
-    recipeCategories.find((c) => c._id === id || c.id === id) || null;
+    recipeCategories.find(
+      (c) => c._id === id || c.id === id || (c._id || c.id)?.toString() === id
+    ) || null;
+
+  const getItemCategoryName = (id) => {
+    if (!id) return "";
+    const cat = itemCategories.find(
+      (c) => c.id === id || c.id === id.toString()
+    );
+    return cat ? cat.name : id;
+  };
+
   const getItem = (id) =>
     items.find((it) => it._id === id || it.id === id) || null;
   const getItemName = (id) => (getItem(id) ? getItem(id).name : id);
 
-  // ✅ Recipe Category dropdown ke options
-  //  - master se aayenge
-  //  - jinka type "LUMPSUM" ya name "Lumpsum" hai wo HIDE
+  // ✅ Recipe Category dropdown:
+  //    - master se aayega
+  //    - jisko name = "Lumpsum" ya type = "LUMPSUM" ho, usko HIDE kar diya
   const categoryOptions = useMemo(
     () =>
       recipeCategories.filter((c) => {
@@ -235,19 +272,18 @@ const RecipeMaster = () => {
       lines: p.lines.filter((_, i) => i !== idx),
     }));
 
-  // ✅ Items ko filter karo by selected Item Category (string match)
-  const itemsForCategory = (cat) =>
+  // ✅ Items list for selected categoryId
+  const itemsForCategory = (categoryId) =>
     items.filter(
       (it) =>
-        (it.itemCategory || it.category || it.item_category || "").toString() ===
-        (cat || "").toString()
+        (it.itemCategoryId || it.itemCategory || "").toString() ===
+        (categoryId || "").toString()
     );
 
   // helper: safely map detected uom to allowed options
   const mapToAllowedUom = (uom) =>
     UOM_OPTIONS.includes(uom) ? uom : undefined;
 
-  // when itemCategory changes: auto-select single item if only one exists
   const onLineCategoryChange = (idx, catVal) => {
     updateLine(idx, "itemCategory", catVal);
     updateLine(idx, "itemId", "");
@@ -269,13 +305,13 @@ const RecipeMaster = () => {
     }
   };
 
-  // when item selected: set itemCategory (if available) and possibly yieldUom
   const onLineItemChange = (idx, itemId) => {
     const it = getItem(itemId);
     updateLine(idx, "itemId", itemId);
 
-    if (it && it.itemCategory)
-      updateLine(idx, "itemCategory", it.itemCategory);
+    if (it && (it.itemCategoryId || it.itemCategory)) {
+      updateLine(idx, "itemCategory", (it.itemCategoryId || it.itemCategory).toString());
+    }
 
     const allowed = it ? mapToAllowedUom(it.uom) : undefined;
     if (allowed) {
@@ -286,7 +322,7 @@ const RecipeMaster = () => {
     }
   };
 
-  // if all ingredient items share same allowed uom, auto-fill header if empty
+  // Auto-fill yieldUom if all ingredient items same uom
   useEffect(() => {
     const detected = form.lines
       .map((ln) => {
@@ -334,13 +370,21 @@ const RecipeMaster = () => {
       yieldUom: rcp.yieldUom || rcp.yield_uom || "",
       lines:
         (rcp.lines &&
-          rcp.lines.map((ln) => ({
-            id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
-            itemCategory:
-              ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
-            itemId: ln.itemId || ln.item || "",
-            qty: ln.qty ?? "",
-          }))) || [emptyLine()],
+          rcp.lines.map((ln) => {
+            const item = getItem(ln.itemId);
+            const catId =
+              ln.itemCategoryId ||
+              ln.itemCategory ||
+              ln.categoryId ||
+              item?.itemCategoryId ||
+              "";
+            return {
+              id: ln.id || `ln_${Math.floor(Math.random() * 100000)}`,
+              itemCategory: catId ? catId.toString() : "",
+              itemId: ln.itemId || ln.item || "",
+              qty: ln.qty ?? "",
+            };
+          })) || [emptyLine()],
     });
     setFormError("");
     setShowForm(true);
@@ -362,13 +406,21 @@ const RecipeMaster = () => {
       yieldUom: rcp.yieldUom || rcp.yield_uom || "",
       lines:
         (rcp.lines &&
-          rcp.lines.map((ln) => ({
-            id: `dup_${Math.floor(Math.random() * 100000)}`,
-            itemCategory:
-              ln.itemCategory || getItem(ln.itemId)?.itemCategory || "",
-            itemId: ln.itemId || "",
-            qty: ln.qty ?? "",
-          }))) || [emptyLine()],
+          rcp.lines.map((ln) => {
+            const item = getItem(ln.itemId);
+            const catId =
+              ln.itemCategoryId ||
+              ln.itemCategory ||
+              ln.categoryId ||
+              item?.itemCategoryId ||
+              "";
+            return {
+              id: `dup_${Math.floor(Math.random() * 100000)}`,
+              itemCategory: catId ? catId.toString() : "",
+              itemId: ln.itemId || "",
+              qty: ln.qty ?? "",
+            };
+          })) || [emptyLine()],
     });
     setFormError("");
     setShowForm(true);
@@ -410,7 +462,7 @@ const RecipeMaster = () => {
       lines: (form.lines || []).map((ln) => ({
         itemId: ln.itemId,
         qty: Number(ln.qty),
-        itemCategory: ln.itemCategory,
+        itemCategory: ln.itemCategory, // this is itemCategoryId
       })),
     };
 
@@ -692,8 +744,8 @@ const RecipeMaster = () => {
                           >
                             <option value="">-- Select category --</option>
                             {itemCategories.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
+                              <option key={c.id} value={c.id}>
+                                {c.name}
                               </option>
                             ))}
                           </select>
@@ -821,11 +873,7 @@ const RecipeMaster = () => {
                 {(viewing.lines || []).map((ln, i) => (
                   <tr key={i}>
                     <td>{getItemName(ln.itemId)}</td>
-                    <td>
-                      {ln.itemCategory ||
-                        getItem(ln.itemId)?.itemCategory ||
-                        "-"}
-                    </td>
+                    <td>{getItemCategoryName(ln.itemCategory)}</td>
                     <td>{ln.qty}</td>
                   </tr>
                 ))}
