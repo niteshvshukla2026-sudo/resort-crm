@@ -98,6 +98,24 @@ const RequisitionList = () => {
     return String(storeResort) === String(resortFilter);
   });
 
+  // normalize helper - ensure categories/items are objects { _id, name, code, ... }
+  const normalizeCategory = (c) =>
+    c && typeof c === "object"
+      ? { _id: c._id || c.id || c.code || c.name, name: c.name || c.label || c.code || String(c._id || c.id || c) }
+      : { _id: c, name: String(c || "") };
+
+  const normalizeItem = (it) =>
+    it && typeof it === "object"
+      ? {
+          _id: it._id || it.id || it.code || it.name,
+          name: it.name || it.title || it.code || String(it._id || it.id || ""),
+          itemCategory: it.itemCategory || it.category || it.categoryId || it.categoryName || "",
+          uom: it.uom || it.UOM || it.unit || "",
+          stockByStore: it.stockByStore || it.stock_by_store || {},
+          code: it.code || "",
+        }
+      : { _id: it, name: String(it || ""), itemCategory: "", uom: "" };
+
   // load data (strict: use backend only)
   const loadData = async () => {
     try {
@@ -122,22 +140,33 @@ const RequisitionList = () => {
         axios.get(`${API_BASE}/item-categories`),
       ]);
 
-      setRequisitions(Array.isArray(reqRes.data) ? reqRes.data : []);
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
-      setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
-      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
-      setItemCategories(Array.isArray(catRes.data) ? catRes.data : []);
+      const reqData = Array.isArray(reqRes.data) ? reqRes.data : [];
+      const resortsData = Array.isArray(resortRes.data) ? resortRes.data : [];
+      const departmentsData = Array.isArray(deptRes.data) ? deptRes.data : [];
+      const storesData = Array.isArray(storeRes.data) ? storeRes.data : [];
+      const itemsData = Array.isArray(itemRes.data) ? itemRes.data : [];
+      const vendorsData = Array.isArray(vendorRes.data) ? vendorRes.data : [];
+      const catsData = Array.isArray(catRes.data) ? catRes.data : [];
+
+      // normalize categories and items
+      const normCats = catsData.map(normalizeCategory).filter((c) => c._id);
+      const normItems = itemsData.map(normalizeItem).filter((i) => i._id);
+
+      setRequisitions(reqData);
+      setResorts(resortsData);
+      setDepartments(departmentsData);
+      setStores(storesData);
+      setItems(normItems);
+      setVendors(vendorsData);
+      setItemCategories(normCats);
     } catch (err) {
       console.error("load error", err);
-      // show backend error but don't populate demo data
       const msg =
         err?.response?.data?.message ||
         err.message ||
         "Failed to load data from backend.";
       setError(msg);
-      // ensure lists are empty to avoid showing stale/demo data
+      // keep lists empty - do not fall back to demo data
       setRequisitions([]);
       setResorts([]);
       setDepartments([]);
@@ -158,12 +187,16 @@ const RequisitionList = () => {
   // lookup helpers
   const lookupName = (list, ref) => {
     if (!ref) return "-";
+    // if ref already an object with name:
+    if (typeof ref === "object" && ref !== null) return ref.name || ref.code || "-";
     const found = list.find(
       (x) =>
         x._id === ref ||
         x.id === ref ||
         x.name === ref ||
-        x.code === ref
+        x.code === ref ||
+        String(x._id) === String(ref) ||
+        String(x.name) === String(ref)
     );
     return found ? found.name || found.code || ref : ref;
   };
@@ -312,7 +345,9 @@ const RequisitionList = () => {
 
     try {
       setSaving(true);
-      const payload = {
+
+      // canonical payload
+      const canonical = {
         type: form.type,
         resort: derivedResort,
         fromStore: form.type === "INTERNAL" ? form.fromStore : undefined,
@@ -329,20 +364,55 @@ const RequisitionList = () => {
         })),
       };
 
+      // Build payload with aliases (improves compatibility with different backend expectations)
+      const payload = {
+        ...canonical,
+        vendorId: canonical.vendor,
+        vendor_id: canonical.vendor,
+        storeId: canonical.store || canonical.toStore,
+        store_id: canonical.store || canonical.toStore,
+        toStoreId: canonical.toStore || undefined,
+        resortId: canonical.resort,
+        resort_id: canonical.resort,
+        // lines: ensure each line contains itemId / item_id etc.
+        lines: (canonical.lines || []).map((ln) => ({
+          itemCategory: ln.itemCategory,
+          item: ln.item,
+          qty: ln.qty,
+          remark: ln.remark,
+          categoryId: ln.itemCategory,
+          category_id: ln.itemCategory,
+          category: ln.itemCategory,
+          itemId: ln.item,
+          item_id: ln.item,
+        })),
+      };
+
+      // remove undefined props
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === undefined) delete payload[k];
+      });
+
+      console.log("Submitting requisition payload:", payload);
+
       let res;
       if (editingId) {
         res = await axios.put(`${API_BASE}/requisitions/${editingId}`, payload);
-        setRequisitions((p) => p.map((r) => (r._id === editingId ? res.data : r)));
+        if (res?.data) setRequisitions((p) => p.map((r) => (r._id === editingId ? res.data : r)));
+        else await loadData();
       } else {
         res = await axios.post(`${API_BASE}/requisitions`, payload);
-        setRequisitions((p) => [res.data, ...p]);
+        if (res?.data) setRequisitions((p) => [res.data, ...p]);
+        else await loadData();
       }
 
       setShowForm(false);
       setEditingId(null);
     } catch (err) {
       console.error("save requisition error", err);
-      setError(err.response?.data?.message || "Failed to save requisition");
+      // prefer server message body
+      const serverBody = err.response?.data ?? err.message ?? String(err);
+      setError(typeof serverBody === "string" ? serverBody : JSON.stringify(serverBody));
     } finally {
       setSaving(false);
     }
@@ -1127,7 +1197,8 @@ const RequisitionList = () => {
                               .filter((it) => {
                                 if (!ln.itemCategory) return true;
                                 const catIdOrName = ln.itemCategory;
-                                const itCat = it.itemCategory || it.category || it.itemCategoryId || "";
+                                // item.itemCategory may be id or name; compare both ways
+                                const itCat = it.itemCategory || it.category || it.categoryId || "";
                                 if (!itCat) return false;
                                 return (
                                   String(itCat) === String(catIdOrName) ||
