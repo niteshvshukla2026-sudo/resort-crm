@@ -32,7 +32,6 @@ const StoreList = () => {
   // ---------- helpers ----------
 
   const normalizeResortList = (payload) => {
-    // resort API different shapes handle karega
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload.data)) return payload.data;
@@ -48,16 +47,22 @@ const StoreList = () => {
     return [];
   };
 
+  // find resort id by name (case-insensitive, trimmed)
+  const findResortIdByName = (name) => {
+    if (!name) return null;
+    const target = String(name).trim().toLowerCase();
+    const r = resorts.find((x) => (x.name || "").trim().toLowerCase() === target);
+    return r ? (r._id || r.id) : null;
+  };
+
   // backend se data lana (stores + resorts)
   const loadData = async () => {
     setLoading(true);
     setError("");
     try {
-      // alag-alag try/catch taki ek fail ho to doosra chale
       let loadedStores = [];
       let loadedResorts = [];
 
-      // STORES
       try {
         const storeRes = await axios.get(`${API_BASE}/stores`);
         console.log("STORES API DATA:", storeRes.data);
@@ -67,7 +72,6 @@ const StoreList = () => {
         setError((prev) => prev || "Failed to load stores from server");
       }
 
-      // RESORTS
       try {
         const resortRes = await axios.get(`${API_BASE}/resorts`);
         console.log("RESORTS API DATA:", resortRes.data);
@@ -93,7 +97,6 @@ const StoreList = () => {
   const getResortName = (resortRef) => {
     if (!resortRef) return "-";
 
-    // agar backend ne resort ko object ki tarah bheja ho
     if (typeof resortRef === "object") {
       if (resortRef.name) return resortRef.name;
       const id = resortRef._id || resortRef.id;
@@ -101,9 +104,8 @@ const StoreList = () => {
       return r ? r.name : id || "-";
     }
 
-    // normally resortRef sirf id string hoga
     const r = resorts.find((x) => (x._id || x.id) === resortRef);
-    return r ? r.name : resortRef; // agar na mila to id hi dikha dega
+    return r ? r.name : resortRef;
   };
 
   // filters
@@ -171,7 +173,7 @@ const StoreList = () => {
       setSaving(true);
 
       const payload = {
-        resort: form.resort, // yahan resort _id bhej rahe hain
+        resort: form.resort,
         name: form.name,
         code: form.code || undefined,
       };
@@ -222,7 +224,7 @@ const StoreList = () => {
     }
   };
 
-  // ---------- CSV Upload / Export (same as before) ----------
+  // ---------- CSV Upload / Export (updated to use resort name) ----------
 
   const handleCSVUpload = (file) => {
     setCsvError("");
@@ -270,18 +272,30 @@ const StoreList = () => {
         return;
       }
 
-      const localAdded = parsed.map((p) => ({
+      // Map parsed resort names -> resort ids (if found)
+      const parsedWithResolvedResort = parsed.map((p) => {
+        const resortName = p.resort ?? "";
+        const matchedId = findResortIdByName(resortName);
+        return {
+          ...p,
+          // if matched convert to id, else keep the raw value (so downstream you can see it)
+          resolvedResort: matchedId || resortName,
+        };
+      });
+
+      // Add local previews (use resolvedResort)
+      const localAdded = parsedWithResolvedResort.map((p) => ({
         _id: `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        resort: p.resort,
+        resort: p.resolvedResort,
         name: p.name,
         code: p.code || "",
       }));
       setStores((prev) => [...localAdded, ...prev]);
 
       try {
-        for (const p of parsed) {
+        for (const p of parsedWithResolvedResort) {
           const payload = {
-            resort: p.resort,
+            resort: p.resolvedResort,
             name: p.name,
             code: p.code || undefined,
           };
@@ -314,10 +328,8 @@ const StoreList = () => {
           .map((c) => {
             let val = s[c];
             if (c === "resort") {
-              val =
-                typeof s.resort === "object"
-                  ? s.resort._id || s.resort.id
-                  : s.resort;
+              // IMPORTANT: use resort *name* for export
+              val = getResortName(s.resort);
             }
             const str = String(val ?? "");
             if (str.includes(",") || str.includes("\n"))
@@ -367,7 +379,7 @@ const StoreList = () => {
                 handleCSVUpload(f);
                 e.target.value = "";
               }}
-              title="Upload CSV (columns: resort,name,code)"
+              title="Upload CSV (columns: resort,name,code) — resort should be resort NAME"
             />
             <span style={{ marginLeft: 6 }}>
               {csvLoading ? "Uploading..." : "Upload CSV"}
