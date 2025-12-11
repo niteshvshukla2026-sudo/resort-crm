@@ -4,11 +4,12 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api/v1";
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 // helper to create a new line
 const newLine = () => ({
   lineId: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+  itemCategory: "",
   item: "",
   qty: 1,
   remark: "",
@@ -63,6 +64,7 @@ const RequisitionList = () => {
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [itemCategories, setItemCategories] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -120,19 +122,34 @@ const RequisitionList = () => {
 
   const navigate = useNavigate();
 
+  // filtered stores for modal selects: use page-level resortFilter
+  const filteredStoresForModal = stores.filter((s) => {
+    if (!resortFilter) return true;
+    const storeResort = s.resort || s.resortId || s.resortName || s.resort;
+    return String(storeResort) === String(resortFilter);
+  });
+
   // load data
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reqRes, resortRes, deptRes, storeRes, itemRes, vendorRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
-          axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
-        ]);
+      const [
+        reqRes,
+        resortRes,
+        deptRes,
+        storeRes,
+        itemRes,
+        vendorRes,
+        catRes,
+      ] = await Promise.all([
+        axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/item-categories`).catch(() => ({ data: [] })),
+      ]);
 
       const serverReqs = Array.isArray(reqRes.data) ? reqRes.data : [];
       const existingReqIds = new Set(serverReqs.map((r) => r._id));
@@ -146,6 +163,7 @@ const RequisitionList = () => {
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
       setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
       setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
+      setItemCategories(Array.isArray(catRes.data) ? catRes.data : []);
     } catch (err) {
       console.error("load error", err);
       setError("Failed to load requisitions. Using demo data.");
@@ -154,6 +172,7 @@ const RequisitionList = () => {
       setStores([]);
       setItems([]);
       setVendors([]);
+      setItemCategories([]);
       setRequisitions(DEV_SAMPLES);
     } finally {
       setLoading(false);
@@ -182,6 +201,7 @@ const RequisitionList = () => {
   const getStoreName = (s) => lookupName(stores, s);
   const getVendorName = (v) => lookupName(vendors, v);
   const getItemName = (itId) => lookupName(items, itId);
+  const getCategoryName = (cId) => lookupName(itemCategories, cId);
 
   // requisition helpers
   const baseEmptyForm = {
@@ -219,6 +239,7 @@ const RequisitionList = () => {
           req.lines.length > 0 &&
           req.lines.map((ln) => ({
             lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
+            itemCategory: ln.itemCategory || "",
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
@@ -244,6 +265,7 @@ const RequisitionList = () => {
           req.lines.length > 0 &&
           req.lines.map((ln) => ({
             lineId: `dup_${Math.floor(Math.random() * 100000)}`,
+            itemCategory: ln.itemCategory || "",
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
@@ -342,6 +364,7 @@ const RequisitionList = () => {
             : form.toStore || undefined,
         requiredBy: form.requiredBy || undefined,
         lines: form.lines.map((x) => ({
+          itemCategory: x.itemCategory || undefined,
           item: x.item,
           qty: Number(x.qty),
           remark: x.remark,
@@ -588,9 +611,7 @@ const RequisitionList = () => {
 
       if (res?.data?.requisition) {
         setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? res.data.requisition : r
-          )
+          p.map((r) => (r._id === req._id ? res.data.requisition : r))
         );
         const createdPo = res.data.po;
         const poIdOrNo =
@@ -656,7 +677,6 @@ const RequisitionList = () => {
   };
 
   // ------------- GRN modal -------------
-
   const openCreateGRN = (req) => {
     if (req.po) {
       setError(
@@ -759,9 +779,7 @@ const RequisitionList = () => {
 
       if (res?.data?.requisition) {
         setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? res.data.requisition : r
-          )
+          p.map((r) => (r._id === req._id ? res.data.requisition : r))
         );
         const createdGrn = res.data.grn || res.data;
         const grnIdOrNo =
@@ -1356,7 +1374,7 @@ const RequisitionList = () => {
                       <option value="">
                         -- Select From Store --
                       </option>
-                      {stores.map((s) => (
+                      {filteredStoresForModal.map((s) => (
                         <option
                           key={s._id || s.id}
                           value={s._id || s.id}
@@ -1378,7 +1396,7 @@ const RequisitionList = () => {
                       <option value="">
                         -- Select To Store --
                       </option>
-                      {stores.map((s) => (
+                      {filteredStoresForModal.map((s) => (
                         <option
                           key={s._id || s.id}
                           value={s._id || s.id}
@@ -1420,7 +1438,7 @@ const RequisitionList = () => {
                       required
                     >
                       <option value="">-- Select Store --</option>
-                      {stores.map((s) => (
+                      {filteredStoresForModal.map((s) => (
                         <option
                           key={s._id || s.id}
                           value={s._id || s.id}
@@ -1448,6 +1466,7 @@ const RequisitionList = () => {
                 <table className="sa-table">
                   <thead>
                     <tr>
+                      <th>Category</th>
                       <th>Item</th>
                       <th>Current Stock</th>
                       <th>Qty</th>
@@ -1460,29 +1479,59 @@ const RequisitionList = () => {
                       <tr key={ln.lineId}>
                         <td>
                           <select
-                            value={ln.item}
+                            value={ln.itemCategory || ""}
                             onChange={(e) =>
-                              updateLine(
-                                idx,
-                                "item",
-                                e.target.value
-                              )
+                              updateLine(idx, "itemCategory", e.target.value)
                             }
-                            required
                           >
-                            <option value="">
-                              -- Select Item --
-                            </option>
-                            {items.map((it) => (
+                            <option value="">-- Category --</option>
+                            {itemCategories.map((c) => (
                               <option
-                                key={it._id || it.id}
-                                value={it._id || it.id}
+                                key={c._id || c.code || c.name}
+                                value={c._id || c.code || c.name}
                               >
-                                {it.name}
+                                {c.name}
                               </option>
                             ))}
                           </select>
                         </td>
+
+                        <td>
+                          <select
+                            value={ln.item}
+                            onChange={(e) =>
+                              updateLine(idx, "item", e.target.value)
+                            }
+                            required
+                          >
+                            <option value="">-- Select Item --</option>
+                            {items
+                              .filter((it) => {
+                                // if no category selected, show all items
+                                if (!ln.itemCategory) return true;
+                                // try matching both id and name (because itemCategory might be stored differently)
+                                const catIdOrName = ln.itemCategory;
+                                const itCat = it.itemCategory || it.category || it.itemCategoryId || "";
+                                if (!itCat) return false;
+                                return (
+                                  String(itCat) === String(catIdOrName) ||
+                                  String(getCategoryName(catIdOrName || "")).toLowerCase() ===
+                                    String(itCat).toLowerCase() ||
+                                  String(getCategoryName(itCat || "")).toLowerCase() ===
+                                    String(catIdOrName).toLowerCase()
+                                );
+                              })
+                              .map((it) => (
+                                <option
+                                  key={it._id || it.code}
+                                  value={it._id || it.code}
+                                >
+                                  {it.name}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+
                         <td style={{ textAlign: "center" }}>
                           {renderCurrentStock(ln)}
                         </td>
@@ -1492,11 +1541,7 @@ const RequisitionList = () => {
                             min="1"
                             value={ln.qty}
                             onChange={(e) =>
-                              updateLine(
-                                idx,
-                                "qty",
-                                e.target.value
-                              )
+                              updateLine(idx, "qty", e.target.value)
                             }
                             required
                           />
@@ -1505,11 +1550,7 @@ const RequisitionList = () => {
                           <input
                             value={ln.remark}
                             onChange={(e) =>
-                              updateLine(
-                                idx,
-                                "remark",
-                                e.target.value
-                              )
+                              updateLine(idx, "remark", e.target.value)
                             }
                           />
                         </td>
@@ -1567,7 +1608,7 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* PO Modal */}
+      {/* PO Modal (unchanged) */}
       {poModal.open && (
         <div
           className="sa-modal-backdrop"
@@ -1882,7 +1923,7 @@ const RequisitionList = () => {
         </div>
       )}
 
-      {/* GRN Modal */}
+      {/* GRN Modal (unchanged) */}
       {grnModal.open && (
         <div
           className="sa-modal-backdrop"
