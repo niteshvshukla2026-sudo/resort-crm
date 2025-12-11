@@ -1,4 +1,6 @@
 // backend/server_router.cjs
+// Consolidated router with Requisition, PO, GRN, Vendors(csv), Items, Stores, ItemCategories, Recipes, etc.
+// CommonJS style — to be used with your existing server.cjs that calls createRouter({ useMongo, mongoose })
 
 const express = require("express");
 const { createControllers } = require("./controllers.cjs");
@@ -41,6 +43,19 @@ function createRouter({ useMongo, mongoose }) {
   let memStores = [];
   let memRecipes = [];
 
+  // Vendor / Requisition / PO / GRN models placeholders (will be initialised below if useMongo)
+  let VendorModel = null;
+  let memVendors = [];
+
+  let RequisitionModel = null;
+  let memRequisitions = [];
+
+  let POModel = null;
+  let memPOs = [];
+
+  let GRNModel = null;
+  let memGRNs = [];
+
   if (useMongo && mongoose) {
     const { Schema } = mongoose;
 
@@ -63,6 +78,8 @@ function createRouter({ useMongo, mongoose }) {
         uom: { type: String, default: "" },
         brand: { type: String, default: "" },
         indicativePrice: { type: Number },
+        // optional stock map: { storeId: qty }
+        stockByStore: { type: Map, of: Number, default: {} },
       },
       { timestamps: true }
     );
@@ -117,9 +134,178 @@ function createRouter({ useMongo, mongoose }) {
       mongoose.models.Recipe || mongoose.model("Recipe", recipeSchema);
 
     console.log("ItemCategory, Item, Store & Recipe models initialised (Mongo)");
+
+    // ------------------------
+    // Vendors
+    // ------------------------
+    const vendorSchema = new Schema({
+      code: { type: String, required: true, unique: true },
+      name: { type: String, required: true },
+      vendorType: { type: String, default: '' },
+      categories: { type: [String], default: [] },
+      resorts: { type: [String], default: [] },
+      contactPerson: String,
+      phone: String,
+      whatsapp: String,
+      alternatePhone: String,
+      email: String,
+      addressLine1: String,
+      addressLine2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: String,
+      gstNumber: String,
+      panNumber: String,
+      fssaiNumber: String,
+      paymentTerms: String,
+      creditLimit: { type: Number, default: 0 },
+      paymentMode: String,
+      bankName: String,
+      accountNumber: String,
+      ifsc: String,
+      branch: String,
+      deliveryTime: String,
+      minOrderQty: { type: Number, default: 0 },
+      status: { type: String, default: 'Active' },
+      notes: String
+    }, { timestamps: true });
+
+    VendorModel = mongoose.models.Vendor || mongoose.model('Vendor', vendorSchema);
+    console.log('Vendor model initialised (Mongo)');
+
+    // ------------------------
+    // Requisition model
+    // ------------------------
+    const reqLineSchema = new Schema(
+      {
+        item: { type: String, required: true }, // item _id or code
+        qty: { type: Number, required: true },
+        remark: { type: String, default: "" },
+      },
+      { _id: false }
+    );
+
+    const requisitionSchema = new Schema(
+      {
+        requisitionNo: { type: String, required: true, unique: true },
+        type: { type: String, enum: ["INTERNAL", "VENDOR"], required: true },
+
+        resort: { type: String }, // Resort _id
+        department: { type: String }, // Dept _id
+        fromStore: { type: String }, // Store _id
+        toStore: { type: String }, // Store _id
+        vendor: { type: String }, // Vendor _id
+        store: { type: String }, // For vendor requisition
+
+        requiredBy: { type: Date },
+
+        status: {
+          type: String,
+          enum: [
+            "PENDING",
+            "APPROVED",
+            "ON_HOLD",
+            "REJECTED",
+            "PO_CREATED",
+            "GRN_CREATED",
+          ],
+          default: "PENDING",
+        },
+
+        lines: [reqLineSchema],
+
+        // --- Audit Fields ---
+        createdBy: { type: String },
+        approvedBy: { type: String },
+        approvedAt: { type: Date },
+        rejectedBy: { type: String },
+        rejectionReason: { type: String },
+      },
+      { timestamps: true }
+    );
+
+    RequisitionModel =
+      mongoose.models.Requisition ||
+      mongoose.model("Requisition", requisitionSchema);
+
+    console.log("Requisition model initialised (Mongo)");
+
+    // ------------------------
+    // PO model
+    // ------------------------
+    const poLineSchema = new Schema(
+      {
+        item: { type: String, required: true }, // item ID
+        qty: { type: Number, required: true },
+        rate: { type: Number, default: 0 },
+        amount: { type: Number, default: 0 },
+        remark: { type: String, default: "" },
+      },
+      { _id: false }
+    );
+
+    const poSchema = new Schema(
+      {
+        poNo: { type: String, required: true, unique: true },
+        requisitionId: { type: String }, // link to requisition
+        vendor: { type: String }, // vendor _id
+        resort: { type: String }, // resort _id
+        deliverTo: { type: String }, // store _id
+        poDate: { type: Date, default: Date.now },
+
+        items: [poLineSchema],
+
+        subTotal: { type: Number, default: 0 },
+        taxPercent: { type: Number, default: 0 },
+        taxAmount: { type: Number, default: 0 },
+        total: { type: Number, default: 0 },
+
+        status: {
+          type: String,
+          enum: ["OPEN", "PARTIAL", "CLOSED"],
+          default: "OPEN",
+        },
+      },
+      { timestamps: true }
+    );
+
+    POModel = mongoose.models.PO || mongoose.model("PO", poSchema);
+    console.log("PO model initialised (Mongo)");
+
+    // ------------------------
+    // GRN model
+    // ------------------------
+    const grnLineSchema = new Schema(
+      {
+        item: { type: String, required: true },
+        receivedQty: { type: Number, required: true },
+        pendingQty: { type: Number, default: 0 },
+        remark: { type: String, default: "" },
+      },
+      { _id: false }
+    );
+
+    const grnSchema = new Schema(
+      {
+        grnNo: { type: String, required: true, unique: true },
+        poId: { type: String, required: true },
+        requisitionId: { type: String },
+        vendor: { type: String },
+        resort: { type: String },
+        store: { type: String },
+        grnDate: { type: Date, default: Date.now },
+
+        items: [grnLineSchema],
+      },
+      { timestamps: true }
+    );
+
+    GRNModel = mongoose.models.GRN || mongoose.model("GRN", grnSchema);
+    console.log("GRN model initialised (Mongo)");
   } else {
     console.warn(
-      "Mongo DB not enabled; ItemCategory/Item/Store/Recipe will use in-memory arrays (data lost on restart)."
+      "Mongo DB not enabled; ItemCategory/Item/Store/Recipe/Vendor/Requisition/PO/GRN will use in-memory arrays (data lost on restart)."
     );
   }
 
@@ -151,10 +337,7 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 📊 Dashboard
   // ------------------------
-  router.get(
-    "/dashboard/resort/:resortId/kpi",
-    safe("getResortKpi")
-  );
+  router.get("/dashboard/resort/:resortId/kpi", safe("getResortKpi"));
 
   // ------------------------
   // 🏨 RESORTS (full CRUD)
@@ -198,9 +381,7 @@ function createRouter({ useMongo, mongoose }) {
       const { resort, name, code } = req.body || {};
 
       if (!resort || !name) {
-        return res
-          .status(400)
-          .json({ message: "resort & name are required" });
+        return res.status(400).json({ message: "resort & name are required" });
       }
 
       if (StoreModel) {
@@ -237,11 +418,7 @@ function createRouter({ useMongo, mongoose }) {
       if (code != null) update.code = code;
 
       if (StoreModel) {
-        const updated = await StoreModel.findByIdAndUpdate(
-          id,
-          { $set: update },
-          { new: true }
-        );
+        const updated = await StoreModel.findByIdAndUpdate(id, { $set: update }, { new: true });
         if (!updated) {
           return res.status(404).json({ message: "Store not found" });
         }
@@ -316,9 +493,7 @@ function createRouter({ useMongo, mongoose }) {
       const { name, code, departmentCategory } = req.body || {};
 
       if (!name || !code) {
-        return res
-          .status(400)
-          .json({ message: "name & code are required" });
+        return res.status(400).json({ message: "name & code are required" });
       }
 
       if (ItemCategoryModel) {
@@ -363,18 +538,14 @@ function createRouter({ useMongo, mongoose }) {
           { new: true }
         );
         if (!updated) {
-          return res
-            .status(404)
-            .json({ message: "Item category not found" });
+          return res.status(404).json({ message: "Item category not found" });
         }
         return res.json(updated);
       }
 
       const idx = memItemCategories.findIndex((c) => c._id === id);
       if (idx === -1) {
-        return res
-          .status(404)
-          .json({ message: "Item category not found" });
+        return res.status(404).json({ message: "Item category not found" });
       }
       memItemCategories[idx] = {
         ...memItemCategories[idx],
@@ -397,9 +568,7 @@ function createRouter({ useMongo, mongoose }) {
       if (ItemCategoryModel) {
         const deleted = await ItemCategoryModel.findByIdAndDelete(id);
         if (!deleted) {
-          return res
-            .status(404)
-            .json({ message: "Item category not found" });
+          return res.status(404).json({ message: "Item category not found" });
         }
         return res.json({ ok: true });
       }
@@ -407,9 +576,7 @@ function createRouter({ useMongo, mongoose }) {
       const before = memItemCategories.length;
       memItemCategories = memItemCategories.filter((c) => c._id !== id);
       if (memItemCategories.length === before) {
-        return res
-          .status(404)
-          .json({ message: "Item category not found" });
+        return res.status(404).json({ message: "Item category not found" });
       }
       return res.json({ ok: true });
     } catch (err) {
@@ -441,9 +608,7 @@ function createRouter({ useMongo, mongoose }) {
         req.body || {};
 
       if (!name || !code) {
-        return res
-          .status(400)
-          .json({ message: "name & code are required" });
+        return res.status(400).json({ message: "name & code are required" });
       }
 
       const common = {
@@ -491,11 +656,7 @@ function createRouter({ useMongo, mongoose }) {
         update.indicativePrice = Number(indicativePrice);
 
       if (ItemModel) {
-        const updated = await ItemModel.findByIdAndUpdate(
-          id,
-          { $set: update },
-          { new: true }
-        );
+        const updated = await ItemModel.findByIdAndUpdate(id, { $set: update }, { new: true });
         if (!updated) {
           return res.status(404).json({ message: "Item not found" });
         }
@@ -575,9 +736,7 @@ function createRouter({ useMongo, mongoose }) {
       } = req.body || {};
 
       if (!code || !name) {
-        return res
-          .status(400)
-          .json({ message: "code & name are required" });
+        return res.status(400).json({ message: "code & name are required" });
       }
 
       // ensure lines array
@@ -636,8 +795,7 @@ function createRouter({ useMongo, mongoose }) {
       const update = {};
       if (code != null) update.code = code;
       if (name != null) update.name = name;
-      if (recipeCategoryId != null)
-        update.recipeCategoryId = recipeCategoryId;
+      if (recipeCategoryId != null) update.recipeCategoryId = recipeCategoryId;
       if (type != null) update.type = type;
       if (yieldQty !== undefined) {
         if (yieldQty === "" || yieldQty == null) update.yieldQty = undefined;
@@ -724,49 +882,6 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // Vendors (full CRUD + CSV upload)
   // ------------------------
-  let VendorModel = null;
-  let memVendors = [];
-
-  if (useMongo && mongoose) {
-    const { Schema } = mongoose;
-    const vendorSchema = new Schema({
-      code: { type: String, required: true, unique: true },
-      name: { type: String, required: true },
-      vendorType: { type: String, default: '' },
-      categories: { type: [String], default: [] },
-      resorts: { type: [String], default: [] },
-      contactPerson: String,
-      phone: String,
-      whatsapp: String,
-      alternatePhone: String,
-      email: String,
-      addressLine1: String,
-      addressLine2: String,
-      city: String,
-      state: String,
-      pincode: String,
-      country: String,
-      gstNumber: String,
-      panNumber: String,
-      fssaiNumber: String,
-      paymentTerms: String,
-      creditLimit: { type: Number, default: 0 },
-      paymentMode: String,
-      bankName: String,
-      accountNumber: String,
-      ifsc: String,
-      branch: String,
-      deliveryTime: String,
-      minOrderQty: { type: Number, default: 0 },
-      status: { type: String, default: 'Active' },
-      notes: String
-    }, { timestamps: true });
-
-    VendorModel = mongoose.models.Vendor || mongoose.model('Vendor', vendorSchema);
-    console.log('Vendor model initialised (Mongo)');
-  } else {
-    console.warn('Mongo not enabled; Vendors will use in-memory array (data lost on restart).');
-  }
 
   // --- handlers ---
   const listVendorsHandler = async (req, res) => {
@@ -777,8 +892,8 @@ function createRouter({ useMongo, mongoose }) {
       }
       return res.json(memVendors);
     } catch (err) {
-      console.error('GET /api/vendors error', err);
-      res.status(500).json({ message: 'Failed to list vendors' });
+      console.error("GET /api/vendors error", err);
+      res.status(500).json({ message: "Failed to list vendors" });
     }
   };
 
@@ -786,14 +901,14 @@ function createRouter({ useMongo, mongoose }) {
     try {
       const payload = req.body || {};
       // normalize categories/resorts (accept comma separated strings)
-      if (payload.categories && typeof payload.categories === 'string') {
-        payload.categories = payload.categories.split(',').map(s => s.trim()).filter(Boolean);
+      if (payload.categories && typeof payload.categories === "string") {
+        payload.categories = payload.categories.split(",").map((s) => s.trim()).filter(Boolean);
       }
-      if (payload.resorts && typeof payload.resorts === 'string') {
-        payload.resorts = payload.resorts.split(',').map(s => s.trim()).filter(Boolean);
+      if (payload.resorts && typeof payload.resorts === "string") {
+        payload.resorts = payload.resorts.split(",").map((s) => s.trim()).filter(Boolean);
       }
       if (!payload.code || !payload.name) {
-        return res.status(400).json({ message: 'code & name are required' });
+        return res.status(400).json({ message: "code & name are required" });
       }
       if (VendorModel) {
         const doc = await VendorModel.create(payload);
@@ -801,10 +916,10 @@ function createRouter({ useMongo, mongoose }) {
       }
       const created = { _id: `ven_${Date.now()}`, ...payload };
       memVendors.push(created);
-      return res.status(201).json(created);
+      return res.status(1).json(created);
     } catch (err) {
-      console.error('POST /api/vendors error', err);
-      res.status(500).json({ message: 'Failed to create vendor', error: err.message });
+      console.error("POST /api/vendors error", err);
+      res.status(500).json({ message: "Failed to create vendor", error: err.message });
     }
   };
 
@@ -812,24 +927,24 @@ function createRouter({ useMongo, mongoose }) {
     try {
       const { id } = req.params;
       const payload = req.body || {};
-      if (payload.categories && typeof payload.categories === 'string') {
-        payload.categories = payload.categories.split(',').map(s => s.trim()).filter(Boolean);
+      if (payload.categories && typeof payload.categories === "string") {
+        payload.categories = payload.categories.split(",").map((s) => s.trim()).filter(Boolean);
       }
-      if (payload.resorts && typeof payload.resorts === 'string') {
-        payload.resorts = payload.resorts.split(',').map(s => s.trim()).filter(Boolean);
+      if (payload.resorts && typeof payload.resorts === "string") {
+        payload.resorts = payload.resorts.split(",").map((s) => s.trim()).filter(Boolean);
       }
       if (VendorModel) {
         const updated = await VendorModel.findByIdAndUpdate(id, { $set: payload }, { new: true });
-        if (!updated) return res.status(404).json({ message: 'Vendor not found' });
+        if (!updated) return res.status(404).json({ message: "Vendor not found" });
         return res.json(updated);
       }
-      const idx = memVendors.findIndex(v => v._id === id);
-      if (idx === -1) return res.status(404).json({ message: 'Vendor not found' });
+      const idx = memVendors.findIndex((v) => v._id === id);
+      if (idx === -1) return res.status(404).json({ message: "Vendor not found" });
       memVendors[idx] = { ...memVendors[idx], ...payload };
       return res.json(memVendors[idx]);
     } catch (err) {
-      console.error('PUT /api/vendors/:id error', err);
-      res.status(500).json({ message: 'Failed to update vendor' });
+      console.error("PUT /api/vendors/:id error", err);
+      res.status(500).json({ message: "Failed to update vendor" });
     }
   };
 
@@ -838,98 +953,579 @@ function createRouter({ useMongo, mongoose }) {
       const { id } = req.params;
       if (VendorModel) {
         const deleted = await VendorModel.findByIdAndDelete(id);
-        if (!deleted) return res.status(404).json({ message: 'Vendor not found' });
+        if (!deleted) return res.status(404).json({ message: "Vendor not found" });
         return res.json({ ok: true });
       }
       const before = memVendors.length;
-      memVendors = memVendors.filter(v => v._id !== id);
-      if (memVendors.length === before) return res.status(404).json({ message: 'Vendor not found' });
+      memVendors = memVendors.filter((v) => v._id !== id);
+      if (memVendors.length === before) return res.status(404).json({ message: "Vendor not found" });
       return res.json({ ok: true });
     } catch (err) {
-      console.error('DELETE /api/vendors/:id error', err);
-      res.status(500).json({ message: 'Failed to delete vendor' });
+      console.error("DELETE /api/vendors/:id error", err);
+      res.status(500).json({ message: "Failed to delete vendor" });
     }
   };
 
   // CSV upload (multipart/form-data field name: file)
   const uploadVendorsCsvHandler = async (req, res) => {
     try {
-      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const json = await csvToJson().fromFile(req.file.path);
-      if (!Array.isArray(json) || json.length === 0) return res.status(400).json({ message: 'CSV empty or invalid' });
+      if (!Array.isArray(json) || json.length === 0) return res.status(400).json({ message: "CSV empty or invalid" });
 
       // Normalize rows to Vendor doc shape
-      const docs = json.map(row => {
-        const categories = (row.categories || row.category || '').toString();
-        const resorts = (row.resorts || '').toString();
+      const docs = json.map((row) => {
+        const categories = (row.categories || row.category || "").toString();
+        const resorts = (row.resorts || "").toString();
         return {
-          code: (row.code || row.Code || '').toString().trim(),
-          name: (row.name || row.Name || '').toString().trim(),
-          vendorType: row.vendorType || row.vendorType || '',
-          categories: categories ? categories.split(',').map(s => s.trim()).filter(Boolean) : [],
-          resorts: resorts ? resorts.split(',').map(s => s.trim()).filter(Boolean) : ['ALL'],
-          contactPerson: row.contactPerson || '',
-          phone: row.phone || '',
-          whatsapp: row.whatsapp || '',
-          alternatePhone: row.alternatePhone || '',
-          email: row.email || '',
-          addressLine1: row.addressLine1 || '',
-          addressLine2: row.addressLine2 || '',
-          city: row.city || '',
-          state: row.state || '',
-          pincode: row.pincode || '',
-          country: row.country || 'India',
-          gstNumber: row.gstNumber || '',
-          panNumber: row.panNumber || '',
-          fssaiNumber: row.fssaiNumber || '',
-          paymentTerms: row.paymentTerms || '',
+          code: (row.code || row.Code || "").toString().trim(),
+          name: (row.name || row.Name || "").toString().trim(),
+          vendorType: row.vendorType || row.vendorType || "",
+          categories: categories ? categories.split(",").map((s) => s.trim()).filter(Boolean) : [],
+          resorts: resorts ? resorts.split(",").map((s) => s.trim()).filter(Boolean) : ["ALL"],
+          contactPerson: row.contactPerson || "",
+          phone: row.phone || "",
+          whatsapp: row.whatsapp || "",
+          alternatePhone: row.alternatePhone || "",
+          email: row.email || "",
+          addressLine1: row.addressLine1 || "",
+          addressLine2: row.addressLine2 || "",
+          city: row.city || "",
+          state: row.state || "",
+          pincode: row.pincode || "",
+          country: row.country || "India",
+          gstNumber: row.gstNumber || "",
+          panNumber: row.panNumber || "",
+          fssaiNumber: row.fssaiNumber || "",
+          paymentTerms: row.paymentTerms || "",
           creditLimit: row.creditLimit ? Number(row.creditLimit) : 0,
-          paymentMode: row.paymentMode || '',
-          bankName: row.bankName || '',
-          accountNumber: row.accountNumber || '',
-          ifsc: row.ifsc || '',
-          branch: row.branch || '',
-          deliveryTime: row.deliveryTime || '',
+          paymentMode: row.paymentMode || "",
+          bankName: row.bankName || "",
+          accountNumber: row.accountNumber || "",
+          ifsc: row.ifsc || "",
+          branch: row.branch || "",
+          deliveryTime: row.deliveryTime || "",
           minOrderQty: row.minOrderQty ? Number(row.minOrderQty) : 0,
-          status: row.status || 'Active',
-          notes: row.notes || ''
+          status: row.status || "Active",
+          notes: row.notes || ""
         };
       });
 
       if (VendorModel) {
         // Upsert by code to avoid duplicates
-        const bulkOps = docs.map(d => ({
+        const bulkOps = docs.map((d) => ({
           updateOne: {
             filter: { code: d.code },
             update: { $set: d },
-            upsert: true
-          }
+            upsert: true,
+          },
         }));
         const result = await VendorModel.bulkWrite(bulkOps);
-        return res.json({ message: 'Uploaded', result });
+        return res.json({ message: "Uploaded", result });
       }
 
       // in-memory insert
-      docs.forEach(d => {
-        const created = { _id: `ven_${Date.now()}_${Math.floor(Math.random()*1000)}`, ...d };
+      docs.forEach((d) => {
+        const created = { _id: `ven_${Date.now()}_${Math.floor(Math.random() * 1000)}`, ...d };
         memVendors.push(created);
       });
-      return res.json({ message: 'Uploaded in-memory', inserted: docs.length });
+      return res.json({ message: "Uploaded in-memory", inserted: docs.length });
     } catch (err) {
-      console.error('CSV upload vendors error', err);
-      res.status(500).json({ message: 'Failed to upload vendors', error: err.message });
+      console.error("CSV upload vendors error", err);
+      res.status(500).json({ message: "Failed to upload vendors", error: err.message });
     }
   };
 
   // --- register vendor routes (plain + /api paths)
-  router.get('/vendors', listVendorsHandler);
-  router.get('/api/vendors', listVendorsHandler);
-  router.post('/api/vendors', createVendorHandler);
-  router.put('/api/vendors/:id', updateVendorHandler);
-  router.delete('/api/vendors/:id', deleteVendorHandler);
+  router.get("/vendors", listVendorsHandler);
+  router.get("/api/vendors", listVendorsHandler);
+  router.post("/api/vendors", createVendorHandler);
+  router.put("/api/vendors/:id", updateVendorHandler);
+  router.delete("/api/vendors/:id", deleteVendorHandler);
 
   // CSV upload endpoint
-  router.post('/api/vendors/upload', upload.single('file'), uploadVendorsCsvHandler);
+  router.post("/api/vendors/upload", upload.single("file"), uploadVendorsCsvHandler);
+
+  // =======================================================
+  // 🧾 REQUISITIONS (FULL CRUD + Approve + Reject + Hold)
+  // =======================================================
+
+  // Helper: Generate Requisition Number
+  function makeReqNo() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const rand = Math.floor(100 + Math.random() * 900);
+    return `REQ-${y}${m}${day}-${rand}`;
+  }
+
+  // LIST
+  router.get("/api/requisitions", async (req, res) => {
+    try {
+      if (RequisitionModel) {
+        const docs = await RequisitionModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memRequisitions);
+    } catch (err) {
+      console.error("GET /api/requisitions", err);
+      res.status(500).json({ message: "Failed to fetch requisitions" });
+    }
+  });
+
+  // CREATE
+  router.post("/api/requisitions", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const reqNo = makeReqNo();
+
+      const payload = {
+        requisitionNo: reqNo,
+        type: data.type,
+        resort: data.resort,
+        department: data.department,
+        fromStore: data.fromStore,
+        toStore: data.toStore,
+        vendor: data.vendor,
+        store: data.store,
+        requiredBy: data.requiredBy || null,
+        status: "PENDING",
+        lines: Array.isArray(data.lines) ? data.lines : [],
+        createdBy: req.user?.id || "SYSTEM",
+      };
+
+      if (RequisitionModel) {
+        const doc = await RequisitionModel.create(payload);
+        return res.status(201).json(doc);
+      }
+
+      const created = { _id: `req_${Date.now()}`, ...payload };
+      memRequisitions.push(created);
+      return res.status(201).json(created);
+    } catch (err) {
+      console.error("POST /api/requisitions", err);
+      res.status(500).json({ message: "Failed to create requisition" });
+    }
+  });
+
+  // UPDATE
+  router.put("/api/requisitions/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const data = req.body || {};
+
+      const update = {
+        type: data.type,
+        resort: data.resort,
+        department: data.department,
+        fromStore: data.fromStore,
+        toStore: data.toStore,
+        vendor: data.vendor,
+        store: data.store,
+        requiredBy: data.requiredBy || null,
+        lines: data.lines || [],
+        updatedAt: new Date(),
+      };
+
+      if (RequisitionModel) {
+        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
+        if (!updated) return res.status(404).json({ message: "Requisition not found" });
+        return res.json(updated);
+      }
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
+
+      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
+      return res.json(memRequisitions[idx]);
+    } catch (err) {
+      console.error("PUT /api/requisitions/:id", err);
+      res.status(500).json({ message: "Failed to update requisition" });
+    }
+  });
+
+  // DELETE
+  router.delete("/api/requisitions/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      if (RequisitionModel) {
+        const deleted = await RequisitionModel.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: "Requisition not found" });
+        return res.json({ ok: true });
+      }
+
+      const before = memRequisitions.length;
+      memRequisitions = memRequisitions.filter((r) => r._id !== id);
+      if (memRequisitions.length === before) return res.status(404).json({ message: "Requisition not found" });
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE /api/requisitions/:id", err);
+      res.status(500).json({ message: "Failed to delete requisition" });
+    }
+  });
+
+  // APPROVE
+  router.post("/api/requisitions/:id/approve", async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      const update = {
+        status: "APPROVED",
+        approvedBy: req.user?.id || "SYSTEM",
+        approvedAt: new Date(),
+      };
+
+      if (RequisitionModel) {
+        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
+        if (!updated) return res.status(404).json({ message: "Requisition not found" });
+        return res.json(updated);
+      }
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
+
+      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
+      return res.json(memRequisitions[idx]);
+    } catch (err) {
+      console.error("APPROVE requisition error", err);
+      res.status(500).json({ message: "Failed to approve requisition" });
+    }
+  });
+
+  // HOLD
+  router.post("/api/requisitions/:id/hold", async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      const update = { status: "ON_HOLD" };
+
+      if (RequisitionModel) {
+        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
+        if (!updated) return res.status(404).json({ message: "Requisition not found" });
+        return res.json(updated);
+      }
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
+
+      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
+      return res.json(memRequisitions[idx]);
+    } catch (err) {
+      console.error("HOLD requisition error", err);
+      res.status(500).json({ message: "Failed to hold requisition" });
+    }
+  });
+
+  // REJECT
+  router.post("/api/requisitions/:id/reject", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const reason = req.body.reason || "";
+
+      const update = {
+        status: "REJECTED",
+        rejectedBy: req.user?.id || "SYSTEM",
+        rejectionReason: reason,
+      };
+
+      if (RequisitionModel) {
+        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
+        if (!updated) return res.status(404).json({ message: "Requisition not found" });
+        return res.json(updated);
+      }
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
+
+      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
+      return res.json(memRequisitions[idx]);
+    } catch (err) {
+      console.error("REJECT requisition error", err);
+      res.status(500).json({ message: "Failed to reject requisition" });
+    }
+  });
+
+  // =======================================================
+  // 📑 PURCHASE ORDERS (PO) — Full CRUD + Link to Requisition
+  // =======================================================
+
+  // Helper for PO number
+  function makePoNo() {
+    const d = new Date();
+    return `PO-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${Math.floor(
+      100 + Math.random() * 900
+    )}`;
+  }
+
+  // LIST POs
+  router.get("/api/po", async (req, res) => {
+    try {
+      if (POModel) {
+        const docs = await POModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memPOs);
+    } catch (err) {
+      console.error("GET /api/po", err);
+      res.status(500).json({ message: "Failed to fetch POs" });
+    }
+  });
+
+  // CREATE PO (including from requisition)
+  router.post("/api/po", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const poNo = data.poNo || makePoNo();
+
+      const payload = {
+        poNo,
+        requisitionId: data.requisitionId || data.requisition || null,
+        vendor: data.vendor,
+        resort: data.resort,
+        deliverTo: data.deliverTo,
+        poDate: data.poDate || new Date(),
+        items: Array.isArray(data.items) ? data.items : [],
+        subTotal: Number(data.subTotal || 0),
+        taxPercent: Number(data.taxPercent || 0),
+        taxAmount: Number(data.taxAmount || 0),
+        total: Number(data.total || 0),
+      };
+
+      // MONGO
+      if (POModel) {
+        const doc = await POModel.create(payload);
+
+        // update requisition status → PO_CREATED
+        if (payload.requisitionId && RequisitionModel) {
+          await RequisitionModel.findByIdAndUpdate(payload.requisitionId, {
+            $set: { status: "PO_CREATED" },
+          });
+        }
+
+        return res.status(201).json(doc);
+      }
+
+      // IN-MEMORY
+      const created = { _id: `po_${Date.now()}`, ...payload };
+      memPOs.push(created);
+      return res.status(201).json(created);
+    } catch (err) {
+      console.error("POST /api/po", err);
+      res.status(500).json({ message: "Failed to create PO" });
+    }
+  });
+
+  // UPDATE PO
+  router.put("/api/po/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const update = { ...req.body, updatedAt: new Date() };
+
+      if (POModel) {
+        const updated = await POModel.findByIdAndUpdate(id, { $set: update }, { new: true });
+        if (!updated) return res.status(404).json({ message: "PO not found" });
+        return res.json(updated);
+      }
+
+      const idx = memPOs.findIndex((p) => p._id === id);
+      if (idx === -1) return res.status(404).json({ message: "PO not found" });
+
+      memPOs[idx] = { ...memPOs[idx], ...update };
+      return res.json(memPOs[idx]);
+    } catch (err) {
+      console.error("PUT /api/po/:id", err);
+      res.status(500).json({ message: "Failed to update PO" });
+    }
+  });
+
+  // DELETE PO
+  router.delete("/api/po/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      if (POModel) {
+        const deleted = await POModel.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: "PO not found" });
+        return res.json({ ok: true });
+      }
+
+      const before = memPOs.length;
+      memPOs = memPOs.filter((p) => p._id !== id);
+      if (memPOs.length === before) return res.status(404).json({ message: "PO not found" });
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE /api/po/:id", err);
+      res.status(500).json({ message: "Failed to delete PO" });
+    }
+  });
+
+  // =======================================================
+  // 📦 GRN (Goods Received Note) — Full CRUD + Auto PO Update
+  // =======================================================
+
+  function makeGrnNo() {
+    const d = new Date();
+    return `GRN-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${Math.floor(
+      100 + Math.random() * 900
+    )}`;
+  }
+
+  // LIST GRN
+  router.get("/api/grn", async (req, res) => {
+    try {
+      if (GRNModel) {
+        const docs = await GRNModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memGRNs);
+    } catch (err) {
+      console.error("GET /api/grn", err);
+      res.status(500).json({ message: "Failed to fetch GRNs" });
+    }
+  });
+
+  // CREATE GRN
+  // expected payload:
+  // { poId, requisitionId?, vendor, resort, store, grnDate, items: [{ item, receivedQty, remark }] }
+  router.post("/api/grn", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const grnNo = data.grnNo || makeGrnNo();
+
+      if (!data.poId) return res.status(400).json({ message: "poId is required" });
+      if (!Array.isArray(data.items) || data.items.length === 0) return res.status(400).json({ message: "items required" });
+
+      const payload = {
+        grnNo,
+        poId: data.poId,
+        requisitionId: data.requisitionId || null,
+        vendor: data.vendor || null,
+        resort: data.resort || null,
+        store: data.store || null,
+        grnDate: data.grnDate || new Date(),
+        items: data.items.map((it) => ({
+          item: it.item,
+          receivedQty: Number(it.receivedQty || 0),
+          pendingQty: 0,
+          remark: it.remark || "",
+        })),
+      };
+
+      // insert
+      let doc = null;
+      if (GRNModel) {
+        doc = await GRNModel.create(payload);
+      } else {
+        doc = { _id: `grn_${Date.now()}`, ...payload };
+        memGRNs.push(doc);
+      }
+
+      // AUTO UPDATE PO STATUS logic
+      if (POModel) {
+        const po = await POModel.findById(data.poId).lean();
+        if (po) {
+          // Build map of received totals for this PO including previous GRNs
+          const grns = GRNModel ? await GRNModel.find({ poId: data.poId }).lean() : memGRNs.filter((g) => g.poId === data.poId);
+          const receivedMap = {};
+
+          (grns || []).forEach((g) => {
+            (g.items || []).forEach((it) => {
+              const id = String(it.item);
+              receivedMap[id] = (receivedMap[id] || 0) + Number(it.receivedQty || 0);
+            });
+          });
+
+          // Add current payload items (in case newly created not in DB yet for mem case)
+          (payload.items || []).forEach((it) => {
+            const id = String(it.item);
+            receivedMap[id] = (receivedMap[id] || 0) + Number(it.receivedQty || 0);
+          });
+
+          let allFulfilled = true;
+          let partial = false;
+
+          (po.items || []).forEach((pItem) => {
+            const want = Number(pItem.qty || 0);
+            const got = Number(receivedMap[String(pItem.item)] || 0);
+            if (got > 0 && got < want) partial = true;
+            if (got === 0) {
+              allFulfilled = false;
+            }
+            if (got < want) {
+              allFulfilled = false;
+            }
+          });
+
+          const newStatus = allFulfilled ? "CLOSED" : partial ? "PARTIAL" : "OPEN";
+          await POModel.findByIdAndUpdate(data.poId, { $set: { status: newStatus } });
+        }
+      } else {
+        // in-memory PO status update
+        const poIdx = memPOs.findIndex((p) => p._id === data.poId);
+        if (poIdx !== -1) {
+          const po = memPOs[poIdx];
+          const allReceivedMap = {};
+          memGRNs.filter((g) => g.poId === data.poId).forEach((g) => {
+            (g.items || []).forEach((it) => {
+              allReceivedMap[it.item] = (allReceivedMap[it.item] || 0) + Number(it.receivedQty || 0);
+            });
+          });
+          // include current payload too
+          payload.items.forEach((it) => {
+            allReceivedMap[it.item] = (allReceivedMap[it.item] || 0) + Number(it.receivedQty || 0);
+          });
+
+          let allFulfilled = true;
+          let partial = false;
+          (po.items || []).forEach((pItem) => {
+            const want = Number(pItem.qty || 0);
+            const got = Number(allReceivedMap[pItem.item] || 0);
+            if (got > 0 && got < want) partial = true;
+            if (got === 0) allFulfilled = false;
+            if (got < want) allFulfilled = false;
+          });
+
+          po.status = allFulfilled ? "CLOSED" : partial ? "PARTIAL" : "OPEN";
+          memPOs[poIdx] = po;
+        }
+      }
+
+      return res.status(201).json(doc);
+    } catch (err) {
+      console.error("POST /api/grn", err);
+      res.status(500).json({ message: "Failed to create GRN", error: err.message });
+    }
+  });
+
+  // DELETE GRN
+  router.delete("/api/grn/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      if (GRNModel) {
+        const deleted = await GRNModel.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: "GRN not found" });
+        return res.json({ ok: true });
+      }
+
+      const before = memGRNs.length;
+      memGRNs = memGRNs.filter((g) => g._id !== id);
+      if (memGRNs.length === before) return res.status(404).json({ message: "GRN not found" });
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("DELETE /api/grn/:id", err);
+      res.status(500).json({ message: "Failed to delete GRN" });
+    }
+  });
+
+  // ------------------------
+  // other endpoints can go here...
+  // ------------------------
 
   return router;
 }

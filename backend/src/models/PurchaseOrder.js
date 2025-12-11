@@ -1,30 +1,53 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
-const poItemSchema = new mongoose.Schema(
-  {
-    item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
-    qty: { type: Number, required: true },
-    rate: { type: Number, required: true },
-  },
-  { _id: false }
-);
+const poItemSchema = new mongoose.Schema({
+  item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
+  qty: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  amount: { type: Number, required: true },
+  remark: { type: String, default: "" },
+});
 
 const poSchema = new mongoose.Schema(
   {
-    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort", required: true },
-    vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", required: true },
-    poNumber: { type: String, required: true, unique: true },
+    poNo: { type: String, required: true, unique: true },
+
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
+    },
+
+    resort: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
+      required: true,
+    },
+
+    deliverTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Store",
+      required: true,
+    },
+
     poDate: { type: Date, default: Date.now },
+
+    items: [poItemSchema],
+
+    subTotal: { type: Number, default: 0 },
+    taxPercent: { type: Number, default: 0 },
+    taxAmount: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+
     status: {
       type: String,
-      enum: ["OPEN", "PART_RECEIVED", "CLOSED", "CANCELLED"],
-      default: "OPEN",
+      enum: ["CREATED", "PARTIAL_GRN", "FULLY_RECEIVED", "CANCELLED"],
+      default: "CREATED",
     },
-    requisition: { type: mongoose.Schema.Types.ObjectId, ref: "Requisition" },
-    items: [poItemSchema],
+
+    createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
-const PurchaseOrder = mongoose.model("PurchaseOrder", poSchema);
-export default PurchaseOrder;
+module.exports = mongoose.model("PO", poSchema);

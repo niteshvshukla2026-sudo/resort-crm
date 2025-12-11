@@ -1,16 +1,12 @@
-import express from "express";
-import { protect } from "../middleware/auth.js";
-
+// routes/po.routes.js
+const express = require("express");
 const router = express.Router();
+const poCtrl = require("../controllers/po.controller");
 
-router.use(protect);
+router.get("/", poCtrl.list);
+router.get("/:id", poCtrl.getOne);
+router.post("/", poCtrl.create);
+router.put("/:id", poCtrl.update);
+router.delete("/:id", poCtrl.delete);
 
-router.get("/", async (req, res) => {
-  res.json([]);
-});
-
-router.post("/", async (req, res) => {
-  res.status(201).json({ message: "Not implemented yet", body: req.body });
-});
-
-export default router;
+module.exports = router;
