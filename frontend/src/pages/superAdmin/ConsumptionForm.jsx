@@ -29,7 +29,7 @@ const ConsumptionForm = () => {
   const [storeFrom, setStoreFrom] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
-  const [referenceNo, setReferenceNo] = useState(""); // kept only if you later want to reference anything (optional)
+  const [referenceNo, setReferenceNo] = useState(""); // optional kept
 
   const [lines, setLines] = useState([emptyLine()]);
 
@@ -98,21 +98,29 @@ const ConsumptionForm = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- derived: item categories ----
-  const itemCategories = Array.from(
-    new Set(
-      items
-        .map(
-          (it) =>
-            it.category ||
-            it.itemCategory ||
-            it.categoryName ||
-            it.categoryId ||
-            ""
-        )
-        .filter(Boolean)
-    )
-  );
+  // ---- derived: item categories (id + name) ----
+  // Build a map from item master so we render friendly category names
+  const categoryMap = {};
+  items.forEach((it) => {
+    if (!it) return;
+    // try common possible fields for category id and label
+    const id =
+      it.categoryId ||
+      it.category ||
+      it.itemCategory ||
+      (typeof it.category === "string" ? it.category : "");
+    const name =
+      it.categoryName ||
+      it.categoryLabel ||
+      it.itemCategoryName ||
+      it.category ||
+      id;
+    if (id) categoryMap[id] = name;
+  });
+  const itemCategories = Object.keys(categoryMap).map((k) => ({
+    id: k,
+    name: categoryMap[k],
+  }));
 
   // ---- line changes ----
   const handleLineChange = (index, field, value) => {
@@ -128,14 +136,17 @@ const ConsumptionForm = () => {
         row.item = value;
         const it = items.find((i) => (i._id || i.id) === value);
         if (it) {
-          row.uom = it.uom || it.UOM || it.unit || row.uom || "";
-          const cat =
+          // common possible uom fields (adjust if your master uses a different key)
+          row.uom = it.uom || it.UOM || it.unit || it.unitOfMeasure || it.measure || row.uom || "";
+          // keep category in sync if possible
+          const catId =
+            it.categoryId ||
             it.category ||
             it.itemCategory ||
-            it.categoryName ||
-            it.categoryId ||
             "";
-          if (cat) row.category = cat;
+          if (catId) row.category = catId;
+        } else {
+          row.uom = row.uom || "";
         }
       } else if (field === "recipe") {
         row.recipe = value;
@@ -165,21 +176,13 @@ const ConsumptionForm = () => {
 
     let validLines;
     if (isRecipeType) {
-      validLines = lines.filter(
-        (ln) => ln.recipe && ln.qty && Number(ln.qty) > 0
-      );
+      validLines = lines.filter((ln) => ln.recipe && ln.qty && Number(ln.qty) > 0);
     } else {
-      validLines = lines.filter(
-        (ln) => ln.item && ln.qty && Number(ln.qty) > 0
-      );
+      validLines = lines.filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0);
     }
 
     if (validLines.length === 0) {
-      setError(
-        isRecipeType
-          ? "Add at least one recipe with quantity."
-          : "Add at least one item line with quantity."
-      );
+      setError(isRecipeType ? "Add at least one recipe with quantity." : "Add at least one item line with quantity.");
       return false;
     }
 
@@ -246,11 +249,7 @@ const ConsumptionForm = () => {
       <div className="sa-page-header">
         <div>
           <h2>{pageTitle}</h2>
-          <p>
-            {type === "REPLACEMENT"
-              ? "Record stock movement between stores."
-              : "Record stock consumption (lumpsum / recipe / portion)."}
-          </p>
+          <p>{isRecipeType ? "Record stock consumption by recipe." : "Record stock consumption (lumpsum / recipe / portion)."}</p>
         </div>
       </div>
 
@@ -266,11 +265,7 @@ const ConsumptionForm = () => {
         >
           <label>
             Type
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              required
-            >
+            <select value={type} onChange={(e) => setType(e.target.value)} required>
               {TYPE_OPTIONS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -287,11 +282,7 @@ const ConsumptionForm = () => {
 
           <label>
             Store From
-            <select
-              value={storeFrom}
-              onChange={(e) => setStoreFrom(e.target.value)}
-              required
-            >
+            <select value={storeFrom} onChange={(e) => setStoreFrom(e.target.value)} required>
               <option value="">Select store</option>
               {stores.map((s) => (
                 <option key={s._id || s.id} value={s._id || s.id}>
@@ -306,19 +297,12 @@ const ConsumptionForm = () => {
         <div style={{ marginBottom: 16 }}>
           <label>
             Notes (optional)
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Any remarks..."
-            />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any remarks..." />
           </label>
         </div>
 
         {/* Lines */}
-        <h3 style={{ marginBottom: 8 }}>
-          {isRecipeType ? "Recipes" : "Items"}
-        </h3>
+        <h3 style={{ marginBottom: 8 }}>{isRecipeType ? "Recipes" : "Items"}</h3>
         <div className="sa-card" style={{ padding: 12, marginBottom: 16 }}>
           <table className="sa-table">
             <thead>
@@ -347,13 +331,7 @@ const ConsumptionForm = () => {
                   return (
                     <tr key={idx}>
                       <td>
-                        <select
-                          value={ln.recipe}
-                          onChange={(e) =>
-                            handleLineChange(idx, "recipe", e.target.value)
-                          }
-                          required
-                        >
+                        <select value={ln.recipe} onChange={(e) => handleLineChange(idx, "recipe", e.target.value)} required>
                           <option value="">Select recipe</option>
                           {recipes.map((rc) => (
                             <option key={rc._id || rc.id} value={rc._id || rc.id}>
@@ -364,34 +342,16 @@ const ConsumptionForm = () => {
                       </td>
 
                       <td>
-                        <input
-                          type="number"
-                          min="0"
-                          value={ln.qty}
-                          onChange={(e) =>
-                            handleLineChange(idx, "qty", e.target.value)
-                          }
-                          required
-                        />
+                        <input type="number" min="0" value={ln.qty} onChange={(e) => handleLineChange(idx, "qty", e.target.value)} required />
                       </td>
 
                       <td>
-                        <input
-                          value={ln.remarks}
-                          onChange={(e) =>
-                            handleLineChange(idx, "remarks", e.target.value)
-                          }
-                          placeholder="optional"
-                        />
+                        <input value={ln.remarks} onChange={(e) => handleLineChange(idx, "remarks", e.target.value)} placeholder="optional" />
                       </td>
 
                       <td>
                         {lines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeLine(idx)}
-                            className="sa-secondary-button"
-                          >
+                          <button type="button" onClick={() => removeLine(idx)} className="sa-secondary-button">
                             -
                           </button>
                         )}
@@ -403,29 +363,25 @@ const ConsumptionForm = () => {
                 // normal item-based rows
                 const filteredItems = items.filter((it) => {
                   const cat =
+                    it.categoryId ||
                     it.category ||
                     it.itemCategory ||
                     it.categoryName ||
                     it.categoryId ||
                     "";
                   if (!ln.category) return true;
-                  return cat === ln.category;
+                  return String(cat) === String(ln.category);
                 });
 
                 return (
                   <tr key={idx}>
                     {/* Category */}
                     <td>
-                      <select
-                        value={ln.category}
-                        onChange={(e) =>
-                          handleLineChange(idx, "category", e.target.value)
-                        }
-                      >
+                      <select value={ln.category} onChange={(e) => handleLineChange(idx, "category", e.target.value)}>
                         <option value="">Select category</option>
                         {itemCategories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
                           </option>
                         ))}
                       </select>
@@ -435,11 +391,9 @@ const ConsumptionForm = () => {
                     <td>
                       <select
                         value={ln.item}
-                        onChange={(e) =>
-                          handleLineChange(idx, "item", e.target.value)
-                        }
+                        onChange={(e) => handleLineChange(idx, "item", e.target.value)}
                         required
-                        disabled={!storeFrom && items.length === 0} // helpful hint: require store selection if you want store-scoped items later
+                        disabled={items.length === 0}
                       >
                         <option value="">Select item</option>
                         {filteredItems.map((it) => (
@@ -452,45 +406,33 @@ const ConsumptionForm = () => {
 
                     {/* Qty */}
                     <td>
-                      <input
-                        type="number"
-                        min="0"
-                        value={ln.qty}
-                        onChange={(e) =>
-                          handleLineChange(idx, "qty", e.target.value)
-                        }
-                        required
-                      />
+                      <input type="number" min="0" value={ln.qty} onChange={(e) => handleLineChange(idx, "qty", e.target.value)} required />
                     </td>
 
-                    {/* UOM auto from item (read-only) */}
+                    {/* UOM auto from item (read-only, readable color) */}
                     <td>
                       <input
                         value={ln.uom}
                         readOnly
                         placeholder="Auto"
-                        style={{ backgroundColor: "#020617", opacity: 0.85 }}
+                        style={{
+                          backgroundColor: "#020617",
+                          opacity: 0.95,
+                          color: "#fff",
+                          border: "1px solid rgba(255,255,255,0.06)",
+                          padding: "6px 8px",
+                        }}
                       />
                     </td>
 
                     {/* Remarks */}
                     <td>
-                      <input
-                        value={ln.remarks}
-                        onChange={(e) =>
-                          handleLineChange(idx, "remarks", e.target.value)
-                        }
-                        placeholder="optional"
-                      />
+                      <input value={ln.remarks} onChange={(e) => handleLineChange(idx, "remarks", e.target.value)} placeholder="optional" />
                     </td>
 
                     <td>
                       {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(idx)}
-                          className="sa-secondary-button"
-                        >
+                        <button type="button" onClick={() => removeLine(idx)} className="sa-secondary-button">
                           -
                         </button>
                       )}
@@ -501,12 +443,7 @@ const ConsumptionForm = () => {
             </tbody>
           </table>
 
-          <button
-            type="button"
-            className="sa-secondary-button"
-            style={{ marginTop: 8 }}
-            onClick={addLine}
-          >
+          <button type="button" className="sa-secondary-button" style={{ marginTop: 8 }} onClick={addLine}>
             {isRecipeType ? "+ Add Recipe" : "+ Add Item"}
           </button>
         </div>
@@ -518,12 +455,7 @@ const ConsumptionForm = () => {
         )}
 
         <div className="sa-modal-actions" style={{ marginTop: 8 }}>
-          <button
-            type="button"
-            className="sa-secondary-button"
-            onClick={() => navigate("/super-admin/consumption")}
-            disabled={saving}
-          >
+          <button type="button" className="sa-secondary-button" onClick={() => navigate("/super-admin/consumption")} disabled={saving}>
             Cancel
           </button>
           <button type="submit" className="sa-primary-button" disabled={saving}>
