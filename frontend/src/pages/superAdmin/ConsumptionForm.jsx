@@ -9,7 +9,6 @@ const TYPE_OPTIONS = [
   { value: "LUMPSUM", label: "Lumpsum" },
   { value: "RECIPE_LUMPSUM", label: "By Recipe – Lumpsum" },
   { value: "RECIPE_PORTION", label: "By Recipe – Portion" },
-  { value: "REPLACEMENT", label: "Store Replacement" },
 ];
 
 // now also supports recipe field
@@ -28,10 +27,9 @@ const ConsumptionForm = () => {
 
   const [type, setType] = useState("LUMPSUM");
   const [storeFrom, setStoreFrom] = useState("");
-  const [storeTo, setStoreTo] = useState("");
-  const [referenceNo, setReferenceNo] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
+  const [referenceNo, setReferenceNo] = useState(""); // kept only if you later want to reference anything (optional)
 
   const [lines, setLines] = useState([emptyLine()]);
 
@@ -50,7 +48,7 @@ const ConsumptionForm = () => {
       const [storeRes, itemRes, recipeRes] = await Promise.all([
         axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })), // adjust if your recipe endpoint is different
+        axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
       ]);
 
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
@@ -74,20 +72,15 @@ const ConsumptionForm = () => {
 
       setType(existingType);
       setStoreFrom(c.storeFrom?._id || c.storeFrom || "");
-      setStoreTo(c.storeTo?._id || c.storeTo || "");
-      setReferenceNo(c.referenceNo || "");
       setDate(c.date ? c.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setNotes(c.notes || "");
+      setReferenceNo(c.referenceNo || "");
 
       setLines(
         (c.lines || []).map((ln) => ({
           category: "",
-          recipe: entryIsRecipeType
-            ? ln.recipe?._id || ln.recipe || ""
-            : "",
-          item: !entryIsRecipeType
-            ? ln.item?._id || ln.item || ""
-            : "",
+          recipe: entryIsRecipeType ? ln.recipe?._id || ln.recipe || "" : "",
+          item: !entryIsRecipeType ? ln.item?._id || ln.item || "" : "",
           qty: ln.qty ?? "",
           uom: ln.uom || "",
           remarks: ln.remarks || "",
@@ -135,7 +128,14 @@ const ConsumptionForm = () => {
         row.item = value;
         const it = items.find((i) => (i._id || i.id) === value);
         if (it) {
-          row.uom = it.uom || row.uom;
+          row.uom = it.uom || it.UOM || it.unit || row.uom || "";
+          const cat =
+            it.category ||
+            it.itemCategory ||
+            it.categoryName ||
+            it.categoryId ||
+            "";
+          if (cat) row.category = cat;
         }
       } else if (field === "recipe") {
         row.recipe = value;
@@ -161,17 +161,6 @@ const ConsumptionForm = () => {
     if (!storeFrom) {
       setError("Store From is required.");
       return false;
-    }
-
-    if (type === "REPLACEMENT") {
-      if (!storeTo) {
-        setError("Store To is required for replacement.");
-        return false;
-      }
-      if (!referenceNo) {
-        setError("Reference No. is required for replacement.");
-        return false;
-      }
     }
 
     let validLines;
@@ -228,10 +217,9 @@ const ConsumptionForm = () => {
     const payload = {
       type,
       storeFrom,
-      storeTo: type === "REPLACEMENT" ? storeTo : undefined,
-      referenceNo: type === "REPLACEMENT" ? referenceNo : undefined,
       date,
       notes: notes || undefined,
+      referenceNo: referenceNo || undefined,
       lines: linePayload,
     };
 
@@ -312,35 +300,6 @@ const ConsumptionForm = () => {
               ))}
             </select>
           </label>
-
-          {type === "REPLACEMENT" && (
-            <>
-              <label>
-                Store To
-                <select
-                  value={storeTo}
-                  onChange={(e) => setStoreTo(e.target.value)}
-                  required
-                >
-                  <option value="">Select store</option>
-                  {stores.map((s) => (
-                    <option key={s._id || s.id} value={s._id || s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Reference No.
-                <input
-                  value={referenceNo}
-                  onChange={(e) => setReferenceNo(e.target.value)}
-                  placeholder="e.g. REP-2025-001"
-                />
-              </label>
-            </>
-          )}
         </div>
 
         {/* Notes */}
@@ -480,6 +439,7 @@ const ConsumptionForm = () => {
                           handleLineChange(idx, "item", e.target.value)
                         }
                         required
+                        disabled={!storeFrom && items.length === 0} // helpful hint: require store selection if you want store-scoped items later
                       >
                         <option value="">Select item</option>
                         {filteredItems.map((it) => (
