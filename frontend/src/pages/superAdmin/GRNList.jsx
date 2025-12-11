@@ -14,24 +14,6 @@ const line = () => ({
   acceptedQty: 0,
 });
 
-// --- 5 Dummy GRN samples for dev/demo ---
-const DEV_GRN_SAMPLES = [
-  {
-    _id: "sample_grn_1",
-    grnNo: "GRN-2025-101",
-    poId: "sample_po_1",
-    vendor: "vendor_1",
-    resort: "resort_1",
-    store: "store_1",
-    grnDate: new Date().toISOString(),
-    status: "Open",
-    lines: [
-      { lineId: "ln1", item: "item_1", poQty: 10, receivedQty: 10, rejectedQty: 0, acceptedQty: 10 },
-      { lineId: "ln2", item: "item_2", poQty: 5, receivedQty: 5, rejectedQty: 0, acceptedQty: 5 },
-    ],
-  },
-];
-
 const GRNList = () => {
   const [grnList, setGrnList] = useState([]);
   const [poList, setPoList] = useState([]);
@@ -60,40 +42,50 @@ const GRNList = () => {
   const navigate = useNavigate();
 
   // FILTER STATES
-  const [statusFilter, setStatusFilter] = useState("ALL"); 
-  const [actionFilter, setActionFilter] = useState("ALL"); 
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [actionFilter, setActionFilter] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [resortFilter, setResortFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
   const [searchText, setSearchText] = useState("");
 
-  // Load data
+  // Load data — strict backend-only fetching, no demo fallback
   const loadData = async () => {
     try {
       setLoading(true);
+      setError("");
+
       const [grnRes, poRes, vendorRes, resortRes, storeRes, itemRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/grn`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/po`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/resorts`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/api/grn`),
+        axios.get(`${API_BASE}/api/po`),
+        axios.get(`${API_BASE}/api/vendors`),
+        axios.get(`${API_BASE}/api/resorts`),
+        axios.get(`${API_BASE}/api/stores`),
+        axios.get(`${API_BASE}/api/items`),
       ]);
 
       const serverGrns = Array.isArray(grnRes.data) ? grnRes.data : [];
-      const existingIds = new Set(serverGrns.map((g) => g._id));
-      const samplesToAdd = DEV_GRN_SAMPLES.filter((s) => !existingIds.has(s._id));
+      // show only GRNs that were created from a PO or a requisition
+      const backendOnlyGrns = serverGrns.filter((g) => g.poId || g.requisitionId);
 
-      setGrnList([...serverGrns, ...samplesToAdd]);
+      setGrnList(backendOnlyGrns);
       setPoList(Array.isArray(poRes.data) ? poRes.data : []);
       setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
       setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
       setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Failed to load");
+      console.error("GRN load error", err);
+      const msg = err?.response?.data?.message || err?.message || "Failed to load data from backend";
+      setError(msg);
+      // Clear lists when backend fails — do not inject demo data
+      setGrnList([]);
+      setPoList([]);
+      setVendors([]);
+      setResorts([]);
+      setStores([]);
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -101,6 +93,7 @@ const GRNList = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const viewGrn = (g) => {
@@ -110,7 +103,7 @@ const GRNList = () => {
   };
 
   const openEditGrn = (g) => {
-    // ❌ prevent editing if approved
+    // prevent editing if approved
     if (g.status === "Approved") return alert("Approved GRN cannot be edited");
 
     setEditingGrnId(g._id || g.id);
@@ -130,8 +123,7 @@ const GRNList = () => {
             receivedQty: ln.receivedQty || "",
             rejectedQty: ln.rejectedQty || "",
             acceptedQty: ln.acceptedQty || 0,
-          }))) ||
-        [line()],
+          }))) || [line()],
     });
     setShowForm(true);
   };
@@ -159,7 +151,7 @@ const GRNList = () => {
           <p>GRNs created from Purchase Orders. Manual GRN creation disabled.</p>
         </div>
 
-        {/* 🔥 NO NEW GRN BUTTON */}
+        {/* NO NEW GRN BUTTON */}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
@@ -172,7 +164,7 @@ const GRNList = () => {
           </button>
         </div>
       </div>
-      
+
       {/* GRN LIST */}
       <div className="sa-card">
         {loading ? (
@@ -198,7 +190,7 @@ const GRNList = () => {
                   <td onClick={() => viewGrn(g)} style={{ cursor: "pointer", color: "#0b69ff" }}>
                     {g.grnNo}
                   </td>
-                  <td>{g.poId}</td>
+                  <td>{g.poId || g.po || "-"}</td>
                   <td>{g.vendor}</td>
                   <td>{g.resort}</td>
                   <td>{g.store}</td>
@@ -206,7 +198,6 @@ const GRNList = () => {
                   <td>{g.status || "Open"}</td>
 
                   <td style={{ whiteSpace: "nowrap" }}>
-                    
                     {/* VIEW */}
                     <span style={{ cursor: "pointer", padding: 6 }} title="View" onClick={() => viewGrn(g)}>
                       <i className="ri-eye-line" />
