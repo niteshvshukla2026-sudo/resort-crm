@@ -26,37 +26,6 @@ const generateGrnNo = (dateStr) => {
   return `GRN-${yyyy}${mm}${dd}-${rand}`;
 };
 
-// Dev fallback data (minimal)
-const DEV_SAMPLES = [
-  {
-    _id: "sample_req_1",
-    requisitionNo: "REQ-2025-001",
-    type: "INTERNAL",
-    resort: "Demo Resort A",
-    fromStore: "Main Store",
-    toStore: "Cold Store",
-    vendor: null,
-    status: "PENDING",
-    date: new Date().toISOString(),
-    lines: [
-      { lineId: "ln1", item: "dev_item_1", qty: 10, remark: "" },
-      { lineId: "ln2", item: "dev_item_2", qty: 5, remark: "" },
-    ],
-  },
-  {
-    _id: "sample_req_2",
-    requisitionNo: "REQ-2025-002",
-    type: "VENDOR",
-    resort: "Demo Resort A",
-    department: null,
-    store: "Main Store",
-    vendor: "dev_vendor_1",
-    status: "PENDING",
-    date: new Date().toISOString(),
-    lines: [{ lineId: "ln3", item: "dev_item_3", qty: 2, remark: "urgent" }],
-  },
-];
-
 const RequisitionList = () => {
   const [requisitions, setRequisitions] = useState([]);
   const [resorts, setResorts] = useState([]);
@@ -108,7 +77,7 @@ const RequisitionList = () => {
     receivedDate: todayStr,
     challanNo: "",
     billNo: "",
-    items: [], // { lineId, item, itemName, qtyRequested, qtyReceived, remark }
+    items: [],
   });
 
   // filters
@@ -129,10 +98,12 @@ const RequisitionList = () => {
     return String(storeResort) === String(resortFilter);
   });
 
-  // load data
+  // load data (strict: use backend only)
   const loadData = async () => {
     try {
       setLoading(true);
+      setError("");
+
       const [
         reqRes,
         resortRes,
@@ -142,22 +113,16 @@ const RequisitionList = () => {
         vendorRes,
         catRes,
       ] = await Promise.all([
-        axios.get(`${API_BASE}/requisitions`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/resorts`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/departments`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/stores`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/items`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/vendors`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/item-categories`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/requisitions`),
+        axios.get(`${API_BASE}/resorts`),
+        axios.get(`${API_BASE}/departments`),
+        axios.get(`${API_BASE}/stores`),
+        axios.get(`${API_BASE}/items`),
+        axios.get(`${API_BASE}/vendors`),
+        axios.get(`${API_BASE}/item-categories`),
       ]);
 
-      const serverReqs = Array.isArray(reqRes.data) ? reqRes.data : [];
-      const existingReqIds = new Set(serverReqs.map((r) => r._id));
-      const samplesToAdd = DEV_SAMPLES.filter(
-        (s) => !existingReqIds.has(s._id)
-      );
-      setRequisitions([...serverReqs, ...samplesToAdd]);
-
+      setRequisitions(Array.isArray(reqRes.data) ? reqRes.data : []);
       setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
       setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
@@ -166,14 +131,20 @@ const RequisitionList = () => {
       setItemCategories(Array.isArray(catRes.data) ? catRes.data : []);
     } catch (err) {
       console.error("load error", err);
-      setError("Failed to load requisitions. Using demo data.");
+      // show backend error but don't populate demo data
+      const msg =
+        err?.response?.data?.message ||
+        err.message ||
+        "Failed to load data from backend.";
+      setError(msg);
+      // ensure lists are empty to avoid showing stale/demo data
+      setRequisitions([]);
       setResorts([]);
       setDepartments([]);
       setStores([]);
       setItems([]);
       setVendors([]);
       setItemCategories([]);
-      setRequisitions(DEV_SAMPLES);
     } finally {
       setLoading(false);
     }
@@ -300,8 +271,7 @@ const RequisitionList = () => {
     });
   };
 
-  const addLine = () =>
-    setForm((p) => ({ ...p, lines: [...p.lines, newLine()] }));
+  const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, newLine()] }));
   const removeLine = (idx) =>
     setForm((p) => ({
       ...p,
@@ -316,26 +286,18 @@ const RequisitionList = () => {
     if (!form.type) return setError("Select requisition type");
 
     if (form.type === "INTERNAL") {
-      if (!form.fromStore)
-        return setError("Select From Store for internal requisition");
-      if (!form.toStore)
-        return setError("Select To Store for internal requisition");
+      if (!form.fromStore) return setError("Select From Store for internal requisition");
+      if (!form.toStore) return setError("Select To Store for internal requisition");
     } else {
-      if (!form.vendor)
-        return setError("Select vendor for vendor requisition");
-      if (!form.store)
-        return setError(
-          "Select store to receive goods for vendor requisition"
-        );
+      if (!form.vendor) return setError("Select vendor for vendor requisition");
+      if (!form.store) return setError("Select store to receive goods for vendor requisition");
     }
 
-    if (!form.lines || form.lines.length === 0)
-      return setError("Add at least one item");
+    if (!form.lines || form.lines.length === 0) return setError("Add at least one item");
 
     for (const ln of form.lines) {
       if (!ln.item) return setError("Each line must have an item selected");
-      if (!ln.qty || Number(ln.qty) <= 0)
-        return setError("Each line must have quantity > 0");
+      if (!ln.qty || Number(ln.qty) <= 0) return setError("Each line must have quantity > 0");
     }
 
     // derive resort from selected store if not selected
@@ -356,12 +318,8 @@ const RequisitionList = () => {
         fromStore: form.type === "INTERNAL" ? form.fromStore : undefined,
         toStore: form.type === "INTERNAL" ? form.toStore : undefined,
         department: form.department || undefined,
-        vendor:
-          form.type === "VENDOR" ? form.vendor || undefined : undefined,
-        store:
-          form.type === "VENDOR"
-            ? form.store || undefined
-            : form.toStore || undefined,
+        vendor: form.type === "VENDOR" ? form.vendor || undefined : undefined,
+        store: form.type === "VENDOR" ? form.store || undefined : form.toStore || undefined,
         requiredBy: form.requiredBy || undefined,
         lines: form.lines.map((x) => ({
           itemCategory: x.itemCategory || undefined,
@@ -373,13 +331,8 @@ const RequisitionList = () => {
 
       let res;
       if (editingId) {
-        res = await axios.put(
-          `${API_BASE}/requisitions/${editingId}`,
-          payload
-        );
-        setRequisitions((p) =>
-          p.map((r) => (r._id === editingId ? res.data : r))
-        );
+        res = await axios.put(`${API_BASE}/requisitions/${editingId}`, payload);
+        setRequisitions((p) => p.map((r) => (r._id === editingId ? res.data : r)));
       } else {
         res = await axios.post(`${API_BASE}/requisitions`, payload);
         setRequisitions((p) => [res.data, ...p]);
@@ -389,9 +342,7 @@ const RequisitionList = () => {
       setEditingId(null);
     } catch (err) {
       console.error("save requisition error", err);
-      setError(
-        err.response?.data?.message || "Failed to save requisition"
-      );
+      setError(err.response?.data?.message || "Failed to save requisition");
     } finally {
       setSaving(false);
     }
@@ -399,20 +350,13 @@ const RequisitionList = () => {
 
   // delete
   const handleDelete = async (req) => {
-    if (
-      !window.confirm(
-        `Delete requisition ${req.requisitionNo || req._id}?`
-      )
-    )
-      return;
+    if (!window.confirm(`Delete requisition ${req.requisitionNo || req._id}?`)) return;
     try {
       setRequisitions((p) => p.filter((r) => r._id !== req._id));
       await axios.delete(`${API_BASE}/requisitions/${req._id}`);
     } catch (err) {
       console.error("delete error", err);
-      setError(
-        err.response?.data?.message || "Failed to delete requisition"
-      );
+      setError(err.response?.data?.message || "Failed to delete requisition");
       loadData();
     }
   };
@@ -420,89 +364,39 @@ const RequisitionList = () => {
   // approve / hold / reject
   const handleApprove = async (req) => {
     if (req.status === "APPROVED") return;
-    if (
-      !window.confirm(
-        `Approve requisition ${req.requisitionNo || req._id}?`
-      )
-    )
-      return;
+    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
     try {
-      const res = await axios.post(
-        `${API_BASE}/requisitions/${req._id}/approve`
-      );
-      if (res?.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "APPROVED" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/approve`);
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "APPROVED" } : r)));
     } catch (err) {
       console.error("approve error", err);
-      setError(
-        err.response?.data?.message || "Failed to approve requisition"
-      );
+      setError(err.response?.data?.message || "Failed to approve requisition");
     }
   };
 
   const handleHold = async (req) => {
-    if (
-      !window.confirm(
-        `Put requisition ${req.requisitionNo || req._id} on hold?`
-      )
-    )
-      return;
+    if (!window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)) return;
     try {
-      const res = await axios.post(
-        `${API_BASE}/requisitions/${req._id}/hold`
-      );
-      if (res?.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "ON_HOLD" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/hold`);
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "ON_HOLD" } : r)));
     } catch (err) {
       console.error("hold error", err);
-      setError(
-        err.response?.data?.message || "Failed to put requisition on hold"
-      );
+      setError(err.response?.data?.message || "Failed to put requisition on hold");
     }
   };
 
   const handleReject = async (req) => {
-    const reason = window.prompt(
-      "Enter rejection reason (optional):",
-      ""
-    );
+    const reason = window.prompt("Enter rejection reason (optional):", "");
     if (reason === null) return;
     try {
-      const res = await axios.post(
-        `${API_BASE}/requisitions/${req._id}/reject`,
-        { reason }
-      );
-      if (res?.data)
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data : r))
-        );
-      else
-        setRequisitions((p) =>
-          p.map((r) =>
-            r._id === req._id ? { ...r, status: "REJECTED" } : r
-          )
-        );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/reject`, { reason });
+      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "REJECTED" } : r)));
     } catch (err) {
       console.error("reject error", err);
-      setError(
-        err.response?.data?.message || "Failed to reject requisition"
-      );
+      setError(err.response?.data?.message || "Failed to reject requisition");
     }
   };
 
@@ -511,10 +405,8 @@ const RequisitionList = () => {
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
-      const rate =
-        ln.expectedRate || ln.rate || itemObj?.indicativePrice || 0;
-      const name =
-        (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const rate = ln.expectedRate || ln.rate || itemObj?.indicativePrice || 0;
+      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
       const qtyVal = ln.qty || 0;
       return {
         lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
@@ -527,10 +419,7 @@ const RequisitionList = () => {
       };
     });
 
-    const sub = itemsPayload.reduce(
-      (s, i) => s + Number(i.amount || 0),
-      0
-    );
+    const sub = itemsPayload.reduce((s, i) => s + Number(i.amount || 0), 0);
 
     setPoModal({
       open: true,
@@ -552,23 +441,14 @@ const RequisitionList = () => {
     const deliverTo = req.toStore || req.store || undefined;
     const resortId = req.resort || undefined;
 
-    if (!vendorId)
-      return setError(
-        "Requisition has no vendor assigned (cannot create PO)"
-      );
-    if (!deliverTo)
-      return setError(
-        "Requisition has no destination store (cannot create PO)"
-      );
-    if (!poItems || poItems.length === 0)
-      return setError("PO must have at least one item");
+    if (!vendorId) return setError("Requisition has no vendor assigned (cannot create PO)");
+    if (!deliverTo) return setError("Requisition has no destination store (cannot create PO)");
+    if (!poItems || poItems.length === 0) return setError("PO must have at least one item");
 
     for (const it of poItems) {
       if (!it.item) return setError("Each PO line must have an item id");
-      if (!it.qty || Number(it.qty) <= 0)
-        return setError("Each PO line qty must be > 0");
-      if (it.rate == null || Number(it.rate) < 0)
-        return setError("Each PO line rate must be >= 0");
+      if (!it.qty || Number(it.qty) <= 0) return setError("Each PO line qty must be > 0");
+      if (it.rate == null || Number(it.rate) < 0) return setError("Each PO line rate must be >= 0");
     }
 
     try {
@@ -586,9 +466,7 @@ const RequisitionList = () => {
         };
       });
       const subTotal = itemsPayload.reduce((s, i) => s + i.amount, 0);
-      const taxAmt = Number(
-        ((taxPercent || 0) / 100) * subTotal
-      );
+      const taxAmt = Number(((taxPercent || 0) / 100) * subTotal);
       const total = subTotal + taxAmt;
 
       const payload = {
@@ -604,25 +482,13 @@ const RequisitionList = () => {
         total,
       };
 
-      const res = await axios.post(
-        `${API_BASE}/requisitions/${req._id}/create-po`,
-        payload
-      );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-po`, payload);
 
       if (res?.data?.requisition) {
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data.requisition : r))
-        );
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
         const createdPo = res.data.po;
-        const poIdOrNo =
-          (createdPo && (createdPo._id || createdPo.code)) ||
-          poNo;
-        setPoModal({
-          open: false,
-          req: null,
-          poNo: "",
-          items: [],
-        });
+        const poIdOrNo = (createdPo && (createdPo._id || createdPo.code)) || poNo;
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else if (res?.data) {
         const createdPo = res.data;
@@ -640,12 +506,7 @@ const RequisitionList = () => {
               : r
           )
         );
-        setPoModal({
-          open: false,
-          req: null,
-          poNo: "",
-          items: [],
-        });
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         const poIdOrNo = createdPo._id || createdPo.code || poNo;
         navigate(`/super-admin/po/${poIdOrNo}`);
       } else {
@@ -660,12 +521,7 @@ const RequisitionList = () => {
               : r
           )
         );
-        setPoModal({
-          open: false,
-          req: null,
-          poNo: "",
-          items: [],
-        });
+        setPoModal({ open: false, req: null, poNo: "", items: [] });
         navigate(`/super-admin/po/${poNo}`);
       }
     } catch (err) {
@@ -679,17 +535,14 @@ const RequisitionList = () => {
   // ------------- GRN modal -------------
   const openCreateGRN = (req) => {
     if (req.po) {
-      setError(
-        "This requisition already has a PO — create GRN from PO page instead."
-      );
+      setError("This requisition already has a PO — create GRN from PO page instead.");
       return;
     }
 
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;
       const itemObj = items.find((it) => (it._id || it.id) === itemId);
-      const name =
-        (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
+      const name = (ln.item && ln.item.name) || (itemObj ? itemObj.name : "");
       const qtyRequested = ln.qty || 0;
       return {
         lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
@@ -724,33 +577,17 @@ const RequisitionList = () => {
   };
 
   const submitCreateGRN = async () => {
-    const {
-      req,
-      grnNo,
-      receivedBy,
-      receivedDate,
-      challanNo,
-      billNo,
-      items: grnItems,
-    } = grnModal;
+    const { req, grnNo, receivedBy, receivedDate, challanNo, billNo, items: grnItems } = grnModal;
 
     if (!grnNo) return setError("GRN No. is required");
-    if (!challanNo.trim())
-      return setError("Challan No is required");
-    if (!grnItems || grnItems.length === 0)
-      return setError("GRN must include at least one item");
+    if (!challanNo.trim()) return setError("Challan No is required");
+    if (!grnItems || grnItems.length === 0) return setError("GRN must include at least one item");
 
-    if (req.po)
-      return setError(
-        "PO exists for this requisition — create GRN from PO instead."
-      );
+    if (req.po) return setError("PO exists for this requisition — create GRN from PO instead.");
 
     for (const it of grnItems) {
       if (!it.item) return setError("Each GRN line must have an item");
-      if (it.qtyReceived == null || Number(it.qtyReceived) < 0)
-        return setError(
-          "Each GRN line received qty must be >= 0"
-        );
+      if (it.qtyReceived == null || Number(it.qtyReceived) < 0) return setError("Each GRN line received qty must be >= 0");
     }
 
     try {
@@ -772,18 +609,12 @@ const RequisitionList = () => {
         store: req.toStore || req.store || undefined,
       };
 
-      const res = await axios.post(
-        `${API_BASE}/requisitions/${req._id}/create-grn`,
-        payload
-      );
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
 
       if (res?.data?.requisition) {
-        setRequisitions((p) =>
-          p.map((r) => (r._id === req._id ? res.data.requisition : r))
-        );
+        setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
         const createdGrn = res.data.grn || res.data;
-        const grnIdOrNo =
-          createdGrn?._id || createdGrn?.code || grnNo;
+        const grnIdOrNo = createdGrn?._id || createdGrn?.code || grnNo;
         setGrnModal({
           open: false,
           req: null,
@@ -798,13 +629,7 @@ const RequisitionList = () => {
       } else {
         setRequisitions((p) =>
           p.map((r) =>
-            r._id === req._id
-              ? {
-                  ...r,
-                  status: "GRN_CREATED",
-                  grn: { grnNo },
-                }
-              : r
+            r._id === req._id ? { ...r, status: "GRN_CREATED", grn: { grnNo } } : r
           )
         );
         setGrnModal({
@@ -855,9 +680,7 @@ const RequisitionList = () => {
 
   // current stock helper
   const renderCurrentStock = (ln) => {
-    const it = items.find(
-      (x) => x._id === ln.item || x.id === ln.item
-    );
+    const it = items.find((x) => x._id === ln.item || x.id === ln.item);
     if (!it) return "-";
     const stockMap = it.stockByStore || {};
     const storeIds = Object.keys(stockMap);
@@ -881,41 +704,23 @@ const RequisitionList = () => {
   const applyFilters = () => {
     return requisitions.filter((r) => {
       if (statusFilter !== "ALL") {
-        if (
-          (r.status || "PENDING").toUpperCase() !==
-          statusFilter.toUpperCase()
-        )
-          return false;
+        if ((r.status || "PENDING").toUpperCase() !== statusFilter.toUpperCase()) return false;
       }
       if (typeFilter !== "ALL") {
-        if (
-          (r.type || "INTERNAL").toUpperCase() !==
-          typeFilter.toUpperCase()
-        )
-          return false;
+        if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
       }
       if (resortFilter) {
-        const val =
-          r.resort || r.resortName || r.resortRef || r.resort;
+        const val = r.resort || r.resortName || r.resortRef || r.resort;
         if (!val) return false;
-        if (
-          !String(val)
-            .toLowerCase()
-            .includes(String(resortFilter).toLowerCase())
-        )
-          return false;
+        if (!String(val).toLowerCase().includes(String(resortFilter).toLowerCase())) return false;
       }
       if (dateFrom) {
-        const rd = r.date
-          ? new Date(r.date).setHours(0, 0, 0, 0)
-          : null;
+        const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
         const from = new Date(dateFrom).setHours(0, 0, 0, 0);
         if (!rd || rd < from) return false;
       }
       if (dateTo) {
-        const rd = r.date
-          ? new Date(r.date).setHours(0, 0, 0, 0)
-          : null;
+        const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
         const to = new Date(dateTo).setHours(0, 0, 0, 0);
         if (!rd || rd > to) return false;
       }
@@ -929,13 +734,7 @@ const RequisitionList = () => {
       }
       if (searchText && searchText.trim()) {
         const q = searchText.trim().toLowerCase();
-        const fields = [
-          r.requisitionNo,
-          r.department,
-          r.store,
-          r.vendor,
-          r.resort,
-        ];
+        const fields = [r.requisitionNo, r.department, r.store, r.vendor, r.resort];
         const joined = fields.filter(Boolean).join(" ").toLowerCase();
         if (!joined.includes(q)) return false;
       }
@@ -970,21 +769,14 @@ const RequisitionList = () => {
 
   return (
     <div className="sa-page">
-      <div
-        className="sa-page-header"
-        style={{ alignItems: "flex-start" }}
-      >
+      <div className="sa-page-header" style={{ alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <h2>Requisitions</h2>
           <p>Create and manage internal and vendor requisitions.</p>
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="sa-primary-button"
-            type="button"
-            onClick={openCreateForm}
-          >
+          <button className="sa-primary-button" type="button" onClick={openCreateForm}>
             <i className="ri-add-line"></i> New Requisition
           </button>
 
@@ -1012,11 +804,7 @@ const RequisitionList = () => {
       >
         <label style={{ fontSize: "0.85rem" }}>
           Status
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="PENDING">Pending</option>
             <option value="APPROVED">Approved</option>
@@ -1029,11 +817,7 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Type
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="INTERNAL">Internal</option>
             <option value="VENDOR">Vendor</option>
@@ -1042,24 +826,15 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Resort
-          <select
-            value={resortFilter}
-            onChange={(e) => setResortFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="">All Resorts</option>
             {resorts.length > 0
               ? resorts.map((r) => (
-                  <option
-                    key={r._id || r.id}
-                    value={r._id || r.name || r.id}
-                  >
+                  <option key={r._id || r.id} value={r._id || r.name || r.id}>
                     {r.name}
                   </option>
                 ))
-              : Array.from(
-                  new Set(requisitions.map((x) => x.resort))
-                ).map((name) => (
+              : Array.from(new Set(requisitions.map((x) => x.resort))).map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
@@ -1069,31 +844,17 @@ const RequisitionList = () => {
 
         <label style={{ fontSize: "0.85rem" }}>
           Date from
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            style={{ marginLeft: 6 }}
-          />
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ marginLeft: 6 }} />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Date to
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            style={{ marginLeft: 6 }}
-          />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ marginLeft: 6 }} />
         </label>
 
         <label style={{ fontSize: "0.85rem" }}>
           Action
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            style={{ marginLeft: 6 }}
-          >
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="NeedsPO">Needs PO</option>
             <option value="NeedsGRN">Needs GRN</option>
@@ -1112,17 +873,8 @@ const RequisitionList = () => {
           />
         </label>
 
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            gap: 8,
-          }}
-        >
-          <button
-            className="sa-secondary-button"
-            onClick={clearFilters}
-          >
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button className="sa-secondary-button" onClick={clearFilters}>
             Clear
           </button>
         </div>
@@ -1135,15 +887,8 @@ const RequisitionList = () => {
           <div>Loading requisitions...</div>
         ) : (
           <>
-            <div
-              style={{
-                marginBottom: 8,
-                color: "#6b7280",
-                fontSize: "0.9rem",
-              }}
-            >
-              Showing {filteredList.length} of{" "}
-              {requisitions.length} requisitions
+            <div style={{ marginBottom: 8, color: "#6b7280", fontSize: "0.9rem" }}>
+              Showing {filteredList.length} of {requisitions.length} requisitions
             </div>
 
             <table className="sa-table">
@@ -1168,14 +913,11 @@ const RequisitionList = () => {
                       {r.type === "VENDOR" ? (
                         <>
                           {getVendorName(r.vendor)}
-                          {r.store
-                            ? ` → ${getStoreName(r.store)}`
-                            : ""}
+                          {r.store ? ` → ${getStoreName(r.store)}` : ""}
                         </>
                       ) : r.fromStore || r.toStore ? (
                         <>
-                          {getStoreName(r.fromStore)} →{" "}
-                          {getStoreName(r.toStore || r.store)}
+                          {getStoreName(r.fromStore)} → {getStoreName(r.toStore || r.store)}
                         </>
                       ) : getDepartmentName(r.department) !== "-" ? (
                         getDepartmentName(r.department)
@@ -1186,59 +928,32 @@ const RequisitionList = () => {
                     <td>{r.status || "PENDING"}</td>
                     <td>{r.date ? r.date.slice(0, 10) : "-"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleView(r)}
-                        title="View"
-                      >
+                      <span style={actionStyle} onClick={() => handleView(r)} title="View">
                         <i className="ri-eye-line" />
                       </span>
-                      <span
-                        style={actionStyle}
-                        onClick={() => openDuplicateAsCreate(r)}
-                        title="Create (Duplicate)"
-                      >
+                      <span style={actionStyle} onClick={() => openDuplicateAsCreate(r)} title="Create (Duplicate)">
                         <i className="ri-file-copy-line" />
                       </span>
-                      <span
-                        style={actionStyle}
-                        onClick={() => openEditForm(r)}
-                        title="Edit"
-                      >
+                      <span style={actionStyle} onClick={() => openEditForm(r)} title="Edit">
                         <i className="ri-edit-line" />
                       </span>
 
                       <span
                         style={{
                           ...actionStyle,
-                          background:
-                            r.status === "APPROVED"
-                              ? "#052e16"
-                              : "transparent",
+                          background: r.status === "APPROVED" ? "#052e16" : "transparent",
                         }}
                         onClick={() => handleApprove(r)}
-                        title={
-                          r.status === "APPROVED"
-                            ? "Already approved"
-                            : "Approve"
-                        }
+                        title={r.status === "APPROVED" ? "Already approved" : "Approve"}
                       >
                         <i className="ri-checkbox-circle-line" />
                       </span>
 
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleHold(r)}
-                        title="Hold"
-                      >
+                      <span style={actionStyle} onClick={() => handleHold(r)} title="Hold">
                         <i className="ri-pause-line" />
                       </span>
 
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleReject(r)}
-                        title="Reject"
-                      >
+                      <span style={actionStyle} onClick={() => handleReject(r)} title="Reject">
                         <i className="ri-close-circle-line" />
                       </span>
 
@@ -1247,52 +962,30 @@ const RequisitionList = () => {
                         <>
                           {/* PO create/view/disabled */}
                           {r.po ? (
-                            <span
-                              style={actionStyle}
-                              title="View PO"
-                              onClick={() => viewPO(r.po)}
-                            >
+                            <span style={actionStyle} title="View PO" onClick={() => viewPO(r.po)}>
                               <i className="ri-file-paper-line" />
                             </span>
                           ) : r.grn ? (
-                            <span
-                              style={disabledActionStyle}
-                              title="GRN already created — PO cannot be created from this requisition"
-                            >
+                            <span style={disabledActionStyle} title="GRN already created — PO cannot be created from this requisition">
                               <i className="ri-file-paper-line" />
                             </span>
                           ) : (
-                            <span
-                              style={actionStyle}
-                              onClick={() => openCreatePO(r)}
-                              title="Create Purchase Order (PO)"
-                            >
+                            <span style={actionStyle} onClick={() => openCreatePO(r)} title="Create Purchase Order (PO)">
                               <i className="ri-shopping-cart-line" />
                             </span>
                           )}
 
                           {/* GRN create/view/disabled */}
                           {r.grn ? (
-                            <span
-                              style={actionStyle}
-                              title="View GRN"
-                              onClick={() => viewGRN(r.grn)}
-                            >
+                            <span style={actionStyle} title="View GRN" onClick={() => viewGRN(r.grn)}>
                               <i className="ri-inbox-line" />
                             </span>
                           ) : r.po ? (
-                            <span
-                              style={disabledActionStyle}
-                              title="PO created — cannot create GRN from requisition (create GRN from PO page)"
-                            >
+                            <span style={disabledActionStyle} title="PO created — cannot create GRN from requisition (create GRN from PO page)">
                               <i className="ri-inbox-line" />
                             </span>
                           ) : (
-                            <span
-                              style={actionStyle}
-                              onClick={() => openCreateGRN(r)}
-                              title="Create GRN"
-                            >
+                            <span style={actionStyle} onClick={() => openCreateGRN(r)} title="Create GRN">
                               <i className="ri-add-box-line" />
                             </span>
                           )}
@@ -1301,20 +994,12 @@ const RequisitionList = () => {
 
                       {/* INTERNAL requisition → Transfer button, no PO/GRN */}
                       {r.type === "INTERNAL" && (
-                        <span
-                          style={actionStyle}
-                          onClick={() => openCreateTransfer(r)}
-                          title="Transfer"
-                        >
+                        <span style={actionStyle} onClick={() => openCreateTransfer(r)} title="Transfer">
                           <i className="ri-arrow-left-right-line" />
                         </span>
                       )}
 
-                      <span
-                        style={actionStyle}
-                        onClick={() => handleDelete(r)}
-                        title="Delete"
-                      >
+                      <span style={actionStyle} onClick={() => handleDelete(r)} title="Delete">
                         <i className="ri-delete-bin-6-line" />
                       </span>
                     </td>
@@ -1328,36 +1013,17 @@ const RequisitionList = () => {
 
       {/* Create / Edit Requisition Modal */}
       {showForm && (
-        <div
-          className="sa-modal-backdrop"
-          onClick={() => !saving && setShowForm(false)}
-        >
-          <div
-            className="sa-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3>
-              {editingId ? "Edit Requisition" : "Create Requisition"}
-            </h3>
-            <p className="sa-modal-sub">
-              Fill the following details to raise a requisition.
-            </p>
+        <div className="sa-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{editingId ? "Edit Requisition" : "Create Requisition"}</h3>
+            <p className="sa-modal-sub">Fill the following details to raise a requisition.</p>
 
             <form className="sa-modal-form" onSubmit={handleSubmit}>
               <label>
                 Requisition Type
-                <select
-                  name="type"
-                  value={form.type}
-                  onChange={updateForm}
-                  required
-                >
-                  <option value="INTERNAL">
-                    Internal (Store → Store transfer)
-                  </option>
-                  <option value="VENDOR">
-                    Vendor (Direct purchase from vendor)
-                  </option>
+                <select name="type" value={form.type} onChange={updateForm} required>
+                  <option value="INTERNAL">Internal (Store → Store transfer)</option>
+                  <option value="VENDOR">Vendor (Direct purchase from vendor)</option>
                 </select>
               </label>
 
@@ -1365,20 +1031,10 @@ const RequisitionList = () => {
                 <>
                   <label>
                     From Store
-                    <select
-                      name="fromStore"
-                      value={form.fromStore}
-                      onChange={updateForm}
-                      required
-                    >
-                      <option value="">
-                        -- Select From Store --
-                      </option>
+                    <select name="fromStore" value={form.fromStore} onChange={updateForm} required>
+                      <option value="">-- Select From Store --</option>
                       {filteredStoresForModal.map((s) => (
-                        <option
-                          key={s._id || s.id}
-                          value={s._id || s.id}
-                        >
+                        <option key={s._id || s.id} value={s._id || s.id}>
                           {s.name}
                         </option>
                       ))}
@@ -1387,20 +1043,10 @@ const RequisitionList = () => {
 
                   <label>
                     To Store
-                    <select
-                      name="toStore"
-                      value={form.toStore}
-                      onChange={updateForm}
-                      required
-                    >
-                      <option value="">
-                        -- Select To Store --
-                      </option>
+                    <select name="toStore" value={form.toStore} onChange={updateForm} required>
+                      <option value="">-- Select To Store --</option>
                       {filteredStoresForModal.map((s) => (
-                        <option
-                          key={s._id || s.id}
-                          value={s._id || s.id}
-                        >
+                        <option key={s._id || s.id} value={s._id || s.id}>
                           {s.name}
                         </option>
                       ))}
@@ -1411,18 +1057,10 @@ const RequisitionList = () => {
                 <>
                   <label>
                     Vendor
-                    <select
-                      name="vendor"
-                      value={form.vendor}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="vendor" value={form.vendor} onChange={updateForm} required>
                       <option value="">-- Select Vendor --</option>
                       {vendors.map((v) => (
-                        <option
-                          key={v._id || v.id}
-                          value={v._id || v.id}
-                        >
+                        <option key={v._id || v.id} value={v._id || v.id}>
                           {v.name}
                         </option>
                       ))}
@@ -1431,18 +1069,10 @@ const RequisitionList = () => {
 
                   <label>
                     Store (to receive goods)
-                    <select
-                      name="store"
-                      value={form.store}
-                      onChange={updateForm}
-                      required
-                    >
+                    <select name="store" value={form.store} onChange={updateForm} required>
                       <option value="">-- Select Store --</option>
                       {filteredStoresForModal.map((s) => (
-                        <option
-                          key={s._id || s.id}
-                          value={s._id || s.id}
-                        >
+                        <option key={s._id || s.id} value={s._id || s.id}>
                           {s.name}
                         </option>
                       ))}
@@ -1453,12 +1083,7 @@ const RequisitionList = () => {
 
               <label>
                 Required On
-                <input
-                  type="date"
-                  name="requiredBy"
-                  value={form.requiredBy}
-                  onChange={updateForm}
-                />
+                <input type="date" name="requiredBy" value={form.requiredBy} onChange={updateForm} />
               </label>
 
               {/* items */}
@@ -1480,16 +1105,11 @@ const RequisitionList = () => {
                         <td>
                           <select
                             value={ln.itemCategory || ""}
-                            onChange={(e) =>
-                              updateLine(idx, "itemCategory", e.target.value)
-                            }
+                            onChange={(e) => updateLine(idx, "itemCategory", e.target.value)}
                           >
                             <option value="">-- Category --</option>
                             {itemCategories.map((c) => (
-                              <option
-                                key={c._id || c.code || c.name}
-                                value={c._id || c.code || c.name}
-                              >
+                              <option key={c._id || c.code || c.name} value={c._id || c.code || c.name}>
                                 {c.name}
                               </option>
                             ))}
@@ -1499,67 +1119,46 @@ const RequisitionList = () => {
                         <td>
                           <select
                             value={ln.item}
-                            onChange={(e) =>
-                              updateLine(idx, "item", e.target.value)
-                            }
+                            onChange={(e) => updateLine(idx, "item", e.target.value)}
                             required
                           >
                             <option value="">-- Select Item --</option>
                             {items
                               .filter((it) => {
-                                // if no category selected, show all items
                                 if (!ln.itemCategory) return true;
-                                // try matching both id and name (because itemCategory might be stored differently)
                                 const catIdOrName = ln.itemCategory;
                                 const itCat = it.itemCategory || it.category || it.itemCategoryId || "";
                                 if (!itCat) return false;
                                 return (
                                   String(itCat) === String(catIdOrName) ||
-                                  String(getCategoryName(catIdOrName || "")).toLowerCase() ===
-                                    String(itCat).toLowerCase() ||
-                                  String(getCategoryName(itCat || "")).toLowerCase() ===
-                                    String(catIdOrName).toLowerCase()
+                                  String(getCategoryName(catIdOrName || "")).toLowerCase() === String(itCat).toLowerCase() ||
+                                  String(getCategoryName(itCat || "")).toLowerCase() === String(catIdOrName).toLowerCase()
                                 );
                               })
                               .map((it) => (
-                                <option
-                                  key={it._id || it.code}
-                                  value={it._id || it.code}
-                                >
+                                <option key={it._id || it.code} value={it._id || it.code}>
                                   {it.name}
                                 </option>
                               ))}
                           </select>
                         </td>
 
-                        <td style={{ textAlign: "center" }}>
-                          {renderCurrentStock(ln)}
-                        </td>
+                        <td style={{ textAlign: "center" }}>{renderCurrentStock(ln)}</td>
                         <td>
                           <input
                             type="number"
                             min="1"
                             value={ln.qty}
-                            onChange={(e) =>
-                              updateLine(idx, "qty", e.target.value)
-                            }
+                            onChange={(e) => updateLine(idx, "qty", e.target.value)}
                             required
                           />
                         </td>
                         <td>
-                          <input
-                            value={ln.remark}
-                            onChange={(e) =>
-                              updateLine(idx, "remark", e.target.value)
-                            }
-                          />
+                          <input value={ln.remark} onChange={(e) => updateLine(idx, "remark", e.target.value)} />
                         </td>
                         <td>
                           {form.lines.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeLine(idx)}
-                            >
+                            <button type="button" onClick={() => removeLine(idx)}>
                               Remove
                             </button>
                           )}
@@ -1569,38 +1168,20 @@ const RequisitionList = () => {
                   </tbody>
                 </table>
 
-                <button
-                  type="button"
-                  onClick={addLine}
-                  style={{ marginTop: 5 }}
-                >
+                <button type="button" onClick={addLine} style={{ marginTop: 5 }}>
                   + Add Line
                 </button>
               </div>
 
-              {error && (
-                <div className="sa-modal-error">{error}</div>
-              )}
+              {error && <div className="sa-modal-error">{error}</div>}
 
               <div className="sa-modal-actions">
-                <button
-                  type="button"
-                  className="sa-secondary-button"
-                  onClick={() => !saving && setShowForm(false)}
-                >
+                <button type="button" className="sa-secondary-button" onClick={() => !saving && setShowForm(false)}>
                   Cancel
                 </button>
 
-                <button
-                  type="submit"
-                  className="sa-primary-button"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingId
-                    ? "Update Requisition"
-                    : "Save Requisition"}
+                <button type="submit" className="sa-primary-button" disabled={saving}>
+                  {saving ? "Saving..." : editingId ? "Update Requisition" : "Save Requisition"}
                 </button>
               </div>
             </form>
@@ -1622,35 +1203,17 @@ const RequisitionList = () => {
             })
           }
         >
-          <div
-            className="sa-modal large"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 980 }}
-          >
+          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Create Purchase Order</h3>
             <p className="sa-modal-sub">
-              This PO will be created from the selected requisition.
-              Vendor and delivery store are taken from the requisition.
+              This PO will be created from the selected requisition. Vendor and delivery store are taken from the requisition.
             </p>
 
             <div className="sa-modal-form">
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                }}
-              >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label>
                   Approved Requisition (read-only)
-                  <input
-                    value={
-                      poModal.req?.requisitionNo ||
-                      poModal.req?._id ||
-                      ""
-                    }
-                    readOnly
-                  />
+                  <input value={poModal.req?.requisitionNo || poModal.req?._id || ""} readOnly />
                 </label>
 
                 <label>
@@ -1669,21 +1232,13 @@ const RequisitionList = () => {
 
                 <label>
                   Vendor (from requisition)
-                  <input
-                    value={getVendorName(poModal.req?.vendor) || ""}
-                    readOnly
-                  />
+                  <input value={getVendorName(poModal.req?.vendor) || ""} readOnly />
                 </label>
 
                 <label>
                   Delivery Store (from requisition)
                   <input
-                    value={
-                      getStoreName(
-                        poModal.req?.toStore ||
-                          poModal.req?.store
-                      ) || ""
-                    }
+                    value={getStoreName(poModal.req?.toStore || poModal.req?.store) || ""}
                     readOnly
                   />
                 </label>
@@ -1692,10 +1247,7 @@ const RequisitionList = () => {
                   PO Date
                   <input
                     type="date"
-                    value={
-                      poModal.poDate ||
-                      new Date().toISOString().slice(0, 10)
-                    }
+                    value={poModal.poDate || new Date().toISOString().slice(0, 10)}
                     onChange={(e) =>
                       setPoModal((p) => ({
                         ...p,
@@ -1707,10 +1259,7 @@ const RequisitionList = () => {
               </div>
 
               <div style={{ marginTop: 12 }}>
-                <table
-                  className="sa-table"
-                  style={{ width: "100%" }}
-                >
+                <table className="sa-table" style={{ width: "100%" }}>
                   <thead>
                     <tr>
                       <th style={{ width: "45%" }}>Item</th>
@@ -1723,18 +1272,9 @@ const RequisitionList = () => {
                   <tbody>
                     {(poModal.items || []).map((ln, idx) => (
                       <tr key={ln.lineId || idx}>
+                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
                         <td>
-                          {ln.itemName ||
-                            getItemName(ln.item) ||
-                            ln.item}
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            value={ln.qty}
-                            readOnly
-                          />
+                          <input type="number" min="0" value={ln.qty} readOnly />
                         </td>
                         <td>
                           <input
@@ -1742,37 +1282,16 @@ const RequisitionList = () => {
                             min="0"
                             value={ln.rate}
                             onChange={(e) => {
-                              const v = Number(
-                                e.target.value || 0
-                              );
+                              const v = Number(e.target.value || 0);
                               setPoModal((p) => {
-                                const newItems = [
-                                  ...(p.items || []),
-                                ];
+                                const newItems = [...(p.items || [])];
                                 newItems[idx] = {
                                   ...newItems[idx],
                                   rate: v,
-                                  amount: Number(
-                                    (
-                                      v *
-                                      Number(
-                                        newItems[idx].qty || 0
-                                      )
-                                    ).toFixed(2)
-                                  ),
+                                  amount: Number((v * Number(newItems[idx].qty || 0)).toFixed(2)),
                                 };
-                                const sub = newItems.reduce(
-                                  (s, i) =>
-                                    s +
-                                    Number(
-                                      i.amount || 0
-                                    ),
-                                  0
-                                );
-                                const tax =
-                                  ((p.taxPercent || 0) /
-                                    100) *
-                                  sub;
+                                const sub = newItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+                                const tax = ((p.taxPercent || 0) / 100) * sub;
                                 return {
                                   ...p,
                                   items: newItems,
@@ -1784,18 +1303,14 @@ const RequisitionList = () => {
                             }}
                           />
                         </td>
-                        <td>
-                          {Number(ln.amount || 0).toFixed(2)}
-                        </td>
+                        <td>{Number(ln.amount || 0).toFixed(2)}</td>
                         <td>
                           <input
                             value={ln.remark || ""}
                             onChange={(e) => {
                               const v = e.target.value;
                               setPoModal((p) => {
-                                const newItems = [
-                                  ...(p.items || []),
-                                ];
+                                const newItems = [...(p.items || [])];
                                 newItems[idx] = {
                                   ...newItems[idx],
                                   remark: v,
@@ -1814,22 +1329,10 @@ const RequisitionList = () => {
                 </table>
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <div
-                  style={{ width: 360, textAlign: "right" }}
-                >
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 12 }}>
+                <div style={{ width: 360, textAlign: "right" }}>
                   <div style={{ marginBottom: 6 }}>
-                    Subtotal:{" "}
-                    <strong>
-                      {(poModal.subTotal || 0).toFixed(2)}
-                    </strong>
+                    Subtotal: <strong>{(poModal.subTotal || 0).toFixed(2)}</strong>
                   </div>
                   <div style={{ marginBottom: 6 }}>
                     Tax %{" "}
@@ -1838,19 +1341,9 @@ const RequisitionList = () => {
                       min="0"
                       value={poModal.taxPercent || 0}
                       onChange={(e) => {
-                        const tp = Number(
-                          e.target.value || 0
-                        );
+                        const tp = Number(e.target.value || 0);
                         setPoModal((p) => {
-                          const st =
-                            p.items?.reduce(
-                              (s, i) =>
-                                s +
-                                Number(
-                                  i.amount || 0
-                                ),
-                              0
-                            ) || 0;
+                          const st = p.items?.reduce((s, i) => s + Number(i.amount || 0), 0) || 0;
                           const taxAmt = (tp / 100) * st;
                           return {
                             ...p,
@@ -1868,33 +1361,15 @@ const RequisitionList = () => {
                     />
                   </div>
                   <div style={{ marginBottom: 6 }}>
-                    Tax Amount:{" "}
-                    <strong>
-                      {(poModal.taxAmount || 0).toFixed(2)}
-                    </strong>
+                    Tax Amount: <strong>{(poModal.taxAmount || 0).toFixed(2)}</strong>
                   </div>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: "1.05rem",
-                    }}
-                  >
-                    Total:{" "}
-                    <strong>
-                      {(
-                        poModal.total ||
-                        poModal.subTotal ||
-                        0
-                      ).toFixed(2)}
-                    </strong>
+                  <div style={{ marginTop: 8, fontSize: "1.05rem" }}>
+                    Total: <strong>{(poModal.total || poModal.subTotal || 0).toFixed(2)}</strong>
                   </div>
                 </div>
               </div>
 
-              <div
-                className="sa-modal-actions"
-                style={{ marginTop: 12 }}
-              >
+              <div className="sa-modal-actions" style={{ marginTop: 12 }}>
                 <button
                   type="button"
                   className="sa-secondary-button"
@@ -1909,12 +1384,7 @@ const RequisitionList = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  className="sa-primary-button"
-                  onClick={submitCreatePO}
-                  disabled={saving}
-                >
+                <button type="button" className="sa-primary-button" onClick={submitCreatePO} disabled={saving}>
                   {saving ? "Creating..." : "Create PO"}
                 </button>
               </div>
@@ -1941,35 +1411,15 @@ const RequisitionList = () => {
             })
           }
         >
-          <div
-            className="sa-modal large"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 980 }}
-          >
+          <div className="sa-modal large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Create GRN</h3>
-            <p className="sa-modal-sub">
-              Record goods received against the selected requisition.
-              Store is taken from the requisition.
-            </p>
+            <p className="sa-modal-sub">Record goods received against the selected requisition. Store is taken from the requisition.</p>
 
             <div className="sa-modal-form">
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                }}
-              >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label>
                   Approved Requisition (read-only)
-                  <input
-                    value={
-                      grnModal.req?.requisitionNo ||
-                      grnModal.req?._id ||
-                      ""
-                    }
-                    readOnly
-                  />
+                  <input value={grnModal.req?.requisitionNo || grnModal.req?._id || ""} readOnly />
                 </label>
 
                 <label>
@@ -1989,12 +1439,7 @@ const RequisitionList = () => {
                   Received By
                   <input
                     value={grnModal.receivedBy || ""}
-                    onChange={(e) =>
-                      setGrnModal((p) => ({
-                        ...p,
-                        receivedBy: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setGrnModal((p) => ({ ...p, receivedBy: e.target.value }))}
                   />
                 </label>
 
@@ -2002,10 +1447,7 @@ const RequisitionList = () => {
                   Received Date
                   <input
                     type="date"
-                    value={
-                      grnModal.receivedDate ||
-                      new Date().toISOString().slice(0, 10)
-                    }
+                    value={grnModal.receivedDate || new Date().toISOString().slice(0, 10)}
                     onChange={(e) => {
                       const val = e.target.value;
                       setGrnModal((p) => ({
@@ -2021,57 +1463,29 @@ const RequisitionList = () => {
                   Challan No<span style={{ color: "red" }}> *</span>
                   <input
                     value={grnModal.challanNo || ""}
-                    onChange={(e) =>
-                      setGrnModal((p) => ({
-                        ...p,
-                        challanNo: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setGrnModal((p) => ({ ...p, challanNo: e.target.value }))}
                     required
                   />
                 </label>
 
                 <label>
                   Bill No (optional)
-                  <input
-                    value={grnModal.billNo || ""}
-                    onChange={(e) =>
-                      setGrnModal((p) => ({
-                        ...p,
-                        billNo: e.target.value,
-                      }))
-                    }
-                  />
+                  <input value={grnModal.billNo || ""} onChange={(e) => setGrnModal((p) => ({ ...p, billNo: e.target.value }))} />
                 </label>
 
                 <label>
                   Store (from requisition)
-                  <input
-                    value={
-                      getStoreName(
-                        grnModal.req?.toStore ||
-                          grnModal.req?.store
-                      ) || ""
-                    }
-                    readOnly
-                  />
+                  <input value={getStoreName(grnModal.req?.toStore || grnModal.req?.store) || ""} readOnly />
                 </label>
               </div>
 
               <div style={{ marginTop: 12 }}>
-                <table
-                  className="sa-table"
-                  style={{ width: "100%" }}
-                >
+                <table className="sa-table" style={{ width: "100%" }}>
                   <thead>
                     <tr>
                       <th style={{ width: "45%" }}>Item</th>
-                      <th style={{ width: "12%" }}>
-                        Requested Qty
-                      </th>
-                      <th style={{ width: "12%" }}>
-                        Received Qty
-                      </th>
+                      <th style={{ width: "12%" }}>Requested Qty</th>
+                      <th style={{ width: "12%" }}>Received Qty</th>
                       <th style={{ width: "12%" }}>Balance</th>
                       <th style={{ width: "19%" }}>Remark</th>
                     </tr>
@@ -2079,18 +1493,9 @@ const RequisitionList = () => {
                   <tbody>
                     {(grnModal.items || []).map((ln, idx) => (
                       <tr key={ln.lineId || idx}>
+                        <td>{ln.itemName || getItemName(ln.item) || ln.item}</td>
                         <td>
-                          {ln.itemName ||
-                            getItemName(ln.item) ||
-                            ln.item}
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            value={ln.qtyRequested}
-                            readOnly
-                          />
+                          <input type="number" min="0" value={ln.qtyRequested} readOnly />
                         </td>
                         <td>
                           <input
@@ -2098,34 +1503,14 @@ const RequisitionList = () => {
                             min="0"
                             value={ln.qtyReceived}
                             onChange={(e) => {
-                              const v = Number(
-                                e.target.value || 0
-                              );
-                              updateGrnLine(
-                                idx,
-                                "qtyReceived",
-                                v
-                              );
+                              const v = Number(e.target.value || 0);
+                              updateGrnLine(idx, "qtyReceived", v);
                             }}
                           />
                         </td>
+                        <td>{Number((ln.qtyRequested || 0) - (ln.qtyReceived || 0)).toFixed(2)}</td>
                         <td>
-                          {Number(
-                            (ln.qtyRequested || 0) -
-                              (ln.qtyReceived || 0)
-                          ).toFixed(2)}
-                        </td>
-                        <td>
-                          <input
-                            value={ln.remark || ""}
-                            onChange={(e) =>
-                              updateGrnLine(
-                                idx,
-                                "remark",
-                                e.target.value
-                              )
-                            }
-                          />
+                          <input value={ln.remark || ""} onChange={(e) => updateGrnLine(idx, "remark", e.target.value)} />
                         </td>
                       </tr>
                     ))}
@@ -2133,10 +1518,7 @@ const RequisitionList = () => {
                 </table>
               </div>
 
-              <div
-                className="sa-modal-actions"
-                style={{ marginTop: 12 }}
-              >
+              <div className="sa-modal-actions" style={{ marginTop: 12 }}>
                 <button
                   type="button"
                   className="sa-secondary-button"
@@ -2155,12 +1537,7 @@ const RequisitionList = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  className="sa-primary-button"
-                  onClick={submitCreateGRN}
-                  disabled={saving}
-                >
+                <button type="button" className="sa-primary-button" onClick={submitCreateGRN} disabled={saving}>
                   {saving ? "Creating..." : "Create GRN"}
                 </button>
               </div>
