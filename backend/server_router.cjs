@@ -3,6 +3,11 @@
 const express = require("express");
 const { createControllers } = require("./controllers.cjs");
 
+// --- added imports for vendors CSV upload
+const multer = require("multer");
+const csvToJson = require("csvtojson");
+const upload = multer({ dest: "tmp/" });
+
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   const controllers = createControllers({ useMongo, mongoose });
@@ -715,6 +720,216 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   router.get("/roles", safe("listRoles"));
   router.get("/users", safe("listUsers"));
+
+  // ------------------------
+  // Vendors (full CRUD + CSV upload)
+  // ------------------------
+  let VendorModel = null;
+  let memVendors = [];
+
+  if (useMongo && mongoose) {
+    const { Schema } = mongoose;
+    const vendorSchema = new Schema({
+      code: { type: String, required: true, unique: true },
+      name: { type: String, required: true },
+      vendorType: { type: String, default: '' },
+      categories: { type: [String], default: [] },
+      resorts: { type: [String], default: [] },
+      contactPerson: String,
+      phone: String,
+      whatsapp: String,
+      alternatePhone: String,
+      email: String,
+      addressLine1: String,
+      addressLine2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: String,
+      gstNumber: String,
+      panNumber: String,
+      fssaiNumber: String,
+      paymentTerms: String,
+      creditLimit: { type: Number, default: 0 },
+      paymentMode: String,
+      bankName: String,
+      accountNumber: String,
+      ifsc: String,
+      branch: String,
+      deliveryTime: String,
+      minOrderQty: { type: Number, default: 0 },
+      status: { type: String, default: 'Active' },
+      notes: String
+    }, { timestamps: true });
+
+    VendorModel = mongoose.models.Vendor || mongoose.model('Vendor', vendorSchema);
+    console.log('Vendor model initialised (Mongo)');
+  } else {
+    console.warn('Mongo not enabled; Vendors will use in-memory array (data lost on restart).');
+  }
+
+  // --- handlers ---
+  const listVendorsHandler = async (req, res) => {
+    try {
+      if (VendorModel) {
+        const docs = await VendorModel.find().lean();
+        return res.json(docs);
+      }
+      return res.json(memVendors);
+    } catch (err) {
+      console.error('GET /api/vendors error', err);
+      res.status(500).json({ message: 'Failed to list vendors' });
+    }
+  };
+
+  const createVendorHandler = async (req, res) => {
+    try {
+      const payload = req.body || {};
+      // normalize categories/resorts (accept comma separated strings)
+      if (payload.categories && typeof payload.categories === 'string') {
+        payload.categories = payload.categories.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (payload.resorts && typeof payload.resorts === 'string') {
+        payload.resorts = payload.resorts.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (!payload.code || !payload.name) {
+        return res.status(400).json({ message: 'code & name are required' });
+      }
+      if (VendorModel) {
+        const doc = await VendorModel.create(payload);
+        return res.status(201).json(doc);
+      }
+      const created = { _id: `ven_${Date.now()}`, ...payload };
+      memVendors.push(created);
+      return res.status(201).json(created);
+    } catch (err) {
+      console.error('POST /api/vendors error', err);
+      res.status(500).json({ message: 'Failed to create vendor', error: err.message });
+    }
+  };
+
+  const updateVendorHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payload = req.body || {};
+      if (payload.categories && typeof payload.categories === 'string') {
+        payload.categories = payload.categories.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (payload.resorts && typeof payload.resorts === 'string') {
+        payload.resorts = payload.resorts.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (VendorModel) {
+        const updated = await VendorModel.findByIdAndUpdate(id, { $set: payload }, { new: true });
+        if (!updated) return res.status(404).json({ message: 'Vendor not found' });
+        return res.json(updated);
+      }
+      const idx = memVendors.findIndex(v => v._id === id);
+      if (idx === -1) return res.status(404).json({ message: 'Vendor not found' });
+      memVendors[idx] = { ...memVendors[idx], ...payload };
+      return res.json(memVendors[idx]);
+    } catch (err) {
+      console.error('PUT /api/vendors/:id error', err);
+      res.status(500).json({ message: 'Failed to update vendor' });
+    }
+  };
+
+  const deleteVendorHandler = async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (VendorModel) {
+        const deleted = await VendorModel.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: 'Vendor not found' });
+        return res.json({ ok: true });
+      }
+      const before = memVendors.length;
+      memVendors = memVendors.filter(v => v._id !== id);
+      if (memVendors.length === before) return res.status(404).json({ message: 'Vendor not found' });
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('DELETE /api/vendors/:id error', err);
+      res.status(500).json({ message: 'Failed to delete vendor' });
+    }
+  };
+
+  // CSV upload (multipart/form-data field name: file)
+  const uploadVendorsCsvHandler = async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+      const json = await csvToJson().fromFile(req.file.path);
+      if (!Array.isArray(json) || json.length === 0) return res.status(400).json({ message: 'CSV empty or invalid' });
+
+      // Normalize rows to Vendor doc shape
+      const docs = json.map(row => {
+        const categories = (row.categories || row.category || '').toString();
+        const resorts = (row.resorts || '').toString();
+        return {
+          code: (row.code || row.Code || '').toString().trim(),
+          name: (row.name || row.Name || '').toString().trim(),
+          vendorType: row.vendorType || row.vendorType || '',
+          categories: categories ? categories.split(',').map(s => s.trim()).filter(Boolean) : [],
+          resorts: resorts ? resorts.split(',').map(s => s.trim()).filter(Boolean) : ['ALL'],
+          contactPerson: row.contactPerson || '',
+          phone: row.phone || '',
+          whatsapp: row.whatsapp || '',
+          alternatePhone: row.alternatePhone || '',
+          email: row.email || '',
+          addressLine1: row.addressLine1 || '',
+          addressLine2: row.addressLine2 || '',
+          city: row.city || '',
+          state: row.state || '',
+          pincode: row.pincode || '',
+          country: row.country || 'India',
+          gstNumber: row.gstNumber || '',
+          panNumber: row.panNumber || '',
+          fssaiNumber: row.fssaiNumber || '',
+          paymentTerms: row.paymentTerms || '',
+          creditLimit: row.creditLimit ? Number(row.creditLimit) : 0,
+          paymentMode: row.paymentMode || '',
+          bankName: row.bankName || '',
+          accountNumber: row.accountNumber || '',
+          ifsc: row.ifsc || '',
+          branch: row.branch || '',
+          deliveryTime: row.deliveryTime || '',
+          minOrderQty: row.minOrderQty ? Number(row.minOrderQty) : 0,
+          status: row.status || 'Active',
+          notes: row.notes || ''
+        };
+      });
+
+      if (VendorModel) {
+        // Upsert by code to avoid duplicates
+        const bulkOps = docs.map(d => ({
+          updateOne: {
+            filter: { code: d.code },
+            update: { $set: d },
+            upsert: true
+          }
+        }));
+        const result = await VendorModel.bulkWrite(bulkOps);
+        return res.json({ message: 'Uploaded', result });
+      }
+
+      // in-memory insert
+      docs.forEach(d => {
+        const created = { _id: `ven_${Date.now()}_${Math.floor(Math.random()*1000)}`, ...d };
+        memVendors.push(created);
+      });
+      return res.json({ message: 'Uploaded in-memory', inserted: docs.length });
+    } catch (err) {
+      console.error('CSV upload vendors error', err);
+      res.status(500).json({ message: 'Failed to upload vendors', error: err.message });
+    }
+  };
+
+  // --- register vendor routes (plain + /api paths)
+  router.get('/vendors', listVendorsHandler);
+  router.get('/api/vendors', listVendorsHandler);
+  router.post('/api/vendors', createVendorHandler);
+  router.put('/api/vendors/:id', updateVendorHandler);
+  router.delete('/api/vendors/:id', deleteVendorHandler);
+
+  // CSV upload endpoint
+  router.post('/api/vendors/upload', upload.single('file'), uploadVendorsCsvHandler);
 
   return router;
 }
