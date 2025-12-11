@@ -11,7 +11,6 @@ const TYPE_OPTIONS = [
   { value: "RECIPE_PORTION", label: "By Recipe – Portion" },
 ];
 
-// now also supports recipe field
 const emptyLine = () => ({
   category: "",
   item: "",
@@ -22,20 +21,21 @@ const emptyLine = () => ({
 });
 
 const ConsumptionForm = () => {
-  const { id } = useParams(); // edit id (optional)
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const [type, setType] = useState("LUMPSUM");
   const [storeFrom, setStoreFrom] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
-  const [referenceNo, setReferenceNo] = useState(""); // optional kept
+  const [referenceNo, setReferenceNo] = useState("");
 
   const [lines, setLines] = useState([emptyLine()]);
 
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [recipes, setRecipes] = useState([]);
+  const [categories, setCategories] = useState([]); // NEW: categories master
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +54,14 @@ const ConsumptionForm = () => {
       setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
       setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
       setRecipes(Array.isArray(recipeRes.data) ? recipeRes.data : []);
+
+      // Try to load categories (preferred endpoint). Fallback attempted if empty.
+      let catRes = await axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] }));
+      if (!Array.isArray(catRes.data) || catRes.data.length === 0) {
+        // fallback to a generic categories endpoint if present
+        catRes = await axios.get(`${API_BASE}/api/categories`).catch(() => ({ data: [] }));
+      }
+      setCategories(Array.isArray(catRes.data) ? catRes.data : []);
     } catch (err) {
       console.error("load masters error", err);
       // non-fatal
@@ -78,7 +86,7 @@ const ConsumptionForm = () => {
 
       setLines(
         (c.lines || []).map((ln) => ({
-          category: "",
+          category: ln.category || "", // keep whatever id stored so dropdown can match
           recipe: entryIsRecipeType ? ln.recipe?._id || ln.recipe || "" : "",
           item: !entryIsRecipeType ? ln.item?._id || ln.item || "" : "",
           qty: ln.qty ?? "",
@@ -98,29 +106,13 @@ const ConsumptionForm = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- derived: item categories (id + name) ----
-  // Build a map from item master so we render friendly category names
-  const categoryMap = {};
-  items.forEach((it) => {
-    if (!it) return;
-    // try common possible fields for category id and label
-    const id =
-      it.categoryId ||
-      it.category ||
-      it.itemCategory ||
-      (typeof it.category === "string" ? it.category : "");
-    const name =
-      it.categoryName ||
-      it.categoryLabel ||
-      it.itemCategoryName ||
-      it.category ||
-      id;
-    if (id) categoryMap[id] = name;
+  // ---- derived: categories list for dropdown (id + name) ----
+  // normalize category objects to { id, name }
+  const itemCategories = (categories || []).map((c) => {
+    const id = c._id || c.id || c.code || c.value || c.name;
+    const name = c.name || c.label || c.title || id;
+    return { id, name };
   });
-  const itemCategories = Object.keys(categoryMap).map((k) => ({
-    id: k,
-    name: categoryMap[k],
-  }));
 
   // ---- line changes ----
   const handleLineChange = (index, field, value) => {
@@ -136,14 +128,9 @@ const ConsumptionForm = () => {
         row.item = value;
         const it = items.find((i) => (i._id || i.id) === value);
         if (it) {
-          // common possible uom fields (adjust if your master uses a different key)
           row.uom = it.uom || it.UOM || it.unit || it.unitOfMeasure || it.measure || row.uom || "";
-          // keep category in sync if possible
-          const catId =
-            it.categoryId ||
-            it.category ||
-            it.itemCategory ||
-            "";
+          // if item has category id -> sync it (keeps dropdown consistent)
+          const catId = it.categoryId || it.category || it.itemCategory || "";
           if (catId) row.category = catId;
         } else {
           row.uom = row.uom || "";
@@ -197,7 +184,6 @@ const ConsumptionForm = () => {
 
     let linePayload;
     if (isRecipeType) {
-      // for recipe types, send recipe + qty + remarks
       linePayload = lines
         .filter((ln) => ln.recipe && ln.qty && Number(ln.qty) > 0)
         .map((ln) => ({
@@ -206,7 +192,6 @@ const ConsumptionForm = () => {
           remarks: ln.remarks || "",
         }));
     } else {
-      // for normal types, send item + qty + uom + remarks
       linePayload = lines
         .filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0)
         .map((ln) => ({
@@ -214,6 +199,7 @@ const ConsumptionForm = () => {
           qty: Number(ln.qty),
           uom: ln.uom || "",
           remarks: ln.remarks || "",
+          category: ln.category || undefined,
         }));
     }
 
@@ -276,7 +262,6 @@ const ConsumptionForm = () => {
 
           <label>
             Date
-            {/* date is fixed, not editable */}
             <input type="date" value={date} disabled />
           </label>
 
@@ -327,7 +312,6 @@ const ConsumptionForm = () => {
             <tbody>
               {lines.map((ln, idx) => {
                 if (isRecipeType) {
-                  // recipe-based rows
                   return (
                     <tr key={idx}>
                       <td>
@@ -360,17 +344,12 @@ const ConsumptionForm = () => {
                   );
                 }
 
-                // normal item-based rows
+                // filter items by category selection (if any)
                 const filteredItems = items.filter((it) => {
-                  const cat =
-                    it.categoryId ||
-                    it.category ||
-                    it.itemCategory ||
-                    it.categoryName ||
-                    it.categoryId ||
-                    "";
+                  const catId =
+                    it.categoryId || it.category || it.itemCategory || it.categoryName || "";
                   if (!ln.category) return true;
-                  return String(cat) === String(ln.category);
+                  return String(catId) === String(ln.category);
                 });
 
                 return (
@@ -389,12 +368,7 @@ const ConsumptionForm = () => {
 
                     {/* Item */}
                     <td>
-                      <select
-                        value={ln.item}
-                        onChange={(e) => handleLineChange(idx, "item", e.target.value)}
-                        required
-                        disabled={items.length === 0}
-                      >
+                      <select value={ln.item} onChange={(e) => handleLineChange(idx, "item", e.target.value)} required disabled={items.length === 0}>
                         <option value="">Select item</option>
                         {filteredItems.map((it) => (
                           <option key={it._id || it.id} value={it._id || it.id}>
@@ -409,7 +383,7 @@ const ConsumptionForm = () => {
                       <input type="number" min="0" value={ln.qty} onChange={(e) => handleLineChange(idx, "qty", e.target.value)} required />
                     </td>
 
-                    {/* UOM auto from item (read-only, readable color) */}
+                    {/* UOM */}
                     <td>
                       <input
                         value={ln.uom}
