@@ -1,10 +1,10 @@
-// controllers/requisition.controller.js
+// src/controllers/requisition.controller.js
 const mongoose = require('mongoose');
 const Requisition = require('../models/requisition.model');
 const Store = require('../models/store.model');
 
 function generateRequisitionNo() {
-  return `REQ-${Date.now()}`;
+  return `REQ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(String(id));
@@ -62,8 +62,9 @@ exports.getOne = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const body = req.body || {};
+    // Debug/log (remove or tone down in production if verbose)
     console.log('--- createRequisition incoming body ---');
-    console.log(JSON.stringify(body, null, 2));
+    console.log(JSON.stringify(body));
 
     const {
       type,
@@ -149,7 +150,7 @@ exports.create = async (req, res) => {
 
     // Build document to save
     const doc = {
-      requisitionNo: requisitionNo || generateRequisitionNo(),
+      requisitionNo: requisitionNo || undefined,
       type,
       resort: resort || undefined,
       department: department || undefined,
@@ -165,9 +166,28 @@ exports.create = async (req, res) => {
       doc.toStore = toStore;
     }
 
+    // ===== IMPORTANT: ensure unique, non-null requisitionNo to avoid E11000 =====
+    doc.requisitionNo = doc.requisitionNo || generateRequisitionNo();
+    // ========================================================================
+
     // Save
     const newReq = new Requisition(doc);
-    await newReq.save();
+
+    try {
+      await newReq.save();
+    } catch (saveErr) {
+      // If duplicate key or other DB error, provide a helpful message and log full error
+      console.error('Requisition save error:', saveErr && saveErr.stack ? saveErr.stack : saveErr);
+      // handle duplicate key more gracefully
+      if (saveErr && saveErr.code === 11000) {
+        return res.status(409).json({
+          message: 'Duplicate key error while creating requisition',
+          error: saveErr.message,
+          keyValue: saveErr.keyValue || null
+        });
+      }
+      return res.status(500).json({ message: 'Failed to create requisition', error: saveErr.message });
+    }
 
     const full = await Requisition.findById(newReq._id)
       .populate('vendor')
