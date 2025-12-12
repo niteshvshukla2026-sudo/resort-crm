@@ -1,3 +1,4 @@
+// backend/models/vendorModel.js
 const mongoose = require('mongoose');
 
 const VendorSchema = new mongoose.Schema({
@@ -5,7 +6,14 @@ const VendorSchema = new mongoose.Schema({
   name: { type: String, required: true },
   vendorType: String,
   categories: [String],
-  resorts: [String], // store as array
+  // store resorts as ObjectId references to Resort for proper relations & filtering
+  resorts: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Resort',
+      index: true,
+    },
+  ],
   contactPerson: String,
   phone: String,
   whatsapp: String,
@@ -32,5 +40,8 @@ const VendorSchema = new mongoose.Schema({
   status: { type: String, default: 'Active' },
   notes: String
 }, { timestamps: true });
+
+// optional index for quick searching by code/name
+VendorSchema.index({ code: 1, name: 1 });
 
 module.exports = mongoose.model('Vendor', VendorSchema);

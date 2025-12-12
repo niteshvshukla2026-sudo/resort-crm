@@ -3,18 +3,20 @@ const mongoose = require("mongoose");
 
 const storeSchema = new mongoose.Schema(
   {
-    // Resort ko abhi simple string rakh rahe hain
-    // Isme tum Resort ka _id ya name dono store kar sakte ho
+    // 🔥 Resort MUST be ObjectId for filtering & linking
     resort: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
       required: true,
-      trim: true,
+      index: true,
     },
+
     name: {
       type: String,
       required: true,
       trim: true,
     },
+
     code: {
       type: String,
       trim: true,
@@ -25,5 +27,8 @@ const storeSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Fast search by resort + name
+storeSchema.index({ resort: 1, name: 1 });
 
 module.exports = mongoose.model("Store", storeSchema);

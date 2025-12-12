@@ -4,26 +4,39 @@ const lineSchema = new mongoose.Schema({
   itemCategory: { type: mongoose.Schema.Types.ObjectId, ref: "ItemCategory" },
   item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
   qty: { type: Number, required: true },
-  remark: String,
+  remark: { type: String, trim: true },
 });
 
 const requisitionSchema = new mongoose.Schema(
   {
-    requisitionNo: String,
-    type: { type: String, enum: ["INTERNAL", "VENDOR"], required: true },
+    requisitionNo: { type: String, trim: true },
 
-    // INTERNAL
+    type: {
+      type: String,
+      enum: ["INTERNAL", "VENDOR"],
+      required: true,
+    },
+
+    // INTERNAL REQUISITION (Store → Store)
     fromStore: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
     toStore: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
 
-    // VENDOR
+    // VENDOR REQUISITION (Store → Vendor)
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
     store: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
 
-    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort" },
+    // 🔥 MANDATORY FOR RESORT FILTERING
+    resort: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
+      required: true,
+      index: true,            // makes filtering super fast
+    },
+
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
 
-    requiredBy: Date,
+    requiredBy: { type: Date },
+
     status: {
       type: String,
       enum: [
@@ -39,6 +52,7 @@ const requisitionSchema = new mongoose.Schema(
 
     lines: [lineSchema],
 
+    // Relations
     po: { type: mongoose.Schema.Types.ObjectId, ref: "PO" },
     grn: { type: mongoose.Schema.Types.ObjectId, ref: "GRN" },
 
@@ -46,5 +60,9 @@ const requisitionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Strong resort index for fast filtering everywhere
+requisitionSchema.index({ resort: 1 });
+requisitionSchema.index({ status: 1 });
 
 module.exports = mongoose.model("Requisition", requisitionSchema);

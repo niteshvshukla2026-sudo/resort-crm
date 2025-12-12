@@ -1,7 +1,8 @@
 // src/pages/superAdmin/RequisitionList.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ResortContext } from "../../context/ResortContext"; // <-- added
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
@@ -27,6 +28,9 @@ const generateGrnNo = (dateStr) => {
 };
 
 const RequisitionList = () => {
+  // global resort from context
+  const { activeResort } = useContext(ResortContext);
+
   const [requisitions, setRequisitions] = useState([]);
   const [resorts, setResorts] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -91,6 +95,16 @@ const RequisitionList = () => {
 
   const navigate = useNavigate();
 
+  // buildUrl helper: appends resort query when activeResort is set (and not 'all')
+  function buildUrl(path) {
+    // path should start with "/" e.g. "/requisitions"
+    const sep = path.includes("?") ? "&" : "?";
+    if (activeResort && activeResort !== "all") {
+      return `${API_BASE}${path}${sep}resort=${encodeURIComponent(activeResort)}`;
+    }
+    return `${API_BASE}${path}`;
+  }
+
   // filtered stores for modal selects: use page-level resortFilter
   const filteredStoresForModal = stores.filter((s) => {
     if (!resortFilter) return true;
@@ -101,18 +115,20 @@ const RequisitionList = () => {
   // Normalize category entries so UI always sees objects { _id, name }
   const normalizeCategories = (raw) => {
     if (!Array.isArray(raw)) return [];
-    return raw.map((c) => {
-      if (!c) return null;
-      if (typeof c === "string") {
-        return { _id: c, name: c };
-      }
-      // if already object, prefer _id and name; fall back to code/title fields
-      return {
-        _id: c._id ?? c.id ?? c.code ?? c.name ?? JSON.stringify(c),
-        name: c.name ?? c.title ?? c.code ?? String(c._id ?? c.id ?? ""),
-        original: c,
-      };
-    }).filter(Boolean);
+    return raw
+      .map((c) => {
+        if (!c) return null;
+        if (typeof c === "string") {
+          return { _id: c, name: c };
+        }
+        // if already object, prefer _id and name; fall back to code/title fields
+        return {
+          _id: c._id ?? c.id ?? c.code ?? c.name ?? JSON.stringify(c),
+          name: c.name ?? c.title ?? c.code ?? String(c._id ?? c.id ?? ""),
+          original: c,
+        };
+      })
+      .filter(Boolean);
   };
 
   // load data (strict: use backend only)
@@ -121,6 +137,7 @@ const RequisitionList = () => {
       setLoading(true);
       setError("");
 
+      // Use buildUrl for endpoints that should be resort-scoped.
       const [
         reqRes,
         resortRes,
@@ -130,12 +147,19 @@ const RequisitionList = () => {
         vendorRes,
         catRes,
       ] = await Promise.all([
-        axios.get(`${API_BASE}/requisitions`),
+        // requisitions should be filtered by activeResort
+        axios.get(buildUrl("/requisitions")),
+        // always fetch all resorts (no resort filter on list of resorts)
         axios.get(`${API_BASE}/resorts`),
+        // departments likely global
         axios.get(`${API_BASE}/departments`),
-        axios.get(`${API_BASE}/stores`),
-        axios.get(`${API_BASE}/items`),
-        axios.get(`${API_BASE}/vendors`),
+        // stores scoped by resort (use buildUrl so if activeResort present it filters stores)
+        axios.get(buildUrl("/stores")),
+        // items scoped by resort (use buildUrl)
+        axios.get(buildUrl("/items")),
+        // vendors scoped by resort (use buildUrl)
+        axios.get(buildUrl("/vendors")),
+        // item categories likely global
         axios.get(`${API_BASE}/item-categories`),
       ]);
 
@@ -168,10 +192,19 @@ const RequisitionList = () => {
     }
   };
 
+  // load data at mount and whenever activeResort changes
   useEffect(() => {
+    // sync page-level resortFilter with global activeResort (if global is set)
+    if (activeResort && activeResort !== "all") {
+      setResortFilter(activeResort);
+    } else {
+      // if global is 'all', keep page filter as blank (meaning all)
+      setResortFilter("");
+    }
+
     loadData();
     // eslint-disable-next-line
-  }, []);
+  }, [activeResort]);
 
   // lookup helpers
   const lookupName = (list, ref) => {
@@ -223,7 +256,7 @@ const RequisitionList = () => {
       toStore: req.toStore || req.store || "",
       store: req.store || "",
       vendor: req.vendor || "",
-      requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
+      requiredBy: req.requestedBy ? req.requestedBy.slice(0, 10) : "",
       lines:
         (req.lines &&
           req.lines.length > 0 &&
@@ -249,7 +282,7 @@ const RequisitionList = () => {
       toStore: req.toStore || req.store || "",
       store: req.store || "",
       vendor: req.vendor || "",
-      requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
+      requiredBy: req.requestedBy ? req.requestedBy.slice(0, 10) : "",
       lines:
         (req.lines &&
           req.lines.length > 0 &&
@@ -877,7 +910,7 @@ const RequisitionList = () => {
                   <option key={name} value={name}>
                     {name}
                   </option>
-                ))}
+                ))}{" "}
           </select>
         </label>
 
@@ -1169,7 +1202,7 @@ const RequisitionList = () => {
                                 return itemMatchesCategory(it, selectedCat);
                               })
                               .map((it) => (
-                                <option key={it._id || it.code} value={it._id || it.code}>
+                                <option key={it._id || it.code} value={it._1d || it._id || it.code}>
                                   {it.name}
                                 </option>
                               ))}
@@ -1460,10 +1493,7 @@ const RequisitionList = () => {
                   <input
                     value={grnModal.grnNo || ""}
                     onChange={(e) =>
-                      setGrnModal((p) => ({
-                        ...p,
-                        grnNo: e.target.value,
-                      }))
+                      setGrnModal((p) => ({ ...p, grnNo: e.target.value }))
                     }
                   />
                 </label>
@@ -1483,11 +1513,7 @@ const RequisitionList = () => {
                     value={grnModal.receivedDate || new Date().toISOString().slice(0, 10)}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setGrnModal((p) => ({
-                        ...p,
-                        receivedDate: val,
-                        grnNo: generateGrnNo(val),
-                      }));
+                      setGrnModal((p) => ({ ...p, receivedDate: val, grnNo: generateGrnNo(val) }));
                     }}
                   />
                 </label>
