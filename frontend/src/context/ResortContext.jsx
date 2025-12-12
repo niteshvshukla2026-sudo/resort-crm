@@ -1,29 +1,44 @@
-import React, { createContext, useEffect, useState } from "react";
-import axios from "axios";
+// src/context/ResortContext.jsx
+import React, { createContext, useContext, useState, useMemo } from "react";
 
-export const ResortContext = createContext();
+/**
+ * ResortContext
+ * - Exports: ResortContext (named), ResortProvider (named), useResort (named), default export (ResortContext)
+ *
+ * Usage:
+ *  - Wrap app: <ResortProvider>{children}</ResortProvider>
+ *  - Consume: const { resort, setResort } = useResort();
+ *  - Or: import { ResortContext } from "../context/ResortContext";
+ */
 
-export function ResortProvider({ children }) {
-  const [resorts, setResorts] = useState([]);
-  const [activeResort, setActiveResort] = useState(
-    localStorage.getItem("activeResort") || "all"
-  );
+const ResortContext = createContext(null);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+export const ResortProvider = ({ children, initialResort = null }) => {
+  const [resort, setResort] = useState(initialResort);
 
-  useEffect(() => {
-    axios.get(`${API_BASE}/api/resorts`)
-      .then(res => setResorts(res.data))
-      .catch(err => console.error(err));
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("activeResort", activeResort);
-  }, [activeResort]);
+  // Memoize value to avoid unnecessary re-renders
+  const value = useMemo(() => ({ resort, setResort }), [resort]);
 
   return (
-    <ResortContext.Provider value={{ resorts, activeResort, setActiveResort }}>
+    <ResortContext.Provider value={value}>
       {children}
     </ResortContext.Provider>
   );
-}
+};
+
+// Named hook export (this is what 'import { useResort } ...' expects)
+export const useResort = () => {
+  const ctx = useContext(ResortContext);
+  if (ctx === undefined || ctx === null) {
+    // Helpful dev-warning — not thrown so pages that check null still work
+    // throw new Error("useResort must be used within a ResortProvider");
+    return { resort: null, setResort: () => {} };
+  }
+  return ctx;
+};
+
+// Also export the context object itself (some files import ResortContext)
+export { ResortContext };
+
+// Default export (optional; safe if some imports use default)
+export default ResortContext;
