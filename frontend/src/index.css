@@ -1,13 +1,16 @@
-/* src/index.css — minimal globals to avoid missing-import build error */
+/* src/index.css */
+
 :root {
-  --app-bg: #ffffff;
-  --text: #1f2937;
+  --app-bg: #f5f7fa;
+  --text-color: #1f2937;
+  --card-bg: #ffffff;
 }
 
 html, body, #root {
-  height: 100%;
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  padding: 0;
+  height: 100%;
   background: var(--app-bg);
-  color: var(--text);
+  color: var(--text-color);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
 }
