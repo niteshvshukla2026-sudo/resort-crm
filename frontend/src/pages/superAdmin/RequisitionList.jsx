@@ -94,25 +94,27 @@ const RequisitionList = () => {
   // filtered stores for modal selects: use page-level resortFilter
   const filteredStoresForModal = stores.filter((s) => {
     if (!resortFilter) return true;
-    const storeResort = s.resort || s.resortId || s.resortName || s.resort;
+    const storeResort = s.resort || s.resortId || s.resortName || (s.resort && (s.resort._id || s.resort.name)) || s.resort;
     return String(storeResort) === String(resortFilter);
   });
 
   // Normalize category entries so UI always sees objects { _id, name }
   const normalizeCategories = (raw) => {
     if (!Array.isArray(raw)) return [];
-    return raw.map((c) => {
-      if (!c) return null;
-      if (typeof c === "string") {
-        return { _id: c, name: c };
-      }
-      // if already object, prefer _id and name; fall back to code/title fields
-      return {
-        _id: c._id ?? c.id ?? c.code ?? c.name ?? JSON.stringify(c),
-        name: c.name ?? c.title ?? c.code ?? String(c._id ?? c.id ?? ""),
-        original: c,
-      };
-    }).filter(Boolean);
+    return raw
+      .map((c) => {
+        if (!c) return null;
+        if (typeof c === "string") {
+          return { _id: c, name: c };
+        }
+        // if already object, prefer _id and name; fall back to code/title fields
+        return {
+          _id: c._id ?? c.id ?? c.code ?? c.name ?? JSON.stringify(c),
+          name: c.name ?? c.title ?? c.code ?? String(c._id ?? c.id ?? ""),
+          original: c,
+        };
+      })
+      .filter(Boolean);
   };
 
   // load data (strict: use backend only)
@@ -174,18 +176,35 @@ const RequisitionList = () => {
   }, []);
 
   // lookup helpers
+  // Accepts either id string or an object { _id, name } or even name string.
   const lookupName = (list, ref) => {
-    if (!ref) return "-";
-    // if list is normalized categories we stored objects with _id and name
+    if (!ref && ref !== 0) return "-";
+
+    // if ref is object with _id or name
+    let refId = ref;
+    let refName = null;
+    if (typeof ref === "object") {
+      refId = ref._id ?? ref.id ?? ref;
+      refName = ref.name ?? ref.title ?? null;
+    }
+
+    // try to find by id or alias fields
     const found = list.find(
       (x) =>
-        x._id === ref ||
-        x.id === ref ||
-        x.name === ref ||
-        x.code === ref
+        String(x._id) === String(refId) ||
+        String(x.id) === String(refId) ||
+        String(x.code) === String(refId) ||
+        String(x.name) === String(refId) ||
+        (refName && String(x.name) === String(refName))
     );
-    return found ? found.name || found.code || ref : ref;
+
+    if (found) return found.name || found.code || String(refId);
+    // fallback to a readable name if we have it from the object
+    if (refName) return refName;
+    // finally fallback to the raw refId/string
+    return typeof refId === "string" ? refId : "-";
   };
+
   const getResortName = (r) => lookupName(resorts, r);
   const getDepartmentName = (d) => lookupName(departments, d);
   const getStoreName = (s) => lookupName(stores, s);
@@ -217,19 +236,20 @@ const RequisitionList = () => {
     setEditingId(req._id);
     setForm({
       type: req.type || "INTERNAL",
-      resort: req.resort || "",
+      // If req.resort is object, use its _id; otherwise use the id/string already present
+      resort: req?.resort?._id || req?.resort || "",
       department: req.department || "",
       fromStore: req.fromStore || "",
       toStore: req.toStore || req.store || "",
       store: req.store || "",
       vendor: req.vendor || "",
-      requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
+      requiredBy: req.requiredBy ? (typeof req.requiredBy === "string" ? req.requiredBy.slice(0, 10) : new Date(req.requiredBy).toISOString().slice(0, 10)) : "",
       lines:
         (req.lines &&
           req.lines.length > 0 &&
           req.lines.map((ln) => ({
             lineId: ln.lineId || `ln_${Math.floor(Math.random() * 100000)}`,
-            itemCategory: ln.itemCategory || "",
+            itemCategory: ln.itemCategory || (ln.item && ln.item.itemCategory) || "",
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
@@ -243,19 +263,19 @@ const RequisitionList = () => {
     setEditingId(null);
     setForm({
       type: req.type || "INTERNAL",
-      resort: req.resort || "",
+      resort: req?.resort?._id || req?.resort || "",
       department: req.department || "",
       fromStore: req.fromStore || "",
       toStore: req.toStore || req.store || "",
       store: req.store || "",
       vendor: req.vendor || "",
-      requiredBy: req.requiredBy ? req.requiredBy.slice(0, 10) : "",
+      requiredBy: req.requiredBy ? (typeof req.requiredBy === "string" ? req.requiredBy.slice(0, 10) : new Date(req.requiredBy).toISOString().slice(0, 10)) : "",
       lines:
         (req.lines &&
           req.lines.length > 0 &&
           req.lines.map((ln) => ({
             lineId: `dup_${Math.floor(Math.random() * 100000)}`,
-            itemCategory: ln.itemCategory || "",
+            itemCategory: ln.itemCategory || (ln.item && ln.item.itemCategory) || "",
             item: ln.item?._id || ln.item || "",
             qty: ln.qty || 1,
             remark: ln.remark || "",
@@ -323,10 +343,12 @@ const RequisitionList = () => {
     let derivedResort = form.resort || undefined;
     if (form.type === "INTERNAL") {
       const from = stores.find((s) => (s._id || s.id) === form.fromStore);
-      if (from?.resort) derivedResort = from.resort;
+      const fromResort = from?.resort || (from?.resort && (from.resort._id || from.resort.name)) || undefined;
+      if (fromResort) derivedResort = fromResort;
     } else {
       const st = stores.find((s) => (s._id || s.id) === form.store);
-      if (st?.resort) derivedResort = st.resort;
+      const stResort = st?.resort || (st?.resort && (st.resort._id || st.resort.name)) || undefined;
+      if (stResort) derivedResort = stResort;
     }
 
     try {
@@ -730,9 +752,9 @@ const RequisitionList = () => {
         if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
       }
       if (resortFilter) {
-        const val = r.resort || r.resortName || r.resortRef || r.resort;
+        const val = getResortName(r.resort);
         if (!val) return false;
-        if (!String(val).toLowerCase().includes(String(resortFilter).toLowerCase())) return false;
+        if (!String(val).toLowerCase().includes(String(getResortName(resortFilter)).toLowerCase())) return false;
       }
       if (dateFrom) {
         const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
@@ -754,7 +776,13 @@ const RequisitionList = () => {
       }
       if (searchText && searchText.trim()) {
         const q = searchText.trim().toLowerCase();
-        const fields = [r.requisitionNo, r.department, r.store, r.vendor, r.resort];
+        const fields = [
+          r.requisitionNo,
+          getDepartmentName(r.department),
+          getStoreName(r.store),
+          getVendorName(r.vendor),
+          getResortName(r.resort),
+        ];
         const joined = fields.filter(Boolean).join(" ").toLowerCase();
         if (!joined.includes(q)) return false;
       }
@@ -873,7 +901,7 @@ const RequisitionList = () => {
                     {r.name}
                   </option>
                 ))
-              : Array.from(new Set(requisitions.map((x) => x.resort))).map((name) => (
+              : Array.from(new Set(requisitions.map((x) => (x.resort && (x.resort.name || x.resort)) || x.resort))).map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
