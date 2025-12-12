@@ -1,50 +1,16 @@
 // backend/routes/storeRoutes.js
 const express = require("express");
-const mongoose = require("mongoose");
 const Store = require("../models/storeModel");
-const Resort = require("../models/resortModel"); // only needed for name → id resolution
 
 const router = express.Router();
 
 /**
  * GET /api/stores
- * Supports filters:
- *  - resort=<resortId>
- *  - search=<text>   (store name OR code)
+ * Saare stores list karega
  */
 router.get("/", async (req, res) => {
   try {
-    const { resort, search } = req.query;
-
-    const filter = {};
-
-    // Resort-wise filtering
-    if (resort) {
-      if (mongoose.Types.ObjectId.isValid(resort)) {
-        // direct ObjectId
-        filter.resort = resort;
-      } else {
-        // try to match resort by name if frontend accidentally sends name
-        const r = await Resort.findOne({
-          name: new RegExp(`^${String(resort).trim()}$`, "i"),
-        }).lean();
-
-        filter.resort = r?._id || resort; // fallback to raw
-      }
-    }
-
-    // Search filter
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { code: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const stores = await Store.find(filter)
-      .sort({ resort: 1, name: 1 })
-      .lean();
-
+    const stores = await Store.find().sort({ resort: 1, name: 1 });
     res.json(stores);
   } catch (err) {
     console.error("GET /api/stores error:", err);
@@ -54,7 +20,8 @@ router.get("/", async (req, res) => {
 
 /**
  * POST /api/stores
- * Create store
+ * Naya store create karega
+ * Body: { resort, name, code? }
  */
 router.post("/", async (req, res) => {
   try {
@@ -80,10 +47,11 @@ router.post("/", async (req, res) => {
 
 /**
  * PUT /api/stores/:id
- * Update existing store
+ * Existing store update karega
  */
 router.put("/:id", async (req, res) => {
   try {
+    const { id } = req.params;
     const { resort, name, code } = req.body;
 
     if (!resort || !name) {
@@ -91,7 +59,7 @@ router.put("/:id", async (req, res) => {
     }
 
     const updated = await Store.findByIdAndUpdate(
-      req.params.id,
+      id,
       { resort, name, code: code || "" },
       { new: true, runValidators: true }
     );
@@ -109,11 +77,13 @@ router.put("/:id", async (req, res) => {
 
 /**
  * DELETE /api/stores/:id
+ * Store delete karega
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Store.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
 
+    const deleted = await Store.findByIdAndDelete(id);
     if (!deleted) {
       return res.status(404).json({ message: "Store not found" });
     }

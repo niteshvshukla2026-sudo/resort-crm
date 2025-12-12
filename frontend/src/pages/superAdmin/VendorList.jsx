@@ -55,7 +55,6 @@ const VendorList = () => {
   const [filterCity, setFilterCity] = useState("");
   const [filterPhone, setFilterPhone] = useState("");
   const [filterEmail, setFilterEmail] = useState("");
-  const [resortFilter, setResortFilter] = useState(""); // NEW: resort filter
 
   // CSV upload
   const [csvError, setCsvError] = useState("");
@@ -174,24 +173,23 @@ const VendorList = () => {
     codeAllowed: /^[A-Z0-9_]+$/,
   };
 
-  // Deterministic code generator (same name -> same short suffix)
+  // Generate vendor code from name: initials of up to 4 words + last 4 digits of timestamp
   const generateCodeFromName = (name) => {
-    if (!name) return `VEND_${String(Date.now()).slice(-6)}`;
-
-    // keep only alnum + spaces, split words
-    const words = name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
-    // take up to first 3 chars of each word to keep code readable
-    const parts = words.slice(0, 4).map(w => w.slice(0, 3).toUpperCase());
-    const base = parts.join("").slice(0, 12) || `VEND`;
-
-    // deterministic short hash from name so repeated generation for same name yields same suffix
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
-    }
-    const suffix = Math.abs(hash).toString().slice(-4).padStart(4, "0");
-
-    return `${base}_${suffix}`;
+    if (!name) return "";
+    const words = name
+      .replace(/[^A-Za-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 4);
+    if (words.length === 0) return `VEND_${String(Date.now()).slice(-4)}`;
+    const initials = words.map((w) => w[0].toUpperCase()).join("");
+    const suffix = String(Date.now()).slice(-4);
+    let base = `${initials}_${suffix}`;
+    const existingCodes = new Set(
+      vendors.map((v) => (v.code || "").toUpperCase())
+    );
+    if (!existingCodes.has(base)) return base;
+    return `${initials}_${suffix}${Math.floor(Math.random() * 90 + 10)}`;
   };
 
   const ensureUniqueCode = (candidate) => {
@@ -803,18 +801,9 @@ const VendorList = () => {
         !v.email?.toLowerCase().includes(filterEmail.toLowerCase())
       )
         return false;
-
-      // NEW: resortFilter logic
-      if (resortFilter) {
-        // vendor may have resorts array, check if selected resort exists in vendor.resorts
-        const vidArr = Array.isArray(v.resorts) ? v.resorts : (v.resorts ? [v.resorts] : (v.resort ? [v.resort] : []));
-        const found = vidArr.some((rid) => String(rid) === String(resortFilter));
-        if (!found) return false;
-      }
-
       return true;
     });
-  }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail, resortFilter]);
+  }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
 
   const cities = useMemo(
     () => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))),
@@ -948,23 +937,6 @@ const VendorList = () => {
             placeholder="Email..."
             style={{ marginLeft: 8 }}
           />
-        </label>
-
-        {/* NEW: Resort filter */}
-        <label>
-          Resort
-          <select
-            value={resortFilter}
-            onChange={(e) => setResortFilter(e.target.value)}
-            style={{ marginLeft: 8 }}
-          >
-            <option value="">All Resorts</option>
-            {resorts.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
         </label>
 
         <div style={{ marginLeft: "auto", color: "#9ca3af" }}>

@@ -2,9 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-// ⭐ ADD: Global resort selector
-import { useResort } from "../../context/ResortContext.jsx";
-
 // tumhara backend items ke liye /api/items use kar raha hai
 // isliye yahan bhi /api hi rakhenge
 const API_BASE =
@@ -13,9 +10,6 @@ const API_BASE =
 const emptyForm = () => ({ _id: undefined, resort: "", name: "", code: "" });
 
 const StoreList = () => {
-  // ⭐ ADD: Access global resort
-  const { selectedResort } = useResort();
-
   const [stores, setStores] = useState([]);
   const [resorts, setResorts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +30,7 @@ const StoreList = () => {
   const [csvError, setCsvError] = useState("");
 
   // ---------- helpers ----------
+
   const normalizeResortList = (payload) => {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
@@ -52,6 +47,7 @@ const StoreList = () => {
     return [];
   };
 
+  // find resort id by name (case-insensitive, trimmed)
   const findResortIdByName = (name) => {
     if (!name) return null;
     const target = String(name).trim().toLowerCase();
@@ -59,6 +55,7 @@ const StoreList = () => {
     return r ? (r._id || r.id) : null;
   };
 
+  // backend se data lana (stores + resorts)
   const loadData = async () => {
     setLoading(true);
     setError("");
@@ -93,8 +90,10 @@ const StoreList = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // resort id se resort ka name nikalna
   const getResortName = (resortRef) => {
     if (!resortRef) return "-";
 
@@ -109,38 +108,34 @@ const StoreList = () => {
     return r ? r.name : resortRef;
   };
 
-  // ---------- Filtering (INCLUDES GLOBAL RESORT FILTER) ----------
+  // filters
   const filtered = useMemo(() => {
     return stores.filter((s) => {
-      // ⭐ ADD: GLOBAL RESORT FILTER
       const resortId =
         typeof s.resort === "object"
           ? s.resort._id || s.resort.id
-          : s.resort;
+          : s.resort || s.resortId;
 
-      if (selectedResort && resortId !== selectedResort) return false;
-
-      // Existing filters
       if (filterResort && resortId !== filterResort) return false;
-      if (filterName && !s.name?.toLowerCase().includes(filterName.toLowerCase()))
+      if (
+        filterName &&
+        !s.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
         return false;
-      if (filterCode && !s.code?.toLowerCase().includes(filterCode.toLowerCase()))
+      if (
+        filterCode &&
+        !s.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
         return false;
-
       return true;
     });
-  }, [stores, filterResort, filterName, filterCode, selectedResort]);
+  }, [stores, filterResort, filterName, filterCode]);
 
   // ---------- CRUD ----------
+
   const openCreateForm = () => {
     setForm(emptyForm());
     setError("");
-
-    // ⭐ ADD: Auto-select global resort
-    if (selectedResort) {
-      setForm((p) => ({ ...p, resort: selectedResort }));
-    }
-
     setShowForm(true);
   };
 
@@ -229,7 +224,8 @@ const StoreList = () => {
     }
   };
 
-  // ---------- CSV Upload / Export ----------
+  // ---------- CSV Upload / Export (updated to use resort name) ----------
+
   const handleCSVUpload = (file) => {
     setCsvError("");
     if (!file) return;
@@ -249,7 +245,9 @@ const StoreList = () => {
         return;
       }
 
-      const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+      const header = rows[0]
+        .split(",")
+        .map((h) => h.trim().toLowerCase());
       const required = ["name", "resort"];
       for (const r of required) {
         if (!header.includes(r)) {
@@ -274,15 +272,18 @@ const StoreList = () => {
         return;
       }
 
+      // Map parsed resort names -> resort ids (if found)
       const parsedWithResolvedResort = parsed.map((p) => {
         const resortName = p.resort ?? "";
         const matchedId = findResortIdByName(resortName);
         return {
           ...p,
+          // if matched convert to id, else keep the raw value (so downstream you can see it)
           resolvedResort: matchedId || resortName,
         };
       });
 
+      // Add local previews (use resolvedResort)
       const localAdded = parsedWithResolvedResort.map((p) => ({
         _id: `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
         resort: p.resolvedResort,
@@ -326,7 +327,10 @@ const StoreList = () => {
         cols
           .map((c) => {
             let val = s[c];
-            if (c === "resort") val = getResortName(s.resort);
+            if (c === "resort") {
+              // IMPORTANT: use resort *name* for export
+              val = getResortName(s.resort);
+            }
             const str = String(val ?? "");
             if (str.includes(",") || str.includes("\n"))
               return `"${str.replace(/"/g, '""')}"`;
@@ -345,6 +349,7 @@ const StoreList = () => {
     URL.revokeObjectURL(url);
   };
 
+  // resort dropdown options
   const resortOptions = useMemo(
     () =>
       resorts.map((r) => ({
@@ -353,6 +358,8 @@ const StoreList = () => {
       })),
     [resorts]
   );
+
+  // ---------- UI ----------
 
   return (
     <div className="sa-page">

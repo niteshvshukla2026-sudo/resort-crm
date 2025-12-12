@@ -1,27 +1,16 @@
-// src/main.jsx
 import React from "react";
-import { createRoot } from "react-dom/client";
+import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import { ResortProvider } from "./context/ResortContext";
-import App from "./App";
-import "./index.css"; // if you have global css
+import App from "./App.jsx";
+import "./styles/index.css";
+import { AuthProvider } from "./context/AuthContext.jsx";
 
-const rootEl = document.getElementById("root");
-if (!rootEl) {
-  throw new Error("No #root element found in index.html");
-}
-
-const root = createRoot(rootEl);
-
-root.render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AuthProvider>
-      <ResortProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ResortProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

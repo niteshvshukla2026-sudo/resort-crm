@@ -1,8 +1,7 @@
 // src/pages/superAdmin/POList.jsx
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { ResortContext } from "../../context/ResortContext"; // <-- added
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -29,8 +28,6 @@ const generateGrnNo = (dateStr) => {
 const todayStr = new Date().toISOString().slice(0, 10);
 
 const POList = () => {
-  const { activeResort } = useContext(ResortContext); // <-- global resort
-
   const [poList, setPoList] = useState([]);
   // only approved AND without PO/GRN (we'll fetch and filter)
   const [requisitions, setRequisitions] = useState([]);
@@ -79,34 +76,22 @@ const POList = () => {
   const [actionFilter, setActionFilter] = useState("ALL"); // ALL / NeedsGRN / HasGRN / Approved / Open
   const [searchText, setSearchText] = useState("");
 
-  // buildUrl helper: accepts a path like "/api/po" or "/api/requisitions?status=Approved"
-  // appends resort query when activeResort is set and not "all"
-  function buildUrl(path) {
-    const sep = path.includes("?") ? "&" : "?";
-    if (activeResort && activeResort !== "all") {
-      return `${API_BASE}${path}${sep}resort=${encodeURIComponent(activeResort)}`;
-    }
-    return `${API_BASE}${path}`;
-  }
-
   // Load existing POs and master data (approved requisitions)
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      // Use buildUrl for endpoints that should be resort-scoped.
+      // strict backend calls — if any fail we'll show an error
       const [poRes, reqRes, vendorRes, resortRes, storeRes, itemRes] =
         await Promise.all([
-          // PO list filtered by activeResort when set
-          axios.get(buildUrl("/api/po")),
-          // Fetch approved requisitions; buildUrl will append resort if activeResort present
-          axios.get(buildUrl("/api/requisitions?status=Approved")),
-          axios.get(buildUrl("/api/vendors")),
-          // resorts list is global — don't scope by resort
+          axios.get(`${API_BASE}/api/po`),
+          // Fetch approved requisitions (backend query may differ) — we will filter for no po/grn on client too
+          axios.get(`${API_BASE}/api/requisitions?status=Approved`),
+          axios.get(`${API_BASE}/api/vendors`),
           axios.get(`${API_BASE}/api/resorts`),
-          axios.get(buildUrl("/api/stores")),
-          axios.get(buildUrl("/api/items")),
+          axios.get(`${API_BASE}/api/stores`),
+          axios.get(`${API_BASE}/api/items`),
         ]);
 
       const poData = Array.isArray(poRes.data) ? poRes.data : [];
@@ -132,7 +117,7 @@ const POList = () => {
         err?.message ||
         "Failed to load data from backend.";
       setError(msg);
-      // keep lists empty to avoid stale/demodata
+      // keep lists as they are (do not populate demo data)
       setPoList([]);
       setRequisitions([]);
       setVendors([]);
@@ -144,13 +129,10 @@ const POList = () => {
     }
   };
 
-  // sync page-level resortFilter with global activeResort and reload data on change
   useEffect(() => {
-    if (activeResort && activeResort !== "all") setResortFilter(activeResort);
-    else setResortFilter("");
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeResort]);
+  }, []);
 
   // Open blank create form (button is removed, but keep for edit/duplicate use if needed)
   const handleOpenForm = () => {
@@ -517,7 +499,7 @@ const POList = () => {
         if (actionFilter === "Open" && (p.status || "").toString().toLowerCase() !== "open") return false;
       }
 
-      // RESORT (client-side filter as well)
+      // RESORT
       if (resortFilter) {
         const val = p.resort || p.resortName || p.resortId || "";
         if (!val.toString().toLowerCase().includes(resortFilter.toString().toLowerCase())) return false;

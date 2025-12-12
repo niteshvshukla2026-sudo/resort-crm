@@ -4,69 +4,10 @@ const Vendor = require("../models/vendorModel");
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-/**
- * GET /api/vendors
- * Supports query params:
- *   - resort (id or name)
- *   - category
- *   - status
- *   - search  (matches name, code, email, phone)
- *   - limit (number), skip (number)  -> for pagination
- */
+// GET /api/vendors  -> array
 exports.getVendors = async (req, res) => {
   try {
-    const { resort, category, status, search, limit, skip } = req.query;
-
-    const filter = {};
-
-    // resort filter: allow passing either resort id or resort name (string)
-    if (resort) {
-      // if it's an ObjectId-like string, match exact string in resorts array
-      if (isObjectId(resort)) {
-        filter.resorts = resort;
-      } else {
-        // partial / case-insensitive match on resort name stored as string inside resorts array
-        // e.g. resorts: ["Resort A","resort_b"] -> we use regex
-        filter.resorts = { $regex: new RegExp(resort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") };
-      }
-    }
-
-    if (category) {
-      // match vendors where categories array contains the category (case-insensitive)
-      filter.categories = { $elemMatch: { $regex: new RegExp(`^${category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } };
-    }
-
-    if (status) {
-      filter.status = status;
-    }
-
-    // search across common fields
-    if (search) {
-      const q = search.trim();
-      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      filter.$or = [
-        { name: re },
-        { code: re },
-        { email: re },
-        { phone: re },
-        { contactPerson: re },
-      ];
-    }
-
-    // pagination
-    const lim = Math.min(Number(limit) || 1000, 5000); // safe cap
-    const sk = Number(skip) || 0;
-
-    const query = Vendor.find(filter).sort({ createdAt: -1 }).skip(sk).limit(lim);
-
-    const vendors = await query.exec();
-
-    // Optionally include total count when pagination used
-    if (req.query.includeCount === "1") {
-      const total = await Vendor.countDocuments(filter);
-      return res.json({ total, count: vendors.length, vendors });
-    }
-
+    const vendors = await Vendor.find().sort({ createdAt: -1 });
     return res.json(vendors);
   } catch (err) {
     console.error("getVendors error", err);
@@ -74,10 +15,7 @@ exports.getVendors = async (req, res) => {
   }
 };
 
-/**
- * GET /api/vendors/:idOrCode
- * fetch by ObjectId or by code (case-insensitive)
- */
+// GET /api/vendors/:idOrCode
 exports.getVendorByIdOrCode = async (req, res) => {
   const { id } = req.params;
   try {
@@ -99,30 +37,15 @@ exports.getVendorByIdOrCode = async (req, res) => {
   }
 };
 
-/**
- * POST /api/vendors
- * Normalizes categories/resorts into arrays and uppercases code if provided
- */
+// POST /api/vendors
 exports.createVendor = async (req, res) => {
   try {
     const data = { ...req.body };
 
-    // normalize
+    // normalize fields like frontend
     if (data.code) data.code = String(data.code).toUpperCase();
-    if (!Array.isArray(data.categories))
-      data.categories = data.categories ? [data.categories] : [];
-    if (!Array.isArray(data.resorts))
-      data.resorts = data.resorts ? [data.resorts] : [];
-
-    // cast certain numeric-like strings
-    if (data.creditLimit !== undefined) {
-      const n = Number(data.creditLimit);
-      if (!Number.isNaN(n)) data.creditLimit = n;
-    }
-    if (data.minOrderQty !== undefined) {
-      const n = Number(data.minOrderQty);
-      if (!Number.isNaN(n)) data.minOrderQty = n;
-    }
+    if (!Array.isArray(data.categories)) data.categories = data.categories ? [data.categories] : [];
+    if (!Array.isArray(data.resorts)) data.resorts = data.resorts ? [data.resorts] : [];
 
     const vendor = await Vendor.create(data);
     return res.status(201).json(vendor);
@@ -135,10 +58,7 @@ exports.createVendor = async (req, res) => {
   }
 };
 
-/**
- * PUT /api/vendors/:idOrCode
- * Update vendor by id or code
- */
+// PUT /api/vendors/:idOrCode
 exports.updateVendor = async (req, res) => {
   const { id } = req.params;
   try {
@@ -150,16 +70,6 @@ exports.updateVendor = async (req, res) => {
     }
     if (data.resorts && !Array.isArray(data.resorts)) {
       data.resorts = [data.resorts];
-    }
-
-    // sanitize numbers
-    if (data.creditLimit !== undefined) {
-      const n = Number(data.creditLimit);
-      if (!Number.isNaN(n)) data.creditLimit = n;
-    }
-    if (data.minOrderQty !== undefined) {
-      const n = Number(data.minOrderQty);
-      if (!Number.isNaN(n)) data.minOrderQty = n;
     }
 
     let query;
@@ -188,9 +98,7 @@ exports.updateVendor = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/vendors/:idOrCode
- */
+// DELETE /api/vendors/:idOrCode
 exports.deleteVendor = async (req, res) => {
   const { id } = req.params;
   try {
