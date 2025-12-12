@@ -1,0 +1,13 @@
+/* src/index.css — minimal globals to avoid missing-import build error */
+:root {
+  --app-bg: #ffffff;
+  --text: #1f2937;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: var(--app-bg);
+  color: var(--text);
+}
