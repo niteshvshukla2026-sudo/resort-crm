@@ -9,11 +9,9 @@ const ResortSwitcher = () => {
   useEffect(() => {
     async function load() {
       try {
-        // Super Admin → all resorts
-        // Resort user → assigned resorts
-        const res = await api.get("/resort-user/assigned-resorts");
-
-        setResorts(res.data.resorts || []);
+        // ✅ SUPER ADMIN → ALL RESORTS
+        const res = await api.get("/api/resorts");
+        setResorts(res.data || []);
       } catch (err) {
         console.error("Failed to load resorts", err);
       }
@@ -25,9 +23,8 @@ const ResortSwitcher = () => {
     <select
       value={selectedResort}
       onChange={(e) => setSelectedResort(e.target.value)}
-      className="resort-switcher"
+      className="sa-resort-switcher"
     >
-      {/* 👇 GLOBAL OPTION */}
       <option value="ALL">All Resorts</option>
 
       {resorts.map((r) => (
