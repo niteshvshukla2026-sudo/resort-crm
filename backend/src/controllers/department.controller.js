@@ -1,46 +1,78 @@
-// backend/src/controllers/department.controller.js
 import Department from "../models/department.model.js";
 
 /**
  * GET /api/departments
- * optional query: name, code
+ * query: name, code, resort
  */
 export const listDepartments = async (req, res) => {
   try {
+    const { name, code, resort } = req.query;
+
     const filter = {};
-    if (req.query.name) filter.name = { $regex: req.query.name, $options: "i" };
-    if (req.query.code) filter.code = { $regex: req.query.code, $options: "i" };
-    const depts = await Department.find(filter).sort({ createdAt: -1 }).lean();
+
+    // 🔥 RESORT FILTER (MOST IMPORTANT)
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
+    }
+
+    if (name) filter.name = { $regex: name, $options: "i" };
+    if (code) filter.code = { $regex: code, $options: "i" };
+
+    const depts = await Department.find(filter)
+      .populate("resort", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
     res.json(depts);
   } catch (err) {
-    console.error(err);
+    console.error("listDepartments error", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 export const getDepartment = async (req, res) => {
   try {
-    const d = await Department.findById(req.params.id).lean();
+    const d = await Department.findById(req.params.id)
+      .populate("resort", "name")
+      .lean();
+
     if (!d) return res.status(404).json({ message: "Department not found" });
     res.json(d);
   } catch (err) {
-    console.error(err);
+    console.error("getDepartment error", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 export const createDepartment = async (req, res) => {
   try {
-    const { name, code } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ message: "Name is required" });
-    if (!code || !code.trim()) return res.status(400).json({ message: "Code is required" });
+    const { name, code, resort } = req.body;
 
-    // normalize
-    const payload = { name: name.trim(), code: code.trim().toUpperCase() };
+    if (!name || !name.trim())
+      return res.status(400).json({ message: "Name is required" });
 
-    // avoid duplicate codes
-    const exists = await Department.findOne({ code: payload.code });
-    if (exists) return res.status(409).json({ message: "Code already exists" });
+    if (!code || !code.trim())
+      return res.status(400).json({ message: "Code is required" });
+
+    if (!resort)
+      return res.status(400).json({ message: "Resort is required" });
+
+    const payload = {
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      resort,
+    };
+
+    // 🔐 UNIQUE CODE PER RESORT
+    const exists = await Department.findOne({
+      code: payload.code,
+      resort: payload.resort,
+    });
+
+    if (exists)
+      return res
+        .status(409)
+        .json({ message: "Department code already exists for this resort" });
 
     const created = await Department.create(payload);
     res.status(201).json(created);
@@ -52,20 +84,37 @@ export const createDepartment = async (req, res) => {
 
 export const updateDepartment = async (req, res) => {
   try {
-    const { name } = req.body;
-    // We will regenerate/replace code on update only if frontend sends a code.
-    // But per your frontend behavior code is auto-generated; we'll accept payload.code if present
     const payload = {};
-    if (name) payload.name = name.trim();
+
+    if (req.body.name) payload.name = req.body.name.trim();
     if (req.body.code) payload.code = req.body.code.trim().toUpperCase();
 
     if (payload.code) {
-      const exists = await Department.findOne({ code: payload.code, _id: { $ne: req.params.id } });
-      if (exists) return res.status(409).json({ message: "Code already in use" });
+      const current = await Department.findById(req.params.id);
+      if (!current)
+        return res.status(404).json({ message: "Department not found" });
+
+      const exists = await Department.findOne({
+        code: payload.code,
+        resort: current.resort,
+        _id: { $ne: req.params.id },
+      });
+
+      if (exists)
+        return res
+          .status(409)
+          .json({ message: "Department code already in use for this resort" });
     }
 
-    const updated = await Department.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true }).lean();
-    if (!updated) return res.status(404).json({ message: "Department not found" });
+    const updated = await Department.findByIdAndUpdate(
+      req.params.id,
+      payload,
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!updated)
+      return res.status(404).json({ message: "Department not found" });
+
     res.json(updated);
   } catch (err) {
     console.error("updateDepartment error", err);
@@ -76,7 +125,9 @@ export const updateDepartment = async (req, res) => {
 export const deleteDepartment = async (req, res) => {
   try {
     const removed = await Department.findByIdAndDelete(req.params.id);
-    if (!removed) return res.status(404).json({ message: "Department not found" });
+    if (!removed)
+      return res.status(404).json({ message: "Department not found" });
+
     res.json({ success: true });
   } catch (err) {
     console.error("deleteDepartment error", err);
