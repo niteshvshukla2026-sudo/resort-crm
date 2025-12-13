@@ -9,8 +9,8 @@ const ResortSwitcher = () => {
   useEffect(() => {
     async function load() {
       try {
-        // ✅ SUPER ADMIN → ALL RESORTS
-        const res = await api.get("/api/resorts");
+        // ✅ api already has /api prefix
+        const res = await api.get("/resorts");
         setResorts(res.data || []);
       } catch (err) {
         console.error("Failed to load resorts", err);
