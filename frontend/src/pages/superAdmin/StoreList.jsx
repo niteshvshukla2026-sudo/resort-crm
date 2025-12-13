@@ -2,38 +2,38 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useResort } from "../../context/ResortContext";
 
-// ------------------------------------
 const API_BASE =
   (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 const emptyForm = () => ({ _id: undefined, name: "", code: "" });
 
 const StoreList = () => {
-  const { selectedResort } = useResort(); // 🔥 GLOBAL RESORT
+  const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT
 
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // UI / modal
+  // modal
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
-  // Filters
+  // filters
   const [filterName, setFilterName] = useState("");
   const [filterCode, setFilterCode] = useState("");
 
-  // ---------------- LOAD STORES (RESORT-WISE) ----------------
+  // ================= LOAD STORES (RESORT-WISE) =================
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const url =
-        selectedResort && selectedResort !== "ALL"
-          ? `${API_BASE}/stores?resort=${selectedResort}`
-          : `${API_BASE}/stores`;
+      let url = `${API_BASE}/stores`;
+
+      if (selectedResort && selectedResort !== "ALL") {
+        url += `?resort=${selectedResort}`;
+      }
 
       const res = await axios.get(url);
       setStores(Array.isArray(res.data) ? res.data : []);
@@ -47,11 +47,12 @@ const StoreList = () => {
   };
 
   useEffect(() => {
+    if (!selectedResort) return;
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedResort]);
 
-  // ---------------- FILTER ----------------
+  // ================= FILTER =================
   const filtered = useMemo(() => {
     return stores.filter((s) => {
       if (
@@ -59,16 +60,18 @@ const StoreList = () => {
         !s.name?.toLowerCase().includes(filterName.toLowerCase())
       )
         return false;
+
       if (
         filterCode &&
         !s.code?.toLowerCase().includes(filterCode.toLowerCase())
       )
         return false;
+
       return true;
     });
   }, [stores, filterName, filterCode]);
 
-  // ---------------- FORM ----------------
+  // ================= FORM =================
   const openCreateForm = () => {
     if (selectedResort === "ALL") {
       alert("Please select a resort first");
@@ -92,24 +95,28 @@ const StoreList = () => {
     setForm((p) => ({ ...p, [name]: value }));
   };
 
-  // ---------------- SAVE ----------------
+  // ================= SAVE =================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (!form.name.trim())
-      return setError("Store name is required");
+    if (!form.name.trim()) {
+      setError("Store name is required");
+      return;
+    }
 
-    if (selectedResort === "ALL")
-      return setError("Please select a resort");
+    if (!selectedResort || selectedResort === "ALL") {
+      setError("Please select a resort");
+      return;
+    }
 
     try {
       setSaving(true);
 
       const payload = {
         name: form.name.trim(),
-        code: form.code?.trim(),
-        resort: selectedResort, // 🔥 AUTO ATTACH
+        code: form.code?.trim() || "",
+        resort: selectedResort, // 🔥 IMPORTANT
       };
 
       if (form._id) {
@@ -129,7 +136,7 @@ const StoreList = () => {
     }
   };
 
-  // ---------------- DELETE ----------------
+  // ================= DELETE =================
   const handleDelete = async (s) => {
     if (!window.confirm(`Delete store "${s.name}"?`)) return;
     try {
@@ -141,7 +148,7 @@ const StoreList = () => {
     }
   };
 
-  // ---------------- UI ----------------
+  // ================= UI =================
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -155,10 +162,7 @@ const StoreList = () => {
           </p>
         </div>
 
-        <button
-          className="sa-primary-button"
-          onClick={openCreateForm}
-        >
+        <button className="sa-primary-button" onClick={openCreateForm}>
           <i className="ri-add-line" /> New Store
         </button>
       </div>
@@ -229,10 +233,7 @@ const StoreList = () => {
           className="sa-modal-backdrop"
           onClick={() => !saving && setShowForm(false)}
         >
-          <div
-            className="sa-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="sa-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{form._id ? "Edit Store" : "New Store"}</h3>
 
             <form onSubmit={handleSubmit}>

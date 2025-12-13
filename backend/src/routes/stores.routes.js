@@ -8,7 +8,7 @@ import {
 
 const router = express.Router();
 
-router.get("/", listStores);
+router.get("/", listStores);        // 🔥 uses query ?resort=
 router.post("/", createStore);
 router.put("/:id", updateStore);
 router.delete("/:id", deleteStore);

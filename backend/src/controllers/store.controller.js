@@ -1,18 +1,16 @@
-import Store from "../models/Store.js";
+import Store from "../models/storeModel.js";
 
 /**
  * GET /api/stores
- * Resort-wise stores list
+ * Resort-wise stores
  */
 export const listStores = async (req, res) => {
   try {
     const { resort } = req.query;
 
-    console.log("STORE LIST FILTER:", resort); // 🔍 DEBUG
-
+    // 🔥 IMPORTANT: RESORT FILTER
     const filter = {};
 
-    // 🔥 IMPORTANT FIX
     if (resort && resort !== "ALL") {
       filter.resort = resort;
     }
@@ -31,18 +29,18 @@ export const listStores = async (req, res) => {
  */
 export const createStore = async (req, res) => {
   try {
-    const { resort, name, code } = req.body;
+    const { name, code, resort } = req.body;
 
-    if (!resort || !name) {
+    if (!name || !resort) {
       return res
         .status(400)
-        .json({ message: "Resort and Store name required" });
+        .json({ message: "Store name and resort are required" });
     }
 
     const store = await Store.create({
+      name: name.trim(),
+      code: code?.trim() || "",
       resort,
-      name,
-      code: code || "",
     });
 
     res.status(201).json(store);
@@ -58,10 +56,13 @@ export const createStore = async (req, res) => {
 export const updateStore = async (req, res) => {
   try {
     const { id } = req.params;
+    const { name, code, resort } = req.body;
 
-    const updated = await Store.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
+    const updated = await Store.findByIdAndUpdate(
+      id,
+      { name, code, resort },
+      { new: true }
+    );
 
     if (!updated) {
       return res.status(404).json({ message: "Store not found" });
@@ -82,7 +83,6 @@ export const deleteStore = async (req, res) => {
     const { id } = req.params;
 
     const deleted = await Store.findByIdAndDelete(id);
-
     if (!deleted) {
       return res.status(404).json({ message: "Store not found" });
     }
