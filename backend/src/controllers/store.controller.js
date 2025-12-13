@@ -1,13 +1,14 @@
-import Store from "../models/storeModel.js";
+import Store from "../models/Store.js";
 
 /**
  * GET /api/stores
- * Resort-wise store list
- * /api/stores?resort=<resortId>
+ * Resort-wise stores list
  */
 export const listStores = async (req, res) => {
   try {
     const { resort } = req.query;
+
+    console.log("STORE LIST FILTER:", resort); // 🔍 DEBUG
 
     const filter = {};
 
@@ -17,6 +18,7 @@ export const listStores = async (req, res) => {
     }
 
     const stores = await Store.find(filter).sort({ name: 1 });
+
     res.json(stores);
   } catch (err) {
     console.error("listStores error:", err);
@@ -34,7 +36,7 @@ export const createStore = async (req, res) => {
     if (!resort || !name) {
       return res
         .status(400)
-        .json({ message: "Resort and Store name are required" });
+        .json({ message: "Resort and Store name required" });
     }
 
     const store = await Store.create({
@@ -56,25 +58,16 @@ export const createStore = async (req, res) => {
 export const updateStore = async (req, res) => {
   try {
     const { id } = req.params;
-    const { resort, name, code } = req.body;
 
-    if (!resort || !name) {
-      return res
-        .status(400)
-        .json({ message: "Resort and Store name are required" });
-    }
+    const updated = await Store.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
 
-    const store = await Store.findByIdAndUpdate(
-      id,
-      { resort, name, code: code || "" },
-      { new: true, runValidators: true }
-    );
-
-    if (!store) {
+    if (!updated) {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    res.json(store);
+    res.json(updated);
   } catch (err) {
     console.error("updateStore error:", err);
     res.status(500).json({ message: "Failed to update store" });
@@ -88,8 +81,9 @@ export const deleteStore = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const store = await Store.findByIdAndDelete(id);
-    if (!store) {
+    const deleted = await Store.findByIdAndDelete(id);
+
+    if (!deleted) {
       return res.status(404).json({ message: "Store not found" });
     }
 
