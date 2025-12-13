@@ -2,27 +2,22 @@ import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import "../styles/superAdmin.css";
 import { useAuth } from "../context/AuthContext.jsx";
+import ResortSwitcher from "../components/ResortSwitcher"; // ✅ ADDED
 
 const menuItems = [
-  // TOP
   { label: "Dashboard", icon: "ri-dashboard-line", path: "/super-admin/dashboard" },
 
-  // MASTERS
   { type: "section", label: "Masters" },
   { label: "Resorts", icon: "ri-building-4-line", path: "/super-admin/resorts" },
   { label: "Departments", icon: "ri-team-line", path: "/super-admin/departments" },
   { label: "Items Category", icon: "ri-archive-2-line", path: "/super-admin/item-categories" },
   { label: "Items", icon: "ri-archive-2-line", path: "/super-admin/items" },
- { label: "Stores", icon: "ri-store-2-line", path: "/super-admin/stores" },
+  { label: "Stores", icon: "ri-store-2-line", path: "/super-admin/stores" },
   { label: "Vendors", icon: "ri-truck-line", path: "/super-admin/vendors" },
-  // <-- Recipe menu item added here -->
-   
   { label: "Recipes", icon: "ri-book-2-line", path: "/super-admin/recipes" },
-
   { label: "Users", icon: "ri-user-settings-line", path: "/super-admin/users" },
-  { label: "Roles", icon: "ri-user-star-line", path: "/super-admin/roles" }, // NEW
+  { label: "Roles", icon: "ri-user-star-line", path: "/super-admin/roles" },
 
-  // PURCHASE
   { type: "section", label: "Purchase" },
   { label: "Requisitions", icon: "ri-file-list-2-line", path: "/super-admin/requisitions" },
   { label: "Purchase Orders", icon: "ri-file-paper-line", path: "/super-admin/po" },
@@ -30,7 +25,6 @@ const menuItems = [
   { label: "Consumption", icon: "ri-goblet-line", path: "/super-admin/consumption" },
   { label: "Store Replacement", icon: "ri-exchange-box-line", path: "/super-admin/store-replacement" },
 
-  // INVENTORY / REPORTS
   { type: "section", label: "Inventory & Reports" },
   { label: "Inventory", icon: "ri-archive-line", path: "/super-admin/inventory" },
   { label: "Reports", icon: "ri-bar-chart-2-line", path: "/super-admin/reports" },
@@ -47,6 +41,7 @@ const SuperAdminLayout = () => {
 
   return (
     <div className="sa-app-shell">
+      {/* ===== SIDEBAR ===== */}
       <aside className="sa-sidebar">
         <div className="sa-logo-block">
           <div className="sa-logo-circle">R</div>
@@ -83,12 +78,14 @@ const SuperAdminLayout = () => {
         </div>
       </aside>
 
+      {/* ===== MAIN ===== */}
       <div className="sa-main">
+        {/* ===== TOP BAR ===== */}
         <header className="sa-topbar">
           <div className="sa-topbar-left">
-            <select className="sa-resort-switcher">
-              <option>All Resorts</option>
-            </select>
+            {/* 🔥 REAL GLOBAL RESORT DROPDOWN */}
+            <ResortSwitcher />
+
             <div className="sa-topbar-divider" />
             <div className="sa-breadcrumb">Super Admin / Panel</div>
           </div>
@@ -113,6 +110,7 @@ const SuperAdminLayout = () => {
           </div>
         </header>
 
+        {/* ===== PAGE CONTENT ===== */}
         <main className="sa-content">
           <Outlet />
         </main>

@@ -1,25 +1,40 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import api from "../utils/api";
+import { useResort } from "../context/ResortContext";
 
-const ResortSwitcher = ({ selected, onChange }) => {
+const ResortSwitcher = () => {
+  const { selectedResort, setSelectedResort } = useResort();
   const [resorts, setResorts] = useState([]);
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await api.get('/resort-user/assigned-resorts');
+        // Super Admin → all resorts
+        // Resort user → assigned resorts
+        const res = await api.get("/resort-user/assigned-resorts");
+
         setResorts(res.data.resorts || []);
       } catch (err) {
-        console.error('Failed to load resorts', err);
+        console.error("Failed to load resorts", err);
       }
     }
     load();
   }, []);
 
   return (
-    <select value={selected || ''} onChange={(e) => onChange(e.target.value)}>
-      <option value="">-- Select Resort --</option>
-      {resorts.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
+    <select
+      value={selectedResort}
+      onChange={(e) => setSelectedResort(e.target.value)}
+      className="resort-switcher"
+    >
+      {/* 👇 GLOBAL OPTION */}
+      <option value="ALL">All Resorts</option>
+
+      {resorts.map((r) => (
+        <option key={r._id} value={r._id}>
+          {r.name}
+        </option>
+      ))}
     </select>
   );
 };
