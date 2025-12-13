@@ -1,8 +1,31 @@
-import Store from "../models/Store.js";
+import Store from "../models/storeModel.js";
+
+/**
+ * GET /api/stores
+ * Resort-wise store list
+ * /api/stores?resort=<resortId>
+ */
+export const listStores = async (req, res) => {
+  try {
+    const { resort } = req.query;
+
+    const filter = {};
+
+    // 🔥 IMPORTANT FIX
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
+    }
+
+    const stores = await Store.find(filter).sort({ name: 1 });
+    res.json(stores);
+  } catch (err) {
+    console.error("listStores error:", err);
+    res.status(500).json({ message: "Failed to fetch stores" });
+  }
+};
 
 /**
  * POST /api/stores
- * Create new store (resort-wise)
  */
 export const createStore = async (req, res) => {
   try {
@@ -16,8 +39,8 @@ export const createStore = async (req, res) => {
 
     const store = await Store.create({
       resort,
-      name: name.trim(),
-      code: code?.trim() || "",
+      name,
+      code: code || "",
     });
 
     res.status(201).json(store);
@@ -28,33 +51,7 @@ export const createStore = async (req, res) => {
 };
 
 /**
- * GET /api/stores
- * ✅ Resort-wise store listing
- * Query: ?resort=<resortId>
- */
-export const listStores = async (req, res) => {
-  try {
-    const filter = {};
-
-    // 🔥 MAIN FIX
-    if (req.query.resort) {
-      filter.resort = req.query.resort;
-    }
-
-    const stores = await Store.find(filter)
-      .sort({ name: 1 })
-      .lean();
-
-    res.json(stores);
-  } catch (err) {
-    console.error("listStores error:", err);
-    res.status(500).json({ message: "Failed to fetch stores" });
-  }
-};
-
-/**
  * PUT /api/stores/:id
- * Update store
  */
 export const updateStore = async (req, res) => {
   try {
@@ -67,21 +64,17 @@ export const updateStore = async (req, res) => {
         .json({ message: "Resort and Store name are required" });
     }
 
-    const updated = await Store.findByIdAndUpdate(
+    const store = await Store.findByIdAndUpdate(
       id,
-      {
-        resort,
-        name: name.trim(),
-        code: code?.trim() || "",
-      },
+      { resort, name, code: code || "" },
       { new: true, runValidators: true }
     );
 
-    if (!updated) {
+    if (!store) {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    res.json(updated);
+    res.json(store);
   } catch (err) {
     console.error("updateStore error:", err);
     res.status(500).json({ message: "Failed to update store" });
@@ -93,13 +86,14 @@ export const updateStore = async (req, res) => {
  */
 export const deleteStore = async (req, res) => {
   try {
-    const deleted = await Store.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
 
-    if (!deleted) {
+    const store = await Store.findByIdAndDelete(id);
+    if (!store) {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    res.json({ success: true });
+    res.json({ message: "Store deleted" });
   } catch (err) {
     console.error("deleteStore error:", err);
     res.status(500).json({ message: "Failed to delete store" });
