@@ -1,7 +1,6 @@
 // src/pages/superAdmin/VendorList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -40,8 +39,6 @@ const emptyForm = () => ({
 });
 
 const VendorList = () => {
-  const { selectedResort } = useResort();
-
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,13 +65,7 @@ const VendorList = () => {
     try {
       setLoading(true);
       setError("");
-      const url =
-  selectedResort && selectedResort !== "ALL"
-    ? `${API_BASE}/api/vendors?resort=${selectedResort}`
-    : `${API_BASE}/api/vendors`;
-
-const res = await axios.get(url);
-
+      const res = await axios.get(`${API_BASE}/api/vendors`);
       const serverVendors = Array.isArray(res.data) ? res.data : [];
       const normalized = serverVendors.map((v) => ({
         ...v,
@@ -507,16 +498,11 @@ const res = await axios.get(url);
 
     try {
       setSaving(true);
-     const payload = {
-  ...form,
-  resorts:
-    form.resorts && form.resorts.length > 0
-      ? form.resorts
-      : selectedResort !== "ALL"
-      ? [selectedResort]
-      : [],
-};
-
+      const payload = {
+        ...form,
+        categories: form.categories || [],
+        resorts: form.resorts || [],
+      };
 
       if (!payload.category && payload.categories && payload.categories.length) {
         payload.category = payload.categories[0];
