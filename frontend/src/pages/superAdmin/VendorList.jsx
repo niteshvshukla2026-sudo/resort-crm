@@ -1,7 +1,6 @@
 // src/pages/superAdmin/VendorList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useResort } from "../../context/ResortContext"; // 🔥 ADDED (RESORT FILTER)
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -40,8 +39,6 @@ const emptyForm = () => ({
 });
 
 const VendorList = () => {
-  const { selectedResort } = useResort(); // 🔥 ADDED (GLOBAL RESORT)
-
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,22 +60,13 @@ const VendorList = () => {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // -----------------------------
-  // LOAD VENDORS (RESORT WISE)
-  // -----------------------------
+  // --- load vendors, categories, resorts ---
   const loadVendors = async () => {
     try {
       setLoading(true);
       setError("");
-
-      const res = await axios.get(`${API_BASE}/api/vendors`, {
-        params: {
-          resort: selectedResort || "ALL", // 🔥 ADDED (RESORT PARAM)
-        },
-      });
-
+      const res = await axios.get(`${API_BASE}/api/vendors`);
       const serverVendors = Array.isArray(res.data) ? res.data : [];
-
       const normalized = serverVendors.map((v) => ({
         ...v,
         categories:
@@ -94,12 +82,11 @@ const VendorList = () => {
             ? [v.resort]
             : [],
       }));
-
       setVendors(normalized);
     } catch (err) {
       console.error("load vendors error", err?.response?.status, err?.response?.data);
       setError("Failed to load vendors");
-      setVendors([]);
+      setVendors([]); // no demo data
     } finally {
       setLoading(false);
     }
@@ -155,21 +142,14 @@ const VendorList = () => {
     }
   };
 
-  // 🔁 RELOAD vendors on RESORT CHANGE
   useEffect(() => {
-    if (!selectedResort) return;
     loadVendors();
-  }, [selectedResort]); // 🔥 ADDED
-
-  // initial load
-  useEffect(() => {
     loadCategories();
     loadResorts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------
-  // SANITIZERS & HELPERS (UNCHANGED)
-  // -----------------------------
+  // --- sanitizers and helpers ---
   const sanitizeLetters = (v) => String(v || "").replace(/[^A-Za-z ]+/g, "");
   const sanitizeDigits = (v) => String(v || "").replace(/\D+/g, "");
   const sanitizeDecimal = (v) => String(v || "").replace(/[^0-9.]/g, "");
@@ -178,7 +158,7 @@ const VendorList = () => {
 
   // Strict regexes
   const regex = {
-    name: /^[A-Za-z ]+$/,
+    name: /^[A-Za-z ]+$/, // only alphabets and spaces
     phone: /^\d{10}$/,
     whatsapp: /^\d{10}$/,
     alternatePhone: /^\d{10}$/,
@@ -193,7 +173,7 @@ const VendorList = () => {
     codeAllowed: /^[A-Z0-9_]+$/,
   };
 
-  // Generate vendor code from name
+  // Generate vendor code from name: initials of up to 4 words + last 4 digits of timestamp
   const generateCodeFromName = (name) => {
     if (!name) return "";
     const words = name
@@ -204,7 +184,12 @@ const VendorList = () => {
     if (words.length === 0) return `VEND_${String(Date.now()).slice(-4)}`;
     const initials = words.map((w) => w[0].toUpperCase()).join("");
     const suffix = String(Date.now()).slice(-4);
-    return `${initials}_${suffix}`;
+    let base = `${initials}_${suffix}`;
+    const existingCodes = new Set(
+      vendors.map((v) => (v.code || "").toUpperCase())
+    );
+    if (!existingCodes.has(base)) return base;
+    return `${initials}_${suffix}${Math.floor(Math.random() * 90 + 10)}`;
   };
 
   const ensureUniqueCode = (candidate) => {
@@ -214,12 +199,14 @@ const VendorList = () => {
       vendors.map((v) => (v.code || "").toUpperCase())
     );
     if (!existing.has(up)) return up;
+    for (let i = 1; i < 1000; i++) {
+      const tryCode = `${up}_${i}`;
+      if (!existing.has(tryCode)) return tryCode;
+    }
     return `${up}_${Date.now().toString().slice(-4)}`;
   };
 
-  // -----------------------------
-  // VALIDATORS (UNCHANGED)
-  // -----------------------------
+  // validators
   const validators = {
     code: (v) => {
       if (!v) return "Vendor code is required";
@@ -239,7 +226,77 @@ const VendorList = () => {
         return "Phone must be exactly 10 digits";
       return undefined;
     },
-    // ⬇️ (rest validators SAME AS YOUR FILE)
+    whatsapp: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.whatsapp.test(String(v).trim()))
+        return "WhatsApp must be exactly 10 digits";
+      return undefined;
+    },
+    alternatePhone: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.alternatePhone.test(String(v).trim()))
+        return "Alternate phone must be exactly 10 digits";
+      return undefined;
+    },
+    email: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.email.test(String(v).trim()))
+        return "Invalid email format";
+      return undefined;
+    },
+    gstNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.gst.test(String(v).trim()))
+        return "GSTIN invalid (must follow 15-char GSTIN pattern)";
+      return undefined;
+    },
+    panNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.pan.test(String(v).trim()))
+        return "PAN invalid (format AAAAA9999A)";
+      return undefined;
+    },
+    ifsc: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.ifsc.test(String(v).trim()))
+        return "IFSC invalid (e.g. SBIN0000001)";
+      return undefined;
+    },
+    pincode: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.pincode.test(String(v).trim()))
+        return "Pincode must be 6 digits and not start with 0";
+      return undefined;
+    },
+    accountNumber: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.accountNumber.test(String(v).trim()))
+        return "Account number must be 6-20 digits";
+      return undefined;
+    },
+    creditLimit: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.decimal.test(String(v).trim()))
+        return "Credit limit must be a number";
+      return undefined;
+    },
+    deliveryTime: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.integer.test(String(v).trim()))
+        return "Delivery time must be whole days (integer)";
+      return undefined;
+    },
+    minOrderQty: (v) => {
+      if (isEmpty(v)) return undefined;
+      if (!regex.integer.test(String(v).trim()))
+        return "MOQ must be a whole number";
+      return undefined;
+    },
+    category: (v) => {
+      if (!v || !Array.isArray(v) || v.length === 0)
+        return "At least one category is required";
+      return undefined;
+    },
   };
 
   const validateAll = () => {
@@ -253,10 +310,7 @@ const VendorList = () => {
     return Object.keys(newErr).length === 0;
   };
 
-  // ⏭️ PART 2 CONTINUES FROM HERE
-  // -----------------------------
-  // FORM HANDLERS (UNCHANGED)
-  // -----------------------------
+  // --- form handlers ---
   const openCreateForm = () => {
     setForm(emptyForm());
     setFieldErrors({});
@@ -289,7 +343,7 @@ const VendorList = () => {
       email: v.email || "",
       addressLine1: v.addressLine1 || "",
       addressLine2: v.addressLine2 || "",
-      city: v.city || "",
+      city: v.city || v.address || "",
       state: v.state || "",
       pincode: v.pincode || "",
       country: v.country || "",
@@ -342,8 +396,9 @@ const VendorList = () => {
 
       const updated = { ...p, [name]: newVal };
 
-      if (name === "name" && (!p.code || p.code === "")) {
-        updated.code = ensureUniqueCode(generateCodeFromName(newVal));
+      if (name === "name" && (p.code === "" || p.code === undefined)) {
+        const gen = generateCodeFromName(newVal);
+        updated.code = ensureUniqueCode(gen);
       }
 
       return updated;
@@ -361,7 +416,13 @@ const VendorList = () => {
       const set = new Set(p.categories || []);
       if (set.has(cat)) set.delete(cat);
       else set.add(cat);
-      return { ...p, categories: Array.from(set) };
+      const updated = { ...p, categories: Array.from(set) };
+      setFieldErrors((prev) => {
+        const c = { ...prev };
+        delete c.category;
+        return c;
+      });
+      return updated;
     });
   };
 
@@ -374,13 +435,62 @@ const VendorList = () => {
     });
   };
 
-  // -----------------------------
-  // SUBMIT (RESORT AUTO-ATTACH 🔥)
-  // -----------------------------
+  const handlePasteLetters = (ev, fieldName) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    const sanitized = sanitizeLetters(text);
+    setForm((p) => {
+      const updated = { ...p, [fieldName]: sanitized };
+      if (fieldName === "name" && (p.code === "" || p.code === undefined)) {
+        updated.code = ensureUniqueCode(generateCodeFromName(sanitized));
+      }
+      return updated;
+    });
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  const handlePasteDigits = (ev, fieldName, limit) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    let sanitized = sanitizeDigits(text);
+    if (limit) sanitized = sanitized.slice(0, limit);
+    setForm((p) => ({ ...p, [fieldName]: sanitized }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  const handlePasteDecimal = (ev, fieldName) => {
+    ev.preventDefault();
+    const text = (ev.clipboardData || window.clipboardData).getData("text");
+    const sanitized = sanitizeDecimal(text);
+    setForm((p) => ({ ...p, [fieldName]: sanitized }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  const handleGenerateCode = () => {
+    const gen = generateCodeFromName(form.name || "");
+    setForm((p) => ({ ...p, code: ensureUniqueCode(gen) }));
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.code;
+      return copy;
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
     if (!validateAll()) {
       setError("Please fix validation errors.");
       return;
@@ -388,147 +498,1045 @@ const VendorList = () => {
 
     try {
       setSaving(true);
-
       const payload = {
         ...form,
         categories: form.categories || [],
-        resorts:
-          form.resorts && form.resorts.length
-            ? form.resorts
-            : selectedResort
-            ? [selectedResort] // 🔥 ADDED
-            : [],
+        resorts: form.resorts || [],
       };
 
+      if (!payload.category && payload.categories && payload.categories.length) {
+        payload.category = payload.categories[0];
+      }
+
+      if (!payload.code) delete payload.code;
       if (form._id) {
-        await axios.put(`${API_BASE}/api/vendors/${form._id}`, payload);
+        const res = await axios
+          .put(`${API_BASE}/api/vendors/${form._id}`, payload)
+          .catch(() => null);
+        if (res?.data) {
+          const updated = {
+            ...res.data,
+            categories:
+              res.data.categories ||
+              (res.data.category ? [res.data.category] : []),
+            resorts:
+              res.data.resorts || (res.data.resort ? [res.data.resort] : []),
+          };
+          setVendors((p) =>
+            p.map((x) => (x._id === form._id || x.id === form._id ? updated : x))
+          );
+        } else {
+          const updated = {
+            ...(vendors.find((x) => x._id === form._id) || {}),
+            ...payload,
+          };
+          setVendors((p) =>
+            p.map((x) => (x._id === form._id || x.id === form._id ? updated : x))
+          );
+        }
       } else {
-        await axios.post(`${API_BASE}/api/vendors`, payload);
+        payload.code = ensureUniqueCode(
+          String(payload.code || "").toUpperCase()
+        );
+        const res = await axios
+          .post(`${API_BASE}/api/vendors`, payload)
+          .catch(() => null);
+        const created = res?.data || { ...payload, _id: `local_${Date.now()}` };
+        created.categories =
+          created.categories ||
+          (created.category ? [created.category] : []);
+        created.resorts =
+          created.resorts || (created.resort ? [created.resort] : []);
+        setVendors((p) => [created, ...p]);
       }
 
       setShowForm(false);
       setForm(emptyForm());
-      loadVendors();
+      setFieldErrors({});
     } catch (err) {
       console.error("save vendor error", err);
-      setError("Failed to save vendor");
+      setError(err?.response?.data?.message || "Failed to save vendor");
     } finally {
       setSaving(false);
     }
   };
 
-  // -----------------------------
-  // CSV UPLOAD (RESORT AUTO-ATTACH 🔥)
-  // -----------------------------
-  const handleCSVUpload = async (file) => {
-    if (!file) return;
-    setCsvLoading(true);
-    setCsvError("");
-
+  const handleDelete = async (v) => {
+    if (!window.confirm(`Delete vendor ${v.name || v.code}?`)) return;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (selectedResort) {
-        formData.append("resort", selectedResort); // 🔥 ADDED
-      }
-
-      await axios.post(`${API_BASE}/api/vendors/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      loadVendors();
+      setVendors((p) =>
+        p.filter(
+          (x) => (x._id || x.id || x.code) !== (v._id || v.id || v.code)
+        )
+      );
+      await axios
+        .delete(`${API_BASE}/api/vendors/${v._id || v.id || v.code}`)
+        .catch(() => null);
     } catch (err) {
-      console.error("CSV upload failed", err);
-      setCsvError("CSV upload failed");
-    } finally {
-      setCsvLoading(false);
+      console.error("delete vendor error", err);
+      setError("Failed to delete vendor");
+      await loadVendors();
     }
   };
 
-  // -----------------------------
-  // FILTERED LIST (UNCHANGED)
-  // -----------------------------
+  const handleCSVUpload = (file) => {
+    setCsvError("");
+    if (!file) return;
+    setCsvLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target.result;
+      const rows = text
+        .split(/\r?\n/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+      if (rows.length === 0) {
+        setCsvError("Empty CSV file");
+        setCsvLoading(false);
+        return;
+      }
+
+      const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+      const headerSet = new Set(header);
+      if (!headerSet.has("code") || !headerSet.has("name")) {
+        setCsvError("CSV must contain at least: code,name columns");
+        setCsvLoading(false);
+        return;
+      }
+
+      const parsed = [];
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(",").map((c) => c.trim());
+        if (cols.length === 0) continue;
+        const obj = {};
+        for (let c = 0; c < header.length; c++) obj[header[c]] = cols[c] ?? "";
+        parsed.push(obj);
+      }
+
+      if (parsed.length === 0) {
+        setCsvError("No data rows in CSV");
+        setCsvLoading(false);
+        return;
+      }
+
+      const payloads = parsed.map((p) => {
+        const nameVal = p.name || "";
+        const codeVal = p.code || generateCodeFromName(nameVal);
+        const catsRaw = p.categories || p.category || "";
+        const cats = catsRaw
+          ? catsRaw
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        const resortsRaw = p.resorts || p.resort || "";
+        const rlist = resortsRaw
+          ? resortsRaw
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+
+        return {
+          code: ensureUniqueCode(String(codeVal).toUpperCase()),
+          name: nameVal,
+          vendorType: p.vendortype || p.vendor_type || "",
+          categories: cats,
+          category: cats.length ? cats[0] : "",
+          resorts: rlist,
+          contactPerson: p.contactperson || p.contact_person || p.contact || "",
+          phone: p.phone || p.contact || "",
+          whatsapp: p.whatsapp || "",
+          alternatePhone:
+            p.alternatephone || p.altphone || p.alt_phone || "",
+          email: p.email || "",
+          addressLine1: p.address || "",
+          addressLine2: p.addressline2 || "",
+          city: p.city || "",
+          state: p.state || "",
+          pincode: p.pincode || "",
+          country: p.country || "",
+          gstNumber: p.gstnumber || "",
+          panNumber: p.pannumber || "",
+          paymentTerms: p.paymentterms || "",
+          creditLimit: p.creditlimit || "",
+          paymentMode: p.paymentmode || "",
+          bankName: p.bankname || "",
+          accountNumber: p.accountnumber || "",
+          ifsc: p.ifsc || "",
+          branch: p.branch || "",
+          deliveryTime: p.deliverytime || "",
+          minOrderQty: p.minqty || "",
+          status: p.status || "Active",
+          notes: p.notes || "",
+        };
+      });
+
+      const localAdded = payloads.map((pl) => ({
+        ...pl,
+        _id: `local_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      }));
+      setVendors((prev) => [...localAdded, ...prev]);
+
+      try {
+        for (const pl of payloads) {
+          try {
+            const res = await axios
+              .post(`${API_BASE}/api/vendors`, pl)
+              .catch(() => null);
+            if (res?.data) {
+              setVendors((prev) =>
+                prev.map((it) => (it.code === pl.code ? res.data : it))
+              );
+            }
+          } catch (err) {
+            console.warn("vendor CSV create failed for", pl.code, err);
+          }
+        }
+      } catch (err) {
+        console.error("CSV bulk create error", err);
+      } finally {
+        setCsvLoading(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setCsvError("Failed to read file");
+      setCsvLoading(false);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const handleExportCSV = (list) => {
+    const cols = [
+      "code",
+      "name",
+      "vendorType",
+      "categories",
+      "resorts",
+      "contactPerson",
+      "phone",
+      "whatsapp",
+      "alternatePhone",
+      "email",
+      "addressLine1",
+      "addressLine2",
+      "city",
+      "state",
+      "pincode",
+      "country",
+      "gstNumber",
+      "panNumber",
+      "fssaiNumber",
+      "paymentTerms",
+      "creditLimit",
+      "paymentMode",
+      "bankName",
+      "accountNumber",
+      "ifsc",
+      "branch",
+      "deliveryTime",
+      "minOrderQty",
+      "status",
+      "notes",
+    ];
+    const rows = [
+      cols.join(","),
+      ...list.map((v) =>
+        cols
+          .map((c) => {
+            const value =
+              c === "categories"
+                ? Array.isArray(v.categories)
+                  ? v.categories.join(";")
+                  : v.categories || v.category || ""
+                : c === "resorts"
+                ? Array.isArray(v.resorts)
+                  ? v.resorts.join(";")
+                  : v.resorts || v.resort || ""
+                : String(v[c] ?? "");
+            if (value.includes(",") || value.includes("\n"))
+              return `"${value.replace(/"/g, '""')}"`;
+            return value;
+          })
+          .join(",")
+      ),
+    ];
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vendors-export-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filtered = useMemo(() => {
     return vendors.filter((v) => {
-      if (filterName && !v.name?.toLowerCase().includes(filterName.toLowerCase()))
+      if (
+        filterName &&
+        !v.name?.toLowerCase().includes(filterName.toLowerCase())
+      )
         return false;
-      if (filterCode && !v.code?.toLowerCase().includes(filterCode.toLowerCase()))
+      if (
+        filterCode &&
+        !v.code?.toLowerCase().includes(filterCode.toLowerCase())
+      )
         return false;
-      if (filterCity && !v.city?.toLowerCase().includes(filterCity.toLowerCase()))
+      if (
+        filterCity &&
+        !v.city?.toLowerCase().includes(filterCity.toLowerCase())
+      )
         return false;
-      if (filterPhone && !v.phone?.includes(filterPhone)) return false;
-      if (filterEmail && !v.email?.toLowerCase().includes(filterEmail.toLowerCase()))
+      if (
+        filterPhone &&
+        !v.phone?.toLowerCase().includes(filterPhone.toLowerCase())
+      )
+        return false;
+      if (
+        filterEmail &&
+        !v.email?.toLowerCase().includes(filterEmail.toLowerCase())
+      )
         return false;
       return true;
     });
   }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
 
+  const cities = useMemo(
+    () => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))),
+    [vendors]
+  );
+
   const findResortName = (id) => {
-    const r = resorts.find((x) => x.id === id);
+    const r = resorts.find(
+      (x) => x.id === id || x._id === id || x.id === String(id)
+    );
     return r ? r.name : id;
   };
 
-  // -----------------------------
-  // JSX
-  // -----------------------------
   return (
     <div className="sa-page">
       <div className="sa-page-header">
-        <h2>Vendors</h2>
-        <button className="sa-primary-button" onClick={openCreateForm}>
-          + New Vendor
-        </button>
+        <div>
+          <h2>Vendors</h2>
+          <p>Approved suppliers for all resort purchases.</p>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                handleCSVUpload(f);
+                e.target.value = "";
+              }}
+              title="Upload CSV (columns: code,name,... )"
+            />
+            {csvLoading ? (
+              <span style={{ marginLeft: 6 }}>Uploading...</span>
+            ) : (
+              <span style={{ marginLeft: 6 }}>Upload CSV</span>
+            )}
+          </label>
+
+          <button
+            className="sa-secondary-button"
+            onClick={() => handleExportCSV(filtered)}
+          >
+            Export CSV
+          </button>
+
+          <button
+            className="sa-primary-button"
+            type="button"
+            onClick={openCreateForm}
+          >
+            <i className="ri-add-line" /> New Vendor
+          </button>
+        </div>
       </div>
 
-      {error && <div className="sa-error">{error}</div>}
+      {error && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+      {csvError && (
+        <div className="sa-modal-error" style={{ marginBottom: 8 }}>
+          {csvError}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div
+        className="sa-card"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <label>
+          Name
+          <input
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            placeholder="Search name..."
+            style={{ marginLeft: 8 }}
+          />
+        </label>
+
+        <label>
+          Code
+          <input
+            value={filterCode}
+            onChange={(e) => setFilterCode(e.target.value)}
+            placeholder="Code..."
+            style={{ marginLeft: 8 }}
+          />
+        </label>
+
+        <label>
+          City
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            style={{ marginLeft: 8 }}
+          >
+            <option value="">All</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Phone
+          <input
+            value={filterPhone}
+            onChange={(e) => setFilterPhone(e.target.value)}
+            placeholder="Phone..."
+            style={{ marginLeft: 8 }}
+          />
+        </label>
+
+        <label>
+          Email
+          <input
+            value={filterEmail}
+            onChange={(e) => setFilterEmail(e.target.value)}
+            placeholder="Email..."
+            style={{ marginLeft: 8 }}
+          />
+        </label>
+
+        <div style={{ marginLeft: "auto", color: "#9ca3af" }}>
+          Showing {filtered.length} / {vendors.length}
+        </div>
+      </div>
 
       <div className="sa-card">
-        <table className="sa-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>City</th>
-              <th>Categories</th>
-              <th>Resorts</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((v) => (
-              <tr key={v._id}>
-                <td>{v.code}</td>
-                <td>{v.name}</td>
-                <td>{v.city}</td>
-                <td>{v.categories?.join(", ")}</td>
-                <td>
-                  {Array.isArray(v.resorts)
-                    ? v.resorts.map(findResortName).join(", ")
-                    : ""}
-                </td>
-                <td>{v.status}</td>
-                <td>
-                  <button onClick={() => openEditForm(v)}>Edit</button>
-                </td>
+        {loading ? (
+          <div>Loading vendors...</div>
+        ) : filtered.length === 0 ? (
+          <div>No vendors match the filters. Add vendor or try clearing filters.</div>
+        ) : (
+          <table className="sa-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Vendor Name</th>
+                <th>Contact</th>
+                <th>Email</th>
+                <th>City</th>
+                <th>Categories</th>
+                <th>Resorts</th>
+                <th>GST</th>
+                <th>Payment Terms</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {filtered.map((v) => (
+                <tr key={v._id || v.id || v.code}>
+                  <td>{v.code}</td>
+                  <td>{v.name}</td>
+                  <td>
+                    {v.contactPerson ? <div>{v.contactPerson}</div> : null}
+                    <div>
+                      {v.phone}
+                      {v.whatsapp ? ` (wa: ${v.whatsapp})` : ""}
+                    </div>
+                  </td>
+                  <td>{v.email}</td>
+                  <td>{v.city}</td>
+                  <td>
+                    {Array.isArray(v.categories)
+                      ? v.categories.join(", ")
+                      : v.category || ""}
+                  </td>
+                  <td>
+                    {Array.isArray(v.resorts)
+                      ? v.resorts.map(findResortName).join(", ")
+                      : v.resort
+                      ? findResortName(v.resort)
+                      : ""}
+                  </td>
+                  <td>{v.gstNumber}</td>
+                  <td>{v.paymentTerms}</td>
+                  <td>{v.status}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => openEditForm(v)}
+                      title="Edit"
+                    >
+                      <i className="ri-edit-line" />
+                    </button>
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(v));
+                      }}
+                      title="Copy JSON"
+                    >
+                      <i className="ri-file-copy-line" />
+                    </button>
+                    <button
+                      className="sa-secondary-button"
+                      onClick={() => handleDelete(v)}
+                      title="Delete"
+                    >
+                      <i className="ri-delete-bin-6-line" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* MODAL */}
+      {/* Modal: create/edit */}
       {showForm && (
-        <div className="sa-modal-backdrop">
-          <div className="sa-modal">
-            <form onSubmit={handleSubmit}>
-              {/* 🔥 FORM CONTENT UNCHANGED */}
+        <div
+          className="sa-modal-backdrop"
+          onClick={() => !saving && setShowForm(false)}
+        >
+          <div
+            className="sa-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 980 }}
+          >
+            <h3>{form._id ? "Edit Vendor" : "New Vendor"}</h3>
+            <p className="sa-modal-sub">
+              Add or update a supplier used in purchase orders. (Strict
+              validations enabled)
+            </p>
+
+            <form className="sa-modal-form" onSubmit={handleSubmit}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <label style={{ flex: 1 }}>
+                  Vendor Name *
+                  <input
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    onPaste={(e) => handlePasteLetters(e, "name")}
+                    placeholder="Only letters and spaces"
+                  />
+                  {fieldErrors.name && (
+                    <div className="sa-field-error">
+                      {fieldErrors.name}
+                    </div>
+                  )}
+                </label>
+
+                <label style={{ width: 260 }}>
+                  Code *
+                  <div
+                    style={{ display: "flex", gap: 6, alignItems: "center" }}
+                  >
+                    <input
+                      name="code"
+                      value={form.code}
+                      onChange={handleChange}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const text = (
+                          e.clipboardData || window.clipboardData
+                        ).getData("text");
+                        const sanitized = String(text || "")
+                          .toUpperCase()
+                          .replace(/\s+/g, "_")
+                          .replace(/[^A-Z0-9_]/g, "");
+                        setForm((p) => ({
+                          ...p,
+                          code: ensureUniqueCode(sanitized),
+                        }));
+                        setFieldErrors((prev) => {
+                          const c = { ...prev };
+                          delete c.code;
+                          return c;
+                        });
+                      }}
+                      placeholder="Auto generated from name"
+                    />
+                    <button
+                      type="button"
+                      className="sa-secondary-button"
+                      onClick={handleGenerateCode}
+                    >
+                      Generate
+                    </button>
+                  </div>
+                  {fieldErrors.code && (
+                    <div className="sa-field-error">
+                      {fieldErrors.code}
+                    </div>
+                  )}
+                </label>
+              </div>
+
+              <label>
+                Vendor Type
+                <select
+                  name="vendorType"
+                  value={form.vendorType}
+                  onChange={handleChange}
+                >
+                  <option value="">Select type</option>
+                  <option value="Company">Company</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Distributor">Distributor</option>
+                  <option value="Manufacturer">Manufacturer</option>
+                </select>
+              </label>
+
+              {/* Categories (multi-select checkboxes) */}
+              <label>
+                Categories * (select one or more)
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 6,
+                  }}
+                >
+                  {categories.length === 0 ? (
+                    <div style={{ color: "#9ca3af" }}>(no categories)</div>
+                  ) : (
+                    categories.map((c) => (
+                      <label
+                        key={c}
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "center",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.categories.includes(c)}
+                          onChange={() => toggleCategory(c)}
+                        />
+                        <span>{c}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {fieldErrors.category && (
+                  <div className="sa-field-error">
+                    {fieldErrors.category}
+                  </div>
+                )}
+              </label>
+
+              {/* Resorts (multi-select checkboxes) */}
+              <label>
+                Resorts (which this vendor supplies) — select one or more
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 6,
+                  }}
+                >
+                  {resorts.map((r) => (
+                    <label
+                      key={r.id}
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(form.resorts || []).includes(r.id)}
+                        onChange={() => toggleResort(r.id)}
+                      />
+                      <span>{r.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </label>
+
+              <label>
+                Contact Person
+                <input
+                  name="contactPerson"
+                  value={form.contactPerson}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteLetters(e, "contactPerson")}
+                  placeholder="Only letters and spaces"
+                />
+                {form.contactPerson &&
+                  !/^[A-Za-z ]+$/.test(String(form.contactPerson).trim()) && (
+                    <div className="sa-field-error">
+                      Contact person must be letters and spaces only
+                    </div>
+                  )}
+              </label>
+
+              <label>
+                Phone
+                <input
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "phone", 10)}
+                  placeholder="10 digits"
+                />
+                {fieldErrors.phone && (
+                  <div className="sa-field-error">
+                    {fieldErrors.phone}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                WhatsApp
+                <input
+                  name="whatsapp"
+                  value={form.whatsapp}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "whatsapp", 10)}
+                  placeholder="10 digits"
+                />
+                {fieldErrors.whatsapp && (
+                  <div className="sa-field-error">
+                    {fieldErrors.whatsapp}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Alternate Phone
+                <input
+                  name="alternatePhone"
+                  value={form.alternatePhone}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "alternatePhone", 10)}
+                  placeholder="10 digits"
+                />
+                {fieldErrors.alternatePhone && (
+                  <div className="sa-field-error">
+                    {fieldErrors.alternatePhone}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="vendor@example.com"
+                />
+                {fieldErrors.email && (
+                  <div className="sa-field-error">
+                    {fieldErrors.email}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Address Line 1
+                <input
+                  name="addressLine1"
+                  value={form.addressLine1}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                Address Line 2
+                <input
+                  name="addressLine2"
+                  value={form.addressLine2}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                City
+                <input name="city" value={form.city} onChange={handleChange} />
+              </label>
+
+              <label>
+                State
+                <input
+                  name="state"
+                  value={form.state}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                Pincode
+                <input
+                  name="pincode"
+                  value={form.pincode}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "pincode", 6)}
+                  placeholder="6 digits"
+                />
+                {fieldErrors.pincode && (
+                  <div className="sa-field-error">
+                    {fieldErrors.pincode}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Country
+                <input
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                GST Number
+                <input
+                  name="gstNumber"
+                  value={form.gstNumber}
+                  onChange={handleChange}
+                  placeholder="15 char GSTIN"
+                />
+                {fieldErrors.gstNumber && (
+                  <div className="sa-field-error">
+                    {fieldErrors.gstNumber}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                PAN Number
+                <input
+                  name="panNumber"
+                  value={form.panNumber}
+                  onChange={handleChange}
+                  placeholder="PAN (AAAAA9999A)"
+                />
+                {fieldErrors.panNumber && (
+                  <div className="sa-field-error">
+                    {fieldErrors.panNumber}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                FSSAI Number
+                <input
+                  name="fssaiNumber"
+                  value={form.fssaiNumber}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                Payment Terms
+                <select
+                  name="paymentTerms"
+                  value={form.paymentTerms}
+                  onChange={handleChange}
+                >
+                  <option value="">Select</option>
+                  <option value="Advance">Advance</option>
+                  <option value="7 Days">7 Days</option>
+                  <option value="15 Days">15 Days</option>
+                  <option value="30 Days">30 Days</option>
+                </select>
+              </label>
+
+              <label>
+                Credit Limit
+                <input
+                  name="creditLimit"
+                  value={form.creditLimit}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDecimal(e, "creditLimit")}
+                  placeholder="Numeric"
+                />
+                {fieldErrors.creditLimit && (
+                  <div className="sa-field-error">
+                    {fieldErrors.creditLimit}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Payment Mode
+                <input
+                  name="paymentMode"
+                  value={form.paymentMode}
+                  onChange={handleChange}
+                  placeholder="UPI / Bank / Cash"
+                />
+              </label>
+
+              <label>
+                Bank Name
+                <input
+                  name="bankName"
+                  value={form.bankName}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                Account Number
+                <input
+                  name="accountNumber"
+                  value={form.accountNumber}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "accountNumber", 20)}
+                  placeholder="6-20 digits"
+                />
+                {fieldErrors.accountNumber && (
+                  <div className="sa-field-error">
+                    {fieldErrors.accountNumber}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                IFSC
+                <input
+                  name="ifsc"
+                  value={form.ifsc}
+                  onChange={handleChange}
+                  placeholder="IFSC"
+                />
+                {fieldErrors.ifsc && (
+                  <div className="sa-field-error">
+                    {fieldErrors.ifsc}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Branch
+                <input
+                  name="branch"
+                  value={form.branch}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label>
+                Delivery Time (days)
+                <input
+                  name="deliveryTime"
+                  value={form.deliveryTime}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "deliveryTime")}
+                  placeholder="Integer days"
+                />
+                {fieldErrors.deliveryTime && (
+                  <div className="sa-field-error">
+                    {fieldErrors.deliveryTime}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Minimum Order Qty
+                <input
+                  name="minOrderQty"
+                  value={form.minOrderQty}
+                  onChange={handleChange}
+                  onPaste={(e) => handlePasteDigits(e, "minOrderQty")}
+                  placeholder="Integer"
+                />
+                {fieldErrors.minOrderQty && (
+                  <div className="sa-field-error">
+                    {fieldErrors.minOrderQty}
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Status
+                <select
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Blacklisted">Blacklisted</option>
+                </select>
+              </label>
+
+              <label>
+                Notes
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={handleChange}
+                  rows={3}
+                />
+              </label>
+
+              {error && <div className="sa-modal-error">{error}</div>}
+
               <div className="sa-modal-actions">
-                <button type="submit" disabled={saving}>
-                  {saving ? "Saving..." : "Save"}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)}>
+                <button
+                  type="button"
+                  className="sa-secondary-button"
+                  onClick={() => !saving && setShowForm(false)}
+                >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sa-primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : form._id
+                    ? "Update Vendor"
+                    : "Save Vendor"}
                 </button>
               </div>
             </form>
