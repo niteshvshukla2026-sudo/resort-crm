@@ -901,33 +901,35 @@ function createRouter({ useMongo, mongoose }) {
   // --- handlers ---
  const listVendorsHandler = async (req, res) => {
   try {
-    const { resort } = req.query; // 👈 SAME AS STORE
+    const { resort } = req.query;
+
+    const query = {};
+
+    // 🔥 MAIN FIX
+    if (resort && resort !== "ALL") {
+      query.resorts = resort;
+    }
 
     if (VendorModel) {
-      const filter = {};
-
-      // 👇 IMPORTANT: vendors.resorts is ARRAY
-      if (resort && resort !== "ALL") {
-        filter.resorts = resort;
-      }
-
-      const docs = await VendorModel.find(filter).lean();
+      const docs = await VendorModel.find(query).lean();
       return res.json(docs);
     }
 
-    // ---- in-memory fallback ----
+    // in-memory fallback
+    let list = memVendors;
     if (resort && resort !== "ALL") {
-      return res.json(
-        memVendors.filter(v => Array.isArray(v.resorts) && v.resorts.includes(resort))
+      list = list.filter(
+        (v) => Array.isArray(v.resorts) && v.resorts.includes(resort)
       );
     }
 
-    return res.json(memVendors);
+    return res.json(list);
   } catch (err) {
     console.error("GET /api/vendors error", err);
     res.status(500).json({ message: "Failed to list vendors" });
   }
 };
+
 
 
   const createVendorHandler = async (req, res) => {
