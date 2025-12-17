@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -28,6 +29,8 @@ const generateGrnNo = (dateStr) => {
 const todayStr = new Date().toISOString().slice(0, 10);
 
 const POList = () => {
+    const { selectedResort } = useResort();
+
   const [poList, setPoList] = useState([]);
   // only approved AND without PO/GRN (we'll fetch and filter)
   const [requisitions, setRequisitions] = useState([]);
@@ -475,7 +478,18 @@ const POList = () => {
 
   // helper display functions (use local state lists)
   const getVendorName = (id) => vendors.find((v) => v._id === id || v.id === id)?.name || id || "-";
-  const getResortName = (id) => resorts.find((r) => r._id === id || r.id === id)?.name || id || "-";
+  const getResortName = (id) => {
+  if (!id) return "-";
+
+  const resort = resorts.find(
+    (r) =>
+      r._id?.toString() === id?.toString() ||
+      r.id?.toString() === id?.toString()
+  );
+
+  return resort ? resort.name : id;
+};
+
   const getStoreName = (id) => stores.find((s) => s._id === id || s.id === id)?.name || id || "-";
   const getReqText = (id) => (requisitions.find((r) => (r._id || r.id) === id)?.requisitionNo) || id || "-";
   const getItemName = (id) => items.find((it) => it._id === id || it.id === id)?.name || id || "-";
@@ -483,6 +497,13 @@ const POList = () => {
   // APPLY FILTERS (client-side)
   const applyFilters = () => {
     return poList.filter((p) => {
+          // 🌍 GLOBAL HEADER RESORT FILTER
+    if (selectedResort) {
+      if (p.resort?.toString() !== selectedResort.toString()) {
+        return false;
+      }
+    }
+
       // STATUS
       if (statusFilter !== "ALL") {
         const st = (p.status || "").toString().toLowerCase();
