@@ -176,11 +176,11 @@ router.post("/:id/create-po", async (req, res) => {
     if (requisition.status !== "APPROVED")
       return res.status(400).json({ message: "Requisition not approved" });
 
-    if (requisition.po)
-      return res.status(400).json({ message: "PO already created" });
-
-    if (!requisition.vendor)
-      return res.status(400).json({ message: "Vendor missing in requisition" });
+    // 🔥 MUTUAL EXCLUSIVE CHECK
+    if (requisition.po || requisition.grn)
+      return res.status(400).json({
+        message: "PO or GRN already created for this requisition",
+      });
 
     const po = await PurchaseOrder.create({
       requisition: requisition._id,
@@ -195,11 +195,7 @@ router.post("/:id/create-po", async (req, res) => {
     requisition.status = "PO_CREATED";
     await requisition.save();
 
-    res.json({
-      message: "PO created successfully",
-      po,
-      requisition,
-    });
+    res.json({ po, requisition });
   } catch (err) {
     console.error("CREATE PO error", err);
     res.status(500).json({ message: "Failed to create PO" });
@@ -213,21 +209,22 @@ router.post("/:id/create-po", async (req, res) => {
  */
 router.post("/:id/create-grn", async (req, res) => {
   try {
-    const requisition = await Requisition.findById(req.params.id)
-      .populate("po");
+    const requisition = await Requisition.findById(req.params.id);
 
     if (!requisition)
       return res.status(404).json({ message: "Requisition not found" });
 
-    if (!requisition.po)
-      return res.status(400).json({ message: "PO not created yet" });
+    if (requisition.type !== "VENDOR")
+      return res.status(400).json({ message: "GRN only for vendor requisition" });
 
-    if (requisition.grn)
-      return res.status(400).json({ message: "GRN already created" });
+    // 🔥 MUTUAL EXCLUSIVE CHECK
+    if (requisition.po || requisition.grn)
+      return res.status(400).json({
+        message: "PO or GRN already created for this requisition",
+      });
 
     const grn = await GRN.create({
       requisition: requisition._id,
-      po: requisition.po._id,
       items: requisition.lines,
       receivedDate: new Date(),
     });
@@ -236,11 +233,7 @@ router.post("/:id/create-grn", async (req, res) => {
     requisition.status = "GRN_CREATED";
     await requisition.save();
 
-    res.json({
-      message: "GRN created successfully",
-      grn,
-      requisition,
-    });
+    res.json({ grn, requisition });
   } catch (err) {
     console.error("CREATE GRN error", err);
     res.status(500).json({ message: "Failed to create GRN" });
