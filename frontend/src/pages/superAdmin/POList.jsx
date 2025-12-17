@@ -488,17 +488,10 @@ const resortMap = React.useMemo(() => {
 
   // helper display functions (use local state lists)
   const getVendorName = (id) => vendors.find((v) => v._id === id || v.id === id)?.name || id || "-";
- const getResortName = (resort) => {
-  if (!resort) return "-";
-
-  // case: populated object
-  if (typeof resort === "object") {
-    return resort.name || "-";
-  }
-
-  // case: id string → lookup map
-  return resortMap[String(resort)] || "-";
+const getResortName = (resort) => {
+  return resort?.name || "-";
 };
+
 
 
   const getStoreName = (id) => stores.find((s) => s._id === id || s.id === id)?.name || id || "-";
