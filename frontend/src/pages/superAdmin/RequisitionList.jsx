@@ -1036,45 +1036,62 @@ if (selectedResort && selectedResort !== "ALL") {
                       </span>
 
                       {/* VENDOR requisition → PO / GRN allowed, with mutual disable */}
-                     {r.type === "VENDOR" && (
+                    {r.type === "VENDOR" && (
   <>
     {/* PO BUTTON */}
-    {r.po || r.grn ? (
+    {r.status === "PO_CREATED" ? (
+      <span
+        style={actionStyle}
+        title="View PO"
+        onClick={() => viewPO(r.po)}
+      >
+        <i className="ri-file-paper-line" />
+      </span>
+    ) : r.status === "GRN_CREATED" ? (
       <span
         style={disabledActionStyle}
-        title="PO or GRN already created"
+        title="GRN already created — PO disabled"
       >
-        <i className="ri-shopping-cart-line" />
+        <i className="ri-file-paper-line" />
       </span>
     ) : (
       <span
         style={actionStyle}
-        onClick={() => openCreatePO(r)}
         title="Create PO"
+        onClick={() => openCreatePO(r)}
       >
-        <i className="ri-shopping-cart-line" />
+        <i className="ri-file-paper-line" />
       </span>
     )}
 
     {/* GRN BUTTON */}
-    {r.po || r.grn ? (
+    {r.status === "GRN_CREATED" ? (
+      <span
+        style={actionStyle}
+        title="View GRN"
+        onClick={() => viewGRN(r.grn)}
+      >
+        <i className="ri-inbox-line" />
+      </span>
+    ) : r.status === "PO_CREATED" ? (
       <span
         style={disabledActionStyle}
-        title="PO or GRN already created"
+        title="PO already created — GRN disabled"
       >
         <i className="ri-inbox-line" />
       </span>
     ) : (
       <span
         style={actionStyle}
-        onClick={() => openCreateGRN(r)}
         title="Create GRN"
+        onClick={() => openCreateGRN(r)}
       >
         <i className="ri-inbox-line" />
       </span>
     )}
   </>
 )}
+
 
 
                       {/* INTERNAL requisition → Transfer button, no PO/GRN */}
