@@ -21,6 +21,7 @@ process.on("unhandledRejection", (reason) => {
 async function start() {
   const app = express();
 
+  // ---------------- CORS ----------------
   let frontend =
     process.env.FRONTEND_URL || "https://resort-crm.vercel.app";
   frontend = String(frontend).replace(/\/+$/, "");
@@ -53,6 +54,7 @@ async function start() {
     allowAllOrigins
   );
 
+  // ---------------- Mongo ----------------
   let mongoose = null;
   let useMongo = false;
 
@@ -69,15 +71,24 @@ async function start() {
     console.warn("MONGO_URI not set, running without DB");
   }
 
-  // ================= ROUTES =================
+  // ---------------- MASTER ROUTER ----------------
+  let router;
+  try {
+    const { createRouter } = require("./server_router.cjs");
+    router = createRouter({ useMongo, mongoose });
+  } catch (err) {
+    console.error(
+      "Failed to load server_router.cjs:",
+      err?.stack || err
+    );
+  }
 
-  // ⬇️ IMPORT ROUTES DIRECTLY (IMPORTANT)
-  const requisitionRoutes = require("./routes/requisitions.routes");
-
-  // ⬇️ MOUNT AT CORRECT BASE PATH
-  app.use("/api/requisitions", requisitionRoutes);
-
-  console.log("✅ Requisition routes mounted at /api/requisitions");
+  if (router) {
+    app.use("/", router); // 👈 VERY IMPORTANT
+    console.log("✅ server_router mounted at /");
+  } else {
+    console.warn("⚠️ No router mounted");
+  }
 
   // root
   app.get("/", (req, res) => res.json({ ok: true, msg: "root" }));
