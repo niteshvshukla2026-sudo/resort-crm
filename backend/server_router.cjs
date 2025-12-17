@@ -1326,21 +1326,15 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
   }
 });
 
-
 // ==================================================
-// 📦 CREATE GRN FROM REQUISITION
+// 📦 CREATE GRN FROM REQUISITION (FINAL & CLEAN)
 // ==================================================
-// ✅ CORRECT
 router.post("/api/requisitions/:id/create-grn", async (req, res) => {
-
-
-
   try {
     const id = req.params.id;
 
-    let reqDoc = null;
-
     // 1️⃣ Find requisition
+    let reqDoc;
     if (RequisitionModel) {
       reqDoc = await RequisitionModel.findById(id);
     } else {
@@ -1358,60 +1352,63 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       });
     }
 
-    // 3️⃣ Create GRN object
+    // 3️⃣ Build GRN payload (🔥 frontend list depends on these fields)
     const grnPayload = {
-  grnNo: req.body.grnNo || makeGrnNo(),
-  requisitionId: id,                 // 🔥 REQUIRED
-  poId: reqDoc.po || null,            // 🔥 REQUIRED (null allowed)
-  vendor: reqDoc.vendor || null,
-  resort: reqDoc.resort || null,      // 🔥 REQUIRED FOR FILTER
-  store: req.body.store || reqDoc.store || null,
-  grnDate: req.body.grnDate || new Date(),
-  items: (req.body.items || []).map(it => ({
-    item: it.item,
-    receivedQty: Number(it.receivedQty || 0),
-    pendingQty: 0,
-    remark: it.remark || "",
-  })),
-};
+      grnNo: req.body.grnNo || makeGrnNo(),
 
-let grnDoc;
-if (GRNModel) {
-  grnDoc = await GRNModel.create(grnPayload);
+      requisitionId: id,          // 🔥 REQUIRED
+      poId: reqDoc.po || null,    // 🔥 REQUIRED (null allowed)
 
-  await RequisitionModel.findByIdAndUpdate(id, {
-    $set: { status: "GRN_CREATED" },
-  });
-} else {
-  grnDoc = { _id: `grn_${Date.now()}`, ...grnPayload };
-  memGRNs.push(grnDoc);
-}
+      vendor: reqDoc.vendor || null,
+      resort: reqDoc.resort || null,   // 🔥 REQUIRED FOR RESORT FILTER
+      store: req.body.store || reqDoc.store || null,
 
-return res.status(201).json(grnDoc);
+      grnDate: req.body.grnDate || new Date(),
 
-
-    // 4️⃣ Update requisition
-    reqDoc.grn = {
-      _id: grn._id,
-      code: grn.grnNo,
+      items: Array.isArray(req.body.items)
+        ? req.body.items.map((it) => ({
+            item: it.item,
+            receivedQty: Number(it.receivedQty || 0),
+            pendingQty: 0,
+            remark: it.remark || "",
+          }))
+        : [],
     };
-    reqDoc.status = "GRN_CREATED";
 
-    if (RequisitionModel) {
-      await reqDoc.save();
+    // 4️⃣ Save GRN
+    let grnDoc;
+    if (GRNModel) {
+      grnDoc = await GRNModel.create(grnPayload);
+
+      // 5️⃣ Update requisition status + reference
+      await RequisitionModel.findByIdAndUpdate(id, {
+        $set: {
+          status: "GRN_CREATED",
+          grn: grnDoc._id,
+        },
+      });
+    } else {
+      grnDoc = { _id: `grn_${Date.now()}`, ...grnPayload };
+      memGRNs.push(grnDoc);
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx !== -1) {
+        memRequisitions[idx].status = "GRN_CREATED";
+        memRequisitions[idx].grn = grnDoc._id;
+      }
     }
 
-    return res.json({
-      grn,
-      requisition: reqDoc,
-    });
+    // 6️⃣ Response
+    return res.status(201).json(grnDoc);
   } catch (err) {
     console.error("CREATE GRN ERROR", err);
     return res.status(500).json({
       message: "Failed to create GRN",
+      error: err.message,
     });
   }
 });
+
 
 
   // =======================================================
