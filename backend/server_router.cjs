@@ -231,7 +231,6 @@ function createRouter({ useMongo, mongoose }) {
 
     console.log("Requisition model initialised (Mongo)");
 
-    
     // ------------------------
     // PO model
     // ------------------------
@@ -333,7 +332,7 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-  router.post("/auth/login", safe("login"));
+  router.post("/api/auth/login", safe("login"));
 
   // ------------------------
   // 📊 Dashboard
@@ -900,36 +899,18 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
 
   // --- handlers ---
- const listVendorsHandler = async (req, res) => {
-  try {
-    const { resort } = req.query; // 👈 SAME AS STORE
-
-    if (VendorModel) {
-      const filter = {};
-
-      // 👇 IMPORTANT: vendors.resorts is ARRAY
-      if (resort && resort !== "ALL") {
-        filter.resorts = resort;
+  const listVendorsHandler = async (req, res) => {
+    try {
+      if (VendorModel) {
+        const docs = await VendorModel.find().lean();
+        return res.json(docs);
       }
-
-      const docs = await VendorModel.find(filter).lean();
-      return res.json(docs);
+      return res.json(memVendors);
+    } catch (err) {
+      console.error("GET /api/vendors error", err);
+      res.status(500).json({ message: "Failed to list vendors" });
     }
-
-    // ---- in-memory fallback ----
-    if (resort && resort !== "ALL") {
-      return res.json(
-        memVendors.filter(v => Array.isArray(v.resorts) && v.resorts.includes(resort))
-      );
-    }
-
-    return res.json(memVendors);
-  } catch (err) {
-    console.error("GET /api/vendors error", err);
-    res.status(500).json({ message: "Failed to list vendors" });
-  }
-};
-
+  };
 
   const createVendorHandler = async (req, res) => {
     try {
