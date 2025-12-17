@@ -231,22 +231,6 @@ function createRouter({ useMongo, mongoose }) {
 
     console.log("Requisition model initialised (Mongo)");
 
-const requisitionRoutes = require("./routes/requisitions");
-// other routes...
-// const vendorRoutes = require("./routes/vendors");
-
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-// ✅ ROUTE MOUNTING (THIS FIXES 404)
-app.use("/api/requisitions", requisitionRoutes);
-
-// app.use("/api/vendors", vendorRoutes);
-// app.use("/api/stores", storeRoutes);
-
-module.exports = app;
     // ------------------------
     // PO model
     // ------------------------
