@@ -234,63 +234,6 @@ function createRouter({ useMongo, mongoose }) {
     // ------------------------
     // PO model
     // ------------------------
-
-    // =======================================================
-// 🧾 CREATE PO FROM REQUISITION (FIX FOR FRONTEND)
-// =======================================================
-
-router.post("/api/requisitions/:id/create-po", async (req, res) => {
-  try {
-    const requisitionId = req.params.id;
-    const data = req.body || {};
-
-    if (!data.vendor) {
-      return res.status(400).json({ message: "Vendor is required" });
-    }
-
-    const poNo = makePoNo();
-
-    const payload = {
-      poNo,
-      requisitionId,
-      vendor: data.vendor,
-      resort: data.resort || null,
-      deliverTo: data.deliverTo || null,
-      poDate: new Date(),
-      items: Array.isArray(data.items) ? data.items : [],
-      subTotal: Number(data.subTotal || 0),
-      taxPercent: Number(data.taxPercent || 0),
-      taxAmount: Number(data.taxAmount || 0),
-      total: Number(data.total || 0),
-      status: "OPEN",
-    };
-
-    // ✅ CREATE PO
-    let po;
-    if (POModel) {
-      po = await POModel.create(payload);
-
-      // 🔥 UPDATE REQUISITION STATUS
-      await RequisitionModel.findByIdAndUpdate(requisitionId, {
-        $set: { status: "PO_CREATED" },
-      });
-    } else {
-      po = { _id: `po_${Date.now()}`, ...payload };
-      memPOs.push(po);
-
-      const idx = memRequisitions.findIndex(r => r._id === requisitionId);
-      if (idx !== -1) {
-        memRequisitions[idx].status = "PO_CREATED";
-      }
-    }
-
-    return res.status(201).json(po);
-  } catch (err) {
-    console.error("CREATE PO FROM REQUISITION ERROR", err);
-    return res.status(500).json({ message: "Failed to create PO" });
-  }
-});
-
     const poLineSchema = new Schema(
       {
         item: { type: String, required: true }, // item ID
@@ -389,8 +332,7 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-router.post("/auth/login", safe("login"));
-
+  router.post("/api/auth/login", safe("login"));
 
   // ------------------------
   // 📊 Dashboard
