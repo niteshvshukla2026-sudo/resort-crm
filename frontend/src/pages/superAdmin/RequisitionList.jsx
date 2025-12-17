@@ -582,11 +582,11 @@ const openCreateForm = () => {
   };
 
   // ------------- GRN modal -------------
-  const openCreateGRN = (req) => {
-    if (req.po) {
-      setError("This requisition already has a PO — create GRN from PO page instead.");
-      return;
-    }
+const openCreateGRN = (req) => {
+  if (req.status !== "PO_CREATED") {
+    setError("GRN can only be created after PO is created.");
+    return;
+  }
 
     const itemsPayload = (req.lines || []).map((ln) => {
       const itemId = ln.item?._id || ln.item;

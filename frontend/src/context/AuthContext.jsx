@@ -12,22 +12,19 @@ const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
 // Helper: build correct login URL ensuring exactly one /api prefix
 function buildLoginUrl() {
-  // if API_BASE already ends with '/api' -> use /auth/login
   if (API_BASE.endsWith("/api")) {
     return `${API_BASE}/auth/login`;
   }
-  // if API_BASE already contains '/api' somewhere else or is backend root, add '/api/auth/login'
   return `${API_BASE}/api/auth/login`;
 }
 
-// Configure axios defaults (do not rely on relative paths here)
-axios.defaults.withCredentials = true; // keep if you use cookies
-// NOTE: we intentionally do NOT set axios.defaults.baseURL to avoid double-append problems
+axios.defaults.withCredentials = true;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
 
+  // 🔐 Load auth from storage
   useEffect(() => {
     try {
       const stored = localStorage.getItem("auth");
@@ -45,8 +42,31 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // 🔥 ADD THIS: axios response interceptor (MOST IMPORTANT FIX)
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const status = error?.response?.status;
+
+        // ❌ Logout ONLY if token is invalid/expired
+        if (status === 401) {
+          console.warn("401 detected → logging out");
+          logout();
+        }
+
+        // ❗ DO NOT logout on 400 / 404 / 500
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   /**
-   * login supports two signatures:
+   * login supports:
    *  - login(email, password)
    *  - login({ email, password })
    */
@@ -58,7 +78,7 @@ export const AuthProvider = ({ children }) => {
       credentials = a || {};
     }
 
-    const url = buildLoginUrl(); // explicit full URL; prevents /api/api issues
+    const url = buildLoginUrl();
     try {
       const res = await axios.post(url, credentials, {
         headers: { "Content-Type": "application/json" },
@@ -75,7 +95,10 @@ export const AuthProvider = ({ children }) => {
         axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
       }
 
-      localStorage.setItem("auth", JSON.stringify({ token: newToken, user: newUser }));
+      localStorage.setItem(
+        "auth",
+        JSON.stringify({ token: newToken, user: newUser })
+      );
 
       return { success: true, data };
     } catch (err) {
