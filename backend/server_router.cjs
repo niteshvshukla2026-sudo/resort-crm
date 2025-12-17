@@ -332,7 +332,8 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-  router.post("/api/auth/login", safe("login"));
+router.post("/auth/login", safe("login"));
+
 
   // ------------------------
   // 📊 Dashboard
