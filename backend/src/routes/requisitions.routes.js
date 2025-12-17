@@ -70,7 +70,9 @@ router.post("/", async (req, res) => {
       .populate("fromStore", "name")
       .populate("toStore", "name")
       .populate("store", "name")
-      .populate("vendor", "name");
+      .populate("vendor", "name")
+      .populate("po")
+      .populate("grn");
 
     res.status(201).json(populated);
   } catch (err) {
@@ -106,7 +108,9 @@ router.put("/:id", async (req, res) => {
       .populate("fromStore", "name")
       .populate("toStore", "name")
       .populate("store", "name")
-      .populate("vendor", "name");
+      .populate("vendor", "name")
+      .populate("po")
+      .populate("grn");
 
     if (!updated)
       return res.status(404).json({ message: "Requisition not found" });
@@ -150,7 +154,11 @@ router.post("/:id/approve", async (req, res) => {
     r.status = "APPROVED";
     await r.save();
 
-    res.json(r);
+    const populated = await Requisition.findById(r._id)
+      .populate("po")
+      .populate("grn");
+
+    res.json(populated);
   } catch (err) {
     res.status(500).json({ message: "Failed to approve requisition" });
   }
@@ -165,7 +173,9 @@ router.post("/:id/create-po", async (req, res) => {
   try {
     const requisition = await Requisition.findById(req.params.id)
       .populate("vendor")
-      .populate("resort");
+      .populate("resort")
+      .populate("po")
+      .populate("grn");
 
     if (!requisition)
       return res.status(404).json({ message: "Requisition not found" });
@@ -176,7 +186,6 @@ router.post("/:id/create-po", async (req, res) => {
     if (requisition.status !== "APPROVED")
       return res.status(400).json({ message: "Requisition not approved" });
 
-    // 🔥 MUTUAL EXCLUSIVE CHECK
     if (requisition.po || requisition.grn)
       return res.status(400).json({
         message: "PO or GRN already created for this requisition",
@@ -195,7 +204,11 @@ router.post("/:id/create-po", async (req, res) => {
     requisition.status = "PO_CREATED";
     await requisition.save();
 
-    res.json({ po, requisition });
+    const populated = await Requisition.findById(requisition._id)
+      .populate("po")
+      .populate("grn");
+
+    res.json({ po, requisition: populated });
   } catch (err) {
     console.error("CREATE PO error", err);
     res.status(500).json({ message: "Failed to create PO" });
@@ -209,7 +222,9 @@ router.post("/:id/create-po", async (req, res) => {
  */
 router.post("/:id/create-grn", async (req, res) => {
   try {
-    const requisition = await Requisition.findById(req.params.id);
+    const requisition = await Requisition.findById(req.params.id)
+      .populate("po")
+      .populate("grn");
 
     if (!requisition)
       return res.status(404).json({ message: "Requisition not found" });
@@ -217,7 +232,6 @@ router.post("/:id/create-grn", async (req, res) => {
     if (requisition.type !== "VENDOR")
       return res.status(400).json({ message: "GRN only for vendor requisition" });
 
-    // 🔥 MUTUAL EXCLUSIVE CHECK
     if (requisition.po || requisition.grn)
       return res.status(400).json({
         message: "PO or GRN already created for this requisition",
@@ -233,7 +247,11 @@ router.post("/:id/create-grn", async (req, res) => {
     requisition.status = "GRN_CREATED";
     await requisition.save();
 
-    res.json({ grn, requisition });
+    const populated = await Requisition.findById(requisition._id)
+      .populate("po")
+      .populate("grn");
+
+    res.json({ grn, requisition: populated });
   } catch (err) {
     console.error("CREATE GRN error", err);
     res.status(500).json({ message: "Failed to create GRN" });
