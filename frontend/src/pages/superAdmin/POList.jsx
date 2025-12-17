@@ -526,7 +526,11 @@ const getResortName = (resort) => {
 
       // RESORT
       if (resortFilter) {
-        const val = p.resort || p.resortName || p.resortId || "";
+       const val =
+  p.resort?.name ||
+  p.resortName ||
+  "";
+
         if (!val.toString().toLowerCase().includes(resortFilter.toString().toLowerCase())) return false;
       }
 
