@@ -1327,6 +1327,72 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
 });
 
 
+// ==================================================
+// 📦 CREATE GRN FROM REQUISITION
+// ==================================================
+router.post("/api/requisitions/:id/create-grn", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    let reqDoc = null;
+
+    // 1️⃣ Find requisition
+    if (RequisitionModel) {
+      reqDoc = await RequisitionModel.findById(id);
+    } else {
+      reqDoc = memRequisitions.find((r) => r._id === id);
+    }
+
+    if (!reqDoc) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    // 2️⃣ Validation
+    if (reqDoc.po && !reqDoc.allowDirectGrn) {
+      return res.status(400).json({
+        message: "GRN must be created from PO, not requisition",
+      });
+    }
+
+    // 3️⃣ Create GRN object
+    const grn = {
+      _id: `grn_${Date.now()}`,
+      grnNo: req.body.grnNo,
+      requisition: id,
+      store: req.body.store,
+      receivedBy: req.body.receivedBy,
+      receivedDate: req.body.receivedDate,
+      challanNo: req.body.challanNo,
+      billNo: req.body.billNo,
+      items: req.body.items || [],
+      status: "CREATED",
+      createdAt: new Date(),
+    };
+
+    // 4️⃣ Update requisition
+    reqDoc.grn = {
+      _id: grn._id,
+      code: grn.grnNo,
+    };
+    reqDoc.status = "GRN_CREATED";
+
+    if (RequisitionModel) {
+      await reqDoc.save();
+    }
+
+    return res.json({
+      grn,
+      requisition: reqDoc,
+    });
+  } catch (err) {
+    console.error("CREATE GRN ERROR", err);
+    return res.status(500).json({
+      message: "Failed to create GRN",
+    });
+  }
+});
+
+
   // =======================================================
   // 📑 PURCHASE ORDERS (PO) — Full CRUD + Link to Requisition
   // =======================================================
