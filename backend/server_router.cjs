@@ -1249,6 +1249,85 @@ function createRouter({ useMongo, mongoose }) {
   });
 
   // =======================================================
+// 🛒 CREATE PO FROM REQUISITION
+// =======================================================
+router.post("/api/requisitions/:id/create-po", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // 1️⃣ Find requisition
+    let reqDoc = null;
+    if (RequisitionModel) {
+      reqDoc = await RequisitionModel.findById(id).lean();
+    } else {
+      reqDoc = memRequisitions.find((r) => r._id === id);
+    }
+
+    if (!reqDoc) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    if (reqDoc.type !== "VENDOR") {
+      return res.status(400).json({ message: "Only vendor requisition can create PO" });
+    }
+
+    if (reqDoc.status !== "APPROVED") {
+      return res.status(400).json({ message: "Requisition not approved" });
+    }
+
+    // 2️⃣ Create PO
+    const poNo = makePoNo();
+
+    const poPayload = {
+      poNo,
+      requisitionId: id,
+      vendor: reqDoc.vendor,
+      resort: reqDoc.resort,
+      deliverTo: reqDoc.store || reqDoc.toStore,
+      poDate: new Date(),
+      items: (reqDoc.lines || []).map((l) => ({
+        item: l.item,
+        qty: l.qty,
+        rate: 0,
+        amount: 0,
+        remark: l.remark || "",
+      })),
+      subTotal: 0,
+      taxPercent: 0,
+      taxAmount: 0,
+      total: 0,
+      status: "OPEN",
+    };
+
+    let poDoc = null;
+
+    if (POModel) {
+      poDoc = await POModel.create(poPayload);
+
+      // 3️⃣ Update requisition status
+      await RequisitionModel.findByIdAndUpdate(id, {
+        $set: { status: "PO_CREATED" },
+      });
+    } else {
+      poDoc = { _id: `po_${Date.now()}`, ...poPayload };
+      memPOs.push(poDoc);
+
+      const idx = memRequisitions.findIndex((r) => r._id === id);
+      if (idx !== -1) memRequisitions[idx].status = "PO_CREATED";
+    }
+
+    return res.status(201).json({
+      message: "PO created successfully",
+      po: poDoc,
+    });
+  } catch (err) {
+    console.error("CREATE PO FROM REQUISITION error", err);
+    res.status(500).json({ message: "Failed to create PO", error: err.message });
+  }
+});
+
+
+  // =======================================================
   // 📑 PURCHASE ORDERS (PO) — Full CRUD + Link to Requisition
   // =======================================================
 
