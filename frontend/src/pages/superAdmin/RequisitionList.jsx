@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useResort } from "../../context/ResortContext";
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
@@ -27,6 +28,8 @@ const generateGrnNo = (dateStr) => {
 };
 
 const RequisitionList = () => {
+  const { selectedResort } = useResort(); // 🔥 GLOBAL RESORT
+
   const [requisitions, setRequisitions] = useState([]);
   const [resorts, setResorts] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -221,13 +224,20 @@ const lookupName = (list, ref) => {
     requiredBy: "",
     lines: [newLine()],
   };
+const openCreateForm = () => {
+  if (!selectedResort || selectedResort === "ALL") {
+    setError("Please select a Resort first to create requisition.");
+    return;
+  }
 
-  const openCreateForm = () => {
-    setEditingId(null);
-    setForm(baseEmptyForm);
-    setError("");
-    setShowForm(true);
-  };
+  setEditingId(null);
+  setForm({
+    ...baseEmptyForm,
+    resort: selectedResort, // 🔥 auto set
+  });
+  setError("");
+  setShowForm(true);
+};
 
   const openEditForm = (req) => {
     setEditingId(req._id);
@@ -748,11 +758,18 @@ const lookupName = (list, ref) => {
       if (typeFilter !== "ALL") {
         if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
       }
-      if (resortFilter) {
-        const val = getResortName(r.resort);
-        if (!val) return false;
-        if (!String(val).toLowerCase().includes(String(getResortName(resortFilter)).toLowerCase())) return false;
-      }
+     // 🔥 GLOBAL RESORT FILTER (TOP DROPDOWN)
+if (selectedResort && selectedResort !== "ALL") {
+  const reqResort =
+    r.resort?._id ||
+    r.resort ||
+    "";
+
+  if (String(reqResort) !== String(selectedResort)) {
+    return false;
+  }
+}
+
       if (dateFrom) {
         const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
         const from = new Date(dateFrom).setHours(0, 0, 0, 0);
