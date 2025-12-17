@@ -1,3 +1,4 @@
+// src/pages/superAdmin/GRNList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -5,45 +6,54 @@ import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+/* ---------------- STATUS NORMALIZER ---------------- */
+const normalizeGrnStatus = (status) => {
+  if (!status) return "CREATED";
+  if (status === "GRN_CREATED") return "CREATED";
+  if (status.startsWith("GRN_")) return status.replace("GRN_", "");
+  return status.toUpperCase();
+};
+
+/* ---------------- SAFE HELPERS ---------------- */
+const getResortId = (g) =>
+  g.resort?._id ||
+  g.resort ||
+  g.requisition?.resort?._id ||
+  g.requisition?.resort ||
+  "";
+
+const getVendorName = (g) =>
+  g.vendor?.name || g.requisition?.vendor?.name || "-";
+
+const getStoreName = (g) =>
+  g.store?.name || g.requisition?.store?.name || "-";
+
+const getResortName = (g) =>
+  g.resort?.name || g.requisition?.resort?.name || "-";
+
 const GRNList = () => {
   const navigate = useNavigate();
   const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT
 
   const [grns, setGrns] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [resorts, setResorts] = useState([]);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔎 FILTER STATES (EXACT POList STYLE)
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL / CREATED / POSTED
-  const [actionFilter, setActionFilter] = useState("ALL"); // ALL / NeedsPosting / Posted
-  const [resortFilter, setResortFilter] = useState("");
-  const [vendorFilter, setVendorFilter] = useState("");
+  // POList-STYLE FILTERS
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
 
-  // ---------------------------------------
-  // LOAD DATA
-  // ---------------------------------------
-  const loadData = async () => {
+  /* ---------------- LOAD DATA ---------------- */
+  const loadGrns = async () => {
     try {
       setLoading(true);
       setError("");
-
-      const [grnRes, vendorRes, resortRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/grn`),
-        axios.get(`${API_BASE}/api/vendors`),
-        axios.get(`${API_BASE}/api/resorts`),
-      ]);
-
-      setGrns(Array.isArray(grnRes.data) ? grnRes.data : []);
-      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
+      const res = await axios.get(`${API_BASE}/api/grn`);
+      setGrns(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("GRN load error", err);
+      console.error(err);
       setError("Failed to load GRNs");
       setGrns([]);
     } finally {
@@ -52,59 +62,20 @@ const GRNList = () => {
   };
 
   useEffect(() => {
-    loadData();
+    loadGrns();
   }, []);
 
-  // ---------------------------------------
-  // HELPERS
-  // ---------------------------------------
-  const getVendorName = (v) => {
-    if (!v) return "-";
-    if (typeof v === "object") return v.name || "-";
-    return vendors.find((x) => x._id === v || x.id === v)?.name || v;
-  };
-
-  const getResortName = (r) => {
-    if (!r) return "-";
-    if (typeof r === "object") return r.name || "-";
-    return resorts.find((x) => x._id === r || x.id === r)?.name || r;
-  };
-
-  // ---------------------------------------
-  // APPLY FILTERS (SAME AS POList)
-  // ---------------------------------------
+  /* ---------------- APPLY FILTERS (PO STYLE) ---------------- */
   const filteredGrns = useMemo(() => {
     return grns.filter((g) => {
-      // 🌍 GLOBAL HEADER RESORT FILTER
+      // 🌍 GLOBAL RESORT
       if (selectedResort) {
-        const rid = g.resort?._id || g.resort;
-        if (String(rid) !== String(selectedResort)) return false;
+        if (String(getResortId(g)) !== String(selectedResort)) return false;
       }
 
       // STATUS
-      if (statusFilter !== "ALL") {
-        const st = (g.status || "CREATED").toLowerCase();
-        if (st !== statusFilter.toLowerCase()) return false;
-      }
-
-      // ACTION
-      if (actionFilter !== "ALL") {
-        const isPosted = (g.status || "").toLowerCase() === "posted";
-        if (actionFilter === "NeedsPosting" && isPosted) return false;
-        if (actionFilter === "Posted" && !isPosted) return false;
-      }
-
-      // RESORT
-      if (resortFilter) {
-        const val = g.resort?._id || g.resort || "";
-        if (!val.toString().includes(resortFilter)) return false;
-      }
-
-      // VENDOR
-      if (vendorFilter) {
-        const val = g.vendor?._id || g.vendor || "";
-        if (!val.toString().includes(vendorFilter)) return false;
-      }
+      const st = normalizeGrnStatus(g.status);
+      if (statusFilter !== "ALL" && st !== statusFilter) return false;
 
       // DATE RANGE
       if (dateFrom) {
@@ -123,9 +94,9 @@ const GRNList = () => {
           g.grnNo,
           g.po?.poNo,
           g.requisition?.requisitionNo,
-          getVendorName(g.vendor),
-          getResortName(g.resort),
-          g.store?.name,
+          getVendorName(g),
+          getStoreName(g),
+          getResortName(g),
         ]
           .filter(Boolean)
           .join(" ")
@@ -136,56 +107,35 @@ const GRNList = () => {
 
       return true;
     });
-  }, [
-    grns,
-    selectedResort,
-    statusFilter,
-    actionFilter,
-    resortFilter,
-    vendorFilter,
-    dateFrom,
-    dateTo,
-    searchText,
-  ]);
+  }, [grns, selectedResort, statusFilter, dateFrom, dateTo, searchText]);
 
-  // ---------------------------------------
-  // ACTIONS
-  // ---------------------------------------
-  const viewGrn = (g) => navigate(`/super-admin/grn/${g._id}`);
+  /* ---------------- ACTIONS ---------------- */
+  const viewGrn = (g) => {
+    navigate(`/super-admin/grn/${g._id}`);
+  };
 
   const deleteGrn = async (g) => {
     if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
     try {
       await axios.delete(`${API_BASE}/api/grn/${g._id}`);
-      loadData();
-    } catch {
+      loadGrns();
+    } catch (err) {
+      console.error(err);
       alert("Failed to delete GRN");
     }
   };
 
-  const clearFilters = () => {
-    setStatusFilter("ALL");
-    setActionFilter("ALL");
-    setResortFilter("");
-    setVendorFilter("");
-    setDateFrom("");
-    setDateTo("");
-    setSearchText("");
-  };
-
-  // ---------------------------------------
-  // UI
-  // ---------------------------------------
+  /* ---------------- UI ---------------- */
   return (
     <div className="sa-page">
       {/* HEADER */}
       <div className="sa-page-header">
         <div>
           <h2>GRN (Goods Receipt Note)</h2>
-          <p>GRNs created from Purchase Orders & Requisitions</p>
+          <p>GRNs created from Purchase Orders / Requisitions</p>
         </div>
 
-        <button className="sa-secondary-button" onClick={loadData}>
+        <button className="sa-secondary-button" onClick={loadGrns}>
           Refresh
         </button>
       </div>
@@ -198,39 +148,6 @@ const GRNList = () => {
             <option value="ALL">All</option>
             <option value="CREATED">Created</option>
             <option value="POSTED">Posted</option>
-          </select>
-        </label>
-
-        <label>
-          Action
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-            <option value="ALL">All</option>
-            <option value="NeedsPosting">Needs Posting</option>
-            <option value="Posted">Posted</option>
-          </select>
-        </label>
-
-        <label>
-          Resort
-          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)}>
-            <option value="">All Resorts</option>
-            {resorts.map((r) => (
-              <option key={r._id || r.id} value={r._id || r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Vendor
-          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
-            <option value="">All Vendors</option>
-            {vendors.map((v) => (
-              <option key={v._id || v.id} value={v._id || v.id}>
-                {v.name}
-              </option>
-            ))}
           </select>
         </label>
 
@@ -252,10 +169,6 @@ const GRNList = () => {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </label>
-
-        <button className="sa-secondary-button" onClick={clearFilters}>
-          Clear
-        </button>
       </div>
 
       {error && <div className="sa-error">{error}</div>}
@@ -290,16 +203,19 @@ const GRNList = () => {
               ) : (
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
-                    <td style={{ color: "#4ea1ff", cursor: "pointer" }} onClick={() => viewGrn(g)}>
+                    <td
+                      style={{ color: "#4ea1ff", cursor: "pointer" }}
+                      onClick={() => viewGrn(g)}
+                    >
                       {g.grnNo}
                     </td>
                     <td>{g.po?.poNo || "-"}</td>
                     <td>{g.requisition?.requisitionNo || "-"}</td>
-                    <td>{getVendorName(g.vendor)}</td>
-                    <td>{getResortName(g.resort)}</td>
-                    <td>{g.store?.name || "-"}</td>
+                    <td>{getVendorName(g)}</td>
+                    <td>{getResortName(g)}</td>
+                    <td>{getStoreName(g)}</td>
                     <td>{g.grnDate ? new Date(g.grnDate).toLocaleDateString() : "-"}</td>
-                    <td>{g.status || "CREATED"}</td>
+                    <td>{normalizeGrnStatus(g.status)}</td>
                     <td>
                       <i className="ri-eye-line" onClick={() => viewGrn(g)} />
                       <i
