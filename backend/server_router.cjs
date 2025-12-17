@@ -1330,7 +1330,9 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
 // ==================================================
 // 📦 CREATE GRN FROM REQUISITION
 // ==================================================
+// ✅ CORRECT
 router.post("/api/requisitions/:id/create-grn", async (req, res) => {
+
 
 
   try {
