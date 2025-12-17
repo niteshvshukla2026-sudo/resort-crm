@@ -525,14 +525,14 @@ const getResortName = (resort) => {
       }
 
       // RESORT
-      if (resortFilter) {
-       const val =
-  p.resort?.name ||
-  p.resortName ||
-  "";
+     // RESORT (FINAL FIX)
+if (resortFilter) {
+  const resortName = p.resort?.name || "";
+  if (!resortName.toLowerCase().includes(resortFilter.toLowerCase())) {
+    return false;
+  }
+}
 
-        if (!val.toString().toLowerCase().includes(resortFilter.toString().toLowerCase())) return false;
-      }
 
       // VENDOR
       if (vendorFilter) {
