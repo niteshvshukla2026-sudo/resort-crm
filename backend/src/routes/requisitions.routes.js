@@ -6,16 +6,18 @@ const PurchaseOrder = require("../models/PurchaseOrder");
 const GRN = require("../models/GRN");
 
 /**
- * ==========================================
+ * =====================================================
  * GET /api/requisitions
- * ?resort=RESORT_ID
- * ==========================================
+ * Optional query:
+ *   ?resort=RESORT_ID
+ * =====================================================
  */
 router.get("/", async (req, res) => {
   try {
     const { resort } = req.query;
-
     const query = {};
+
+    // 🔥 Resort-wise filter (global)
     if (resort && resort !== "ALL") {
       query.resort = resort;
     }
@@ -39,36 +41,30 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * ==========================================
+ * =====================================================
  * POST /api/requisitions (CREATE)
- * ==========================================
+ * =====================================================
  */
 router.post("/", async (req, res) => {
   try {
     const payload = { ...req.body };
 
-    if (!payload.resort) {
-      return res.status(400).json({
-        message: "Resort is required to create requisition",
-      });
-    }
-
-    // 🔥 normalize resort id
+    // ❌ Resort mandatory
     payload.resort =
       payload.resort?._id ||
       payload.resort?.id ||
       payload.resort;
 
+    if (!payload.resort) {
+      return res.status(400).json({ message: "Resort is required" });
+    }
+
     if (!payload.type) {
-      return res.status(400).json({
-        message: "Requisition type is required",
-      });
+      return res.status(400).json({ message: "Requisition type required" });
     }
 
     if (!payload.lines || !payload.lines.length) {
-      return res.status(400).json({
-        message: "At least one item line is required",
-      });
+      return res.status(400).json({ message: "At least one item required" });
     }
 
     payload.status = "PENDING";
@@ -91,24 +87,22 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * ==========================================
+ * =====================================================
  * PUT /api/requisitions/:id (UPDATE)
- * ==========================================
+ * =====================================================
  */
 router.put("/:id", async (req, res) => {
   try {
     const payload = { ...req.body };
 
-    if (!payload.resort) {
-      return res.status(400).json({
-        message: "Resort is required",
-      });
-    }
-
     payload.resort =
       payload.resort?._id ||
       payload.resort?.id ||
       payload.resort;
+
+    if (!payload.resort) {
+      return res.status(400).json({ message: "Resort is required" });
+    }
 
     const updated = await Requisition.findByIdAndUpdate(
       req.params.id,
@@ -134,111 +128,9 @@ router.put("/:id", async (req, res) => {
 });
 
 /**
- * ==========================================
- * POST /api/requisitions/:id/approve
- * ==========================================
- */
-router.post("/:id/approve", async (req, res) => {
-  try {
-    const reqDoc = await Requisition.findById(req.params.id);
-    if (!reqDoc) return res.status(404).json({ message: "Requisition not found" });
-
-    reqDoc.status = "APPROVED";
-    await reqDoc.save();
-
-    res.json(reqDoc);
-  } catch (err) {
-    console.error("approve error", err);
-    res.status(500).json({ message: "Failed to approve requisition" });
-  }
-});
-
-/**
- * ==========================================
- * POST /api/requisitions/:id/create-po
- * ==========================================
- */
-router.post("/:id/create-po", async (req, res) => {
-  try {
-    const requisition = await Requisition.findById(req.params.id);
-
-    if (!requisition) {
-      return res.status(404).json({ message: "Requisition not found" });
-    }
-
-    if (!requisition.resort) {
-      return res.status(400).json({
-        message: "Requisition has no resort assigned",
-      });
-    }
-
-    if (requisition.po) {
-      return res.status(400).json({ message: "PO already created" });
-    }
-
-    const payload = {
-      ...req.body,
-      resort: requisition.resort, // 🔥 force resort
-    };
-
-    const po = await PurchaseOrder.create(payload);
-
-    requisition.po = po._id;
-    requisition.status = "PO_CREATED";
-    await requisition.save();
-
-    res.json({ requisition, po });
-  } catch (err) {
-    console.error("create PO error", err);
-    res.status(500).json({ message: "Failed to create PO" });
-  }
-});
-
-/**
- * ==========================================
- * POST /api/requisitions/:id/create-grn
- * ==========================================
- */
-router.post("/:id/create-grn", async (req, res) => {
-  try {
-    const requisition = await Requisition.findById(req.params.id);
-
-    if (!requisition) {
-      return res.status(404).json({ message: "Requisition not found" });
-    }
-
-    if (!requisition.resort) {
-      return res.status(400).json({
-        message: "Requisition has no resort assigned",
-      });
-    }
-
-    if (requisition.grn) {
-      return res.status(400).json({ message: "GRN already created" });
-    }
-
-    const payload = {
-      ...req.body,
-      resort: requisition.resort, // 🔥 force resort
-    };
-
-    const grn = await GRN.create(payload);
-
-    requisition.grn = grn._id;
-    requisition.status = "GRN_CREATED";
-    await requisition.save();
-
-    res.json({ requisition, grn });
-  } catch (err) {
-    console.error("create GRN error", err);
-    res.status(500).json({ message: "Failed to create GRN" });
-  }
-});
-
-/**
- * ==========================================
+ * =====================================================
  * DELETE /api/requisitions/:id
- * ==========================================
+ * =====================================================
  */
 router.delete("/:id", async (req, res) => {
   try {
@@ -250,6 +142,91 @@ router.delete("/:id", async (req, res) => {
   } catch (err) {
     console.error("DELETE /requisitions error", err);
     res.status(500).json({ message: "Failed to delete requisition" });
+  }
+});
+
+/**
+ * =====================================================
+ * POST /api/requisitions/:id/approve
+ * =====================================================
+ */
+router.post("/:id/approve", async (req, res) => {
+  try {
+    const r = await Requisition.findById(req.params.id);
+    if (!r) return res.status(404).json({ message: "Requisition not found" });
+
+    r.status = "APPROVED";
+    await r.save();
+
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to approve requisition" });
+  }
+});
+
+/**
+ * =====================================================
+ * POST /api/requisitions/:id/create-po
+ * =====================================================
+ */
+router.post("/:id/create-po", async (req, res) => {
+  try {
+    const requisition = await Requisition.findById(req.params.id);
+
+    if (!requisition)
+      return res.status(404).json({ message: "Requisition not found" });
+
+    if (requisition.type !== "VENDOR")
+      return res.status(400).json({ message: "PO only for vendor requisition" });
+
+    if (requisition.po)
+      return res.status(400).json({ message: "PO already created" });
+
+    const po = await PurchaseOrder.create({
+      ...req.body,
+      requisition: requisition._id,
+      status: "CREATED",
+    });
+
+    requisition.po = po._id;
+    requisition.status = "PO_CREATED";
+    await requisition.save();
+
+    res.json({ requisition, po });
+  } catch (err) {
+    console.error("CREATE PO error", err);
+    res.status(500).json({ message: "Failed to create PO" });
+  }
+});
+
+/**
+ * =====================================================
+ * POST /api/requisitions/:id/create-grn
+ * =====================================================
+ */
+router.post("/:id/create-grn", async (req, res) => {
+  try {
+    const requisition = await Requisition.findById(req.params.id);
+
+    if (!requisition)
+      return res.status(404).json({ message: "Requisition not found" });
+
+    if (requisition.grn)
+      return res.status(400).json({ message: "GRN already created" });
+
+    const grn = await GRN.create({
+      ...req.body,
+      requisition: requisition._id,
+    });
+
+    requisition.grn = grn._id;
+    requisition.status = "GRN_CREATED";
+    await requisition.save();
+
+    res.json({ requisition, grn });
+  } catch (err) {
+    console.error("CREATE GRN error", err);
+    res.status(500).json({ message: "Failed to create GRN" });
   }
 });
 
