@@ -111,7 +111,8 @@ async function start() {
 
   if (router) {
     // NOTE: mount at root so /api/... works as defined in router
-    app.use("/api", router);
+   app.use("/", router);
+
         console.log("Router mounted at /");
   } else {
     console.warn("No router mounted — app running with minimal endpoints");
