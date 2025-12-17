@@ -332,7 +332,7 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-  router.post("/api/auth/login", safe("login"));
+  router.post("/auth/login", safe("login"));
 
   // ------------------------
   // 📊 Dashboard
@@ -901,35 +901,33 @@ function createRouter({ useMongo, mongoose }) {
   // --- handlers ---
  const listVendorsHandler = async (req, res) => {
   try {
-    const { resort } = req.query;
-
-    const query = {};
-
-    // 🔥 MAIN FIX
-    if (resort && resort !== "ALL") {
-      query.resorts = resort;
-    }
+    const { resort } = req.query; // 👈 SAME AS STORE
 
     if (VendorModel) {
-      const docs = await VendorModel.find(query).lean();
+      const filter = {};
+
+      // 👇 IMPORTANT: vendors.resorts is ARRAY
+      if (resort && resort !== "ALL") {
+        filter.resorts = resort;
+      }
+
+      const docs = await VendorModel.find(filter).lean();
       return res.json(docs);
     }
 
-    // in-memory fallback
-    let list = memVendors;
+    // ---- in-memory fallback ----
     if (resort && resort !== "ALL") {
-      list = list.filter(
-        (v) => Array.isArray(v.resorts) && v.resorts.includes(resort)
+      return res.json(
+        memVendors.filter(v => Array.isArray(v.resorts) && v.resorts.includes(resort))
       );
     }
 
-    return res.json(list);
+    return res.json(memVendors);
   } catch (err) {
     console.error("GET /api/vendors error", err);
     res.status(500).json({ message: "Failed to list vendors" });
   }
 };
-
 
 
   const createVendorHandler = async (req, res) => {
