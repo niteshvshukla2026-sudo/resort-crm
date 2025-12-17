@@ -36,6 +36,16 @@ const POList = () => {
   const [requisitions, setRequisitions] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [resorts, setResorts] = useState([]);
+  // 🔑 Resort lookup map (id → name)
+const resortMap = React.useMemo(() => {
+  const map = {};
+  resorts.forEach((r) => {
+    if (r._id) map[String(r._id)] = r.name;
+    if (r.id) map[String(r.id)] = r.name;
+  });
+  return map;
+}, [resorts]);
+
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
 
@@ -481,20 +491,13 @@ const POList = () => {
  const getResortName = (resort) => {
   if (!resort) return "-";
 
-  // 🟢 Case 1: populated object
+  // case: populated object
   if (typeof resort === "object") {
     return resort.name || "-";
   }
 
-  // 🟢 Case 2: string / ObjectId → lookup
-  const found = resorts.find(
-    (r) =>
-      r._id?.toString() === resort?.toString() ||
-      r.id?.toString() === resort?.toString()
-  );
-
-  // 🟢 Case 3: fallback (jab resorts late aaye)
-  return found?.name || resort;
+  // case: id string → lookup map
+  return resortMap[String(resort)] || "-";
 };
 
 
