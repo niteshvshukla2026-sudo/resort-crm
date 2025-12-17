@@ -8,8 +8,6 @@ const GRN = require("../models/GRN");
 /**
  * =====================================================
  * GET /api/requisitions
- * Optional query:
- *   ?resort=RESORT_ID
  * =====================================================
  */
 router.get("/", async (req, res) => {
@@ -17,7 +15,6 @@ router.get("/", async (req, res) => {
     const { resort } = req.query;
     const query = {};
 
-    // 🔥 Resort-wise filter (global)
     if (resort && resort !== "ALL") {
       query.resort = resort;
     }
@@ -25,9 +22,9 @@ router.get("/", async (req, res) => {
     const list = await Requisition.find(query)
       .populate("resort", "name")
       .populate("department", "name")
-      .populate("fromStore", "name resort")
-      .populate("toStore", "name resort")
-      .populate("store", "name resort")
+      .populate("fromStore", "name")
+      .populate("toStore", "name")
+      .populate("store", "name")
       .populate("vendor", "name")
       .populate("po")
       .populate("grn")
@@ -42,30 +39,26 @@ router.get("/", async (req, res) => {
 
 /**
  * =====================================================
- * POST /api/requisitions (CREATE)
+ * POST /api/requisitions
  * =====================================================
  */
 router.post("/", async (req, res) => {
   try {
     const payload = { ...req.body };
 
-    // ❌ Resort mandatory
     payload.resort =
       payload.resort?._id ||
       payload.resort?.id ||
       payload.resort;
 
-    if (!payload.resort) {
+    if (!payload.resort)
       return res.status(400).json({ message: "Resort is required" });
-    }
 
-    if (!payload.type) {
+    if (!payload.type)
       return res.status(400).json({ message: "Requisition type required" });
-    }
 
-    if (!payload.lines || !payload.lines.length) {
+    if (!payload.lines || !payload.lines.length)
       return res.status(400).json({ message: "At least one item required" });
-    }
 
     payload.status = "PENDING";
 
@@ -74,9 +67,9 @@ router.post("/", async (req, res) => {
     const populated = await Requisition.findById(requisition._id)
       .populate("resort", "name")
       .populate("department", "name")
-      .populate("fromStore", "name resort")
-      .populate("toStore", "name resort")
-      .populate("store", "name resort")
+      .populate("fromStore", "name")
+      .populate("toStore", "name")
+      .populate("store", "name")
       .populate("vendor", "name");
 
     res.status(201).json(populated);
@@ -88,7 +81,7 @@ router.post("/", async (req, res) => {
 
 /**
  * =====================================================
- * PUT /api/requisitions/:id (UPDATE)
+ * PUT /api/requisitions/:id
  * =====================================================
  */
 router.put("/:id", async (req, res) => {
@@ -100,9 +93,8 @@ router.put("/:id", async (req, res) => {
       payload.resort?.id ||
       payload.resort;
 
-    if (!payload.resort) {
+    if (!payload.resort)
       return res.status(400).json({ message: "Resort is required" });
-    }
 
     const updated = await Requisition.findByIdAndUpdate(
       req.params.id,
@@ -111,14 +103,13 @@ router.put("/:id", async (req, res) => {
     )
       .populate("resort", "name")
       .populate("department", "name")
-      .populate("fromStore", "name resort")
-      .populate("toStore", "name resort")
-      .populate("store", "name resort")
+      .populate("fromStore", "name")
+      .populate("toStore", "name")
+      .populate("store", "name")
       .populate("vendor", "name");
 
-    if (!updated) {
+    if (!updated)
       return res.status(404).json({ message: "Requisition not found" });
-    }
 
     res.json(updated);
   } catch (err) {
@@ -135,9 +126,9 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const deleted = await Requisition.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    if (!deleted)
       return res.status(404).json({ message: "Requisition not found" });
-    }
+
     res.json({ message: "Requisition deleted" });
   } catch (err) {
     console.error("DELETE /requisitions error", err);
@@ -153,7 +144,8 @@ router.delete("/:id", async (req, res) => {
 router.post("/:id/approve", async (req, res) => {
   try {
     const r = await Requisition.findById(req.params.id);
-    if (!r) return res.status(404).json({ message: "Requisition not found" });
+    if (!r)
+      return res.status(404).json({ message: "Requisition not found" });
 
     r.status = "APPROVED";
     await r.save();
@@ -171,7 +163,9 @@ router.post("/:id/approve", async (req, res) => {
  */
 router.post("/:id/create-po", async (req, res) => {
   try {
-    const requisition = await Requisition.findById(req.params.id);
+    const requisition = await Requisition.findById(req.params.id)
+      .populate("vendor")
+      .populate("resort");
 
     if (!requisition)
       return res.status(404).json({ message: "Requisition not found" });
@@ -179,20 +173,33 @@ router.post("/:id/create-po", async (req, res) => {
     if (requisition.type !== "VENDOR")
       return res.status(400).json({ message: "PO only for vendor requisition" });
 
+    if (requisition.status !== "APPROVED")
+      return res.status(400).json({ message: "Requisition not approved" });
+
     if (requisition.po)
       return res.status(400).json({ message: "PO already created" });
 
+    if (!requisition.vendor)
+      return res.status(400).json({ message: "Vendor missing in requisition" });
+
     const po = await PurchaseOrder.create({
-      ...req.body,
       requisition: requisition._id,
+      vendor: requisition.vendor._id,
+      resort: requisition.resort._id,
+      items: requisition.lines,
       status: "CREATED",
+      createdAt: new Date(),
     });
 
     requisition.po = po._id;
     requisition.status = "PO_CREATED";
     await requisition.save();
 
-    res.json({ requisition, po });
+    res.json({
+      message: "PO created successfully",
+      po,
+      requisition,
+    });
   } catch (err) {
     console.error("CREATE PO error", err);
     res.status(500).json({ message: "Failed to create PO" });
@@ -206,24 +213,34 @@ router.post("/:id/create-po", async (req, res) => {
  */
 router.post("/:id/create-grn", async (req, res) => {
   try {
-    const requisition = await Requisition.findById(req.params.id);
+    const requisition = await Requisition.findById(req.params.id)
+      .populate("po");
 
     if (!requisition)
       return res.status(404).json({ message: "Requisition not found" });
+
+    if (!requisition.po)
+      return res.status(400).json({ message: "PO not created yet" });
 
     if (requisition.grn)
       return res.status(400).json({ message: "GRN already created" });
 
     const grn = await GRN.create({
-      ...req.body,
       requisition: requisition._id,
+      po: requisition.po._id,
+      items: requisition.lines,
+      receivedDate: new Date(),
     });
 
     requisition.grn = grn._id;
     requisition.status = "GRN_CREATED";
     await requisition.save();
 
-    res.json({ requisition, grn });
+    res.json({
+      message: "GRN created successfully",
+      grn,
+      requisition,
+    });
   } catch (err) {
     console.error("CREATE GRN error", err);
     res.status(500).json({ message: "Failed to create GRN" });

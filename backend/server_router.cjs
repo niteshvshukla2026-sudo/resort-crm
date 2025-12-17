@@ -364,32 +364,17 @@ function createRouter({ useMongo, mongoose }) {
   // =======================================================
 
   const listStoresHandler = async (req, res) => {
-  try {
-    const { resort } = req.query; // 👈 NEW
-
-    if (StoreModel) {
-      const filter = {};
-
-      if (resort && resort !== "ALL") {
-        filter.resort = resort;
+    try {
+      if (StoreModel) {
+        const docs = await StoreModel.find().lean();
+        return res.json(docs);
       }
-
-      const docs = await StoreModel.find(filter).lean();
-      return res.json(docs);
+      return res.json(memStores);
+    } catch (err) {
+      console.error("GET /api/stores error", err);
+      res.status(500).json({ message: "Failed to list stores" });
     }
-
-    // in-memory fallback
-    if (resort && resort !== "ALL") {
-      return res.json(memStores.filter(s => s.resort === resort));
-    }
-
-    return res.json(memStores);
-  } catch (err) {
-    console.error("GET /api/stores error", err);
-    res.status(500).json({ message: "Failed to list stores" });
-  }
-};
-
+  };
 
   const createStoreHandler = async (req, res) => {
     try {
