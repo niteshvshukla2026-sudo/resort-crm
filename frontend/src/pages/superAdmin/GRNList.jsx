@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// row template
+// row template (only for edit/view safety)
 const line = () => ({
   lineId: `grn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
   item: "",
@@ -15,6 +15,8 @@ const line = () => ({
 });
 
 const GRNList = () => {
+  const navigate = useNavigate();
+
   const [grnList, setGrnList] = useState([]);
   const [poList, setPoList] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -23,40 +25,26 @@ const GRNList = () => {
   const [items, setItems] = useState([]);
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingGrnId, setEditingGrnId] = useState(null); // null -> create, otherwise edit
-
-  const [form, setForm] = useState({
-    resort: "",
-    store: "",
-    vendor: "",
-    poId: "",
-    grnDate: new Date().toISOString().slice(0, 10),
-    lines: [line()],
-    grnNo: "",
-  });
-
-  const navigate = useNavigate();
-
   // FILTER STATES
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [resortFilter, setResortFilter] = useState("");
-  const [vendorFilter, setVendorFilter] = useState("");
   const [searchText, setSearchText] = useState("");
 
-  // Load data — strict backend-only fetching, no demo fallback
+  // ---------------- LOAD DATA ----------------
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [grnRes, poRes, vendorRes, resortRes, storeRes, itemRes] = await Promise.all([
+      const [
+        grnRes,
+        poRes,
+        vendorRes,
+        resortRes,
+        storeRes,
+        itemRes,
+      ] = await Promise.all([
         axios.get(`${API_BASE}/api/grn`),
         axios.get(`${API_BASE}/api/po`),
         axios.get(`${API_BASE}/api/vendors`),
@@ -66,26 +54,26 @@ const GRNList = () => {
       ]);
 
       const serverGrns = Array.isArray(grnRes.data) ? grnRes.data : [];
-      // show only GRNs that were created from a PO or a requisition
-      const backendOnlyGrns = serverGrns.filter((g) => g.poId || g.requisitionId);
 
-      setGrnList(backendOnlyGrns);
-      setPoList(Array.isArray(poRes.data) ? poRes.data : []);
-      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
+      // ✅ ONLY VALID BACKEND GRNs (created from PO or requisition)
+      const validGrns = serverGrns.filter(
+        (g) => g.poId || g.requisitionId
+      );
+
+      setGrnList(validGrns);
+      setPoList(poRes.data || []);
+      setVendors(vendorRes.data || []);
+      setResorts(resortRes.data || []);
+      setStores(storeRes.data || []);
+      setItems(itemRes.data || []);
     } catch (err) {
       console.error("GRN load error", err);
-      const msg = err?.response?.data?.message || err?.message || "Failed to load data from backend";
-      setError(msg);
-      // Clear lists when backend fails — do not inject demo data
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load GRNs"
+      );
       setGrnList([]);
-      setPoList([]);
-      setVendors([]);
-      setResorts([]);
-      setStores([]);
-      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -96,76 +84,98 @@ const GRNList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const viewGrn = (g) => {
-    const idOrNo = g._id || g.grnNo;
-    if (!idOrNo) return;
-    navigate(`/super-admin/grn/${idOrNo}`);
-  };
+  // ---------------- FILTERED LIST ----------------
+  const filteredGrns = useMemo(() => {
+    return grnList.filter((g) => {
+      // Resort filter
+      if (resortFilter && resortFilter !== "ALL") {
+        if (String(g.resort) !== String(resortFilter)) return false;
+      }
 
-  const openEditGrn = (g) => {
-    // prevent editing if approved
-    if (g.status === "Approved") return alert("Approved GRN cannot be edited");
+      // Search
+      if (searchText) {
+        const t = searchText.toLowerCase();
+        if (
+          !String(g.grnNo || "").toLowerCase().includes(t) &&
+          !String(g.vendor || "").toLowerCase().includes(t)
+        ) {
+          return false;
+        }
+      }
 
-    setEditingGrnId(g._id || g.id);
-    setForm({
-      grnNo: g.grnNo || "",
-      resort: g.resort || "",
-      store: g.store || "",
-      vendor: g.vendor || "",
-      poId: g.poId || "",
-      grnDate: (g.grnDate || g.date || new Date().toISOString()).slice(0, 10),
-      lines:
-        (g.lines &&
-          g.lines.map((ln) => ({
-            lineId: ln.lineId || `grn_${Math.floor(Math.random() * 100000)}`,
-            item: ln.item || "",
-            poQty: ln.poQty || 0,
-            receivedQty: ln.receivedQty || "",
-            rejectedQty: ln.rejectedQty || "",
-            acceptedQty: ln.acceptedQty || 0,
-          }))) || [line()],
+      return true;
     });
-    setShowForm(true);
+  }, [grnList, resortFilter, searchText]);
+
+  // ---------------- ACTIONS ----------------
+  const viewGrn = (g) => {
+    const id = g._id || g.grnNo;
+    if (!id) return;
+    navigate(`/super-admin/grn/${id}`);
   };
 
   const handleDelete = async (g) => {
-    if (g.status === "Approved") return alert("Approved GRN cannot be deleted");
+    if (g.status === "Approved") {
+      alert("Approved GRN cannot be deleted");
+      return;
+    }
 
-    if (!window.confirm(`❗ Delete GRN ${g.grnNo}?`)) return;
+    if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
+
     try {
-      setGrnList((p) => p.filter((x) => x._id !== g._id));
       await axios.delete(`${API_BASE}/api/grn/${g._id}`);
+      await loadData();
     } catch (err) {
       console.error(err);
-      setError("Failed to delete");
-      await loadData();
+      alert("Failed to delete GRN");
     }
   };
 
+  // ---------------- UI ----------------
   return (
     <div className="sa-page">
       {/* HEADER */}
-      <div className="sa-page-header" style={{ alignItems: "flex-start" }}>
+      <div className="sa-page-header">
         <div>
-          <h2>GRN (Goods Receipt)</h2>
-          <p>GRNs created from Purchase Orders. Manual GRN creation disabled.</p>
+          <h2>GRN (Goods Receipt Note)</h2>
+          <p>GRNs created from Vendor Requisitions / Purchase Orders</p>
         </div>
 
-        {/* NO NEW GRN BUTTON */}
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            className="sa-secondary-button"
-            onClick={() => {
-              loadData();
-            }}
-          >
+          <button className="sa-secondary-button" onClick={loadData}>
             Refresh
           </button>
         </div>
       </div>
 
-      {/* GRN LIST */}
+      {/* FILTER BAR */}
+      <div className="sa-card" style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <select
+            value={resortFilter}
+            onChange={(e) => setResortFilter(e.target.value)}
+          >
+            <option value="">All Resorts</option>
+            {resorts.map((r) => (
+              <option key={r._id} value={r._id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Search GRN no / vendor"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* ERROR */}
+      {error && <div className="sa-error">{error}</div>}
+
+      {/* LIST */}
       <div className="sa-card">
         {loading ? (
           <div>Loading…</div>
@@ -174,7 +184,7 @@ const GRNList = () => {
             <thead>
               <tr>
                 <th>GRN No</th>
-                <th>PO No</th>
+                <th>PO</th>
                 <th>Vendor</th>
                 <th>Resort</th>
                 <th>Store</th>
@@ -185,49 +195,58 @@ const GRNList = () => {
             </thead>
 
             <tbody>
-              {grnList.map((g) => (
-                <tr key={g._id}>
-                  <td onClick={() => viewGrn(g)} style={{ cursor: "pointer", color: "#0b69ff" }}>
-                    {g.grnNo}
-                  </td>
-                  <td>{g.poId || g.po || "-"}</td>
-                  <td>{g.vendor}</td>
-                  <td>{g.resort}</td>
-                  <td>{g.store}</td>
-                  <td>{g.grnDate?.slice(0, 10)}</td>
-                  <td>{g.status || "Open"}</td>
-
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {/* VIEW */}
-                    <span style={{ cursor: "pointer", padding: 6 }} title="View" onClick={() => viewGrn(g)}>
-                      <i className="ri-eye-line" />
-                    </span>
-
-                    {/* EDIT (Disabled after approval) */}
-                    {g.status === "Approved" ? (
-                      <span style={{ opacity: 0.4, padding: 6 }}>
-                        <i className="ri-edit-line" />
-                      </span>
-                    ) : (
-                      <span style={{ cursor: "pointer", padding: 6 }} title="Edit" onClick={() => openEditGrn(g)}>
-                        <i className="ri-edit-line" />
-                      </span>
-                    )}
-
-                    {/* DELETE (Disabled after approval) */}
-                    {g.status === "Approved" ? (
-                      <span style={{ opacity: 0.4, padding: 6 }}>
-                        <i className="ri-delete-bin-6-line" />
-                      </span>
-                    ) : (
-                      <span style={{ cursor: "pointer", padding: 6 }} title="Delete" onClick={() => handleDelete(g)}>
-                        <i className="ri-delete-bin-6-line" />
-                      </span>
-                    )}
-
+              {filteredGrns.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center" }}>
+                    No GRNs found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredGrns.map((g) => (
+                  <tr key={g._id}>
+                    <td
+                      style={{ cursor: "pointer", color: "#0b69ff" }}
+                      onClick={() => viewGrn(g)}
+                    >
+                      {g.grnNo}
+                    </td>
+                    <td>{g.poId || "-"}</td>
+                    <td>{g.vendor || "-"}</td>
+                    <td>
+                      {resorts.find((r) => r._id === g.resort)?.name || "-"}
+                    </td>
+                    <td>
+                      {stores.find((s) => s._id === g.store)?.name || "-"}
+                    </td>
+                    <td>{g.grnDate?.slice(0, 10)}</td>
+                    <td>{g.status || "OPEN"}</td>
+
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span
+                        title="View"
+                        style={{ cursor: "pointer", padding: 6 }}
+                        onClick={() => viewGrn(g)}
+                      >
+                        <i className="ri-eye-line" />
+                      </span>
+
+                      {g.status === "Approved" ? (
+                        <span style={{ opacity: 0.4, padding: 6 }}>
+                          <i className="ri-delete-bin-6-line" />
+                        </span>
+                      ) : (
+                        <span
+                          title="Delete"
+                          style={{ cursor: "pointer", padding: 6 }}
+                          onClick={() => handleDelete(g)}
+                        >
+                          <i className="ri-delete-bin-6-line" />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         )}

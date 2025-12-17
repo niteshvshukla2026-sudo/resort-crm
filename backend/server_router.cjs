@@ -1359,19 +1359,36 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
     }
 
     // 3️⃣ Create GRN object
-    const grn = {
-      _id: `grn_${Date.now()}`,
-      grnNo: req.body.grnNo,
-      requisition: id,
-      store: req.body.store,
-      receivedBy: req.body.receivedBy,
-      receivedDate: req.body.receivedDate,
-      challanNo: req.body.challanNo,
-      billNo: req.body.billNo,
-      items: req.body.items || [],
-      status: "CREATED",
-      createdAt: new Date(),
-    };
+    const grnPayload = {
+  grnNo: req.body.grnNo || makeGrnNo(),
+  requisitionId: id,                 // 🔥 REQUIRED
+  poId: reqDoc.po || null,            // 🔥 REQUIRED (null allowed)
+  vendor: reqDoc.vendor || null,
+  resort: reqDoc.resort || null,      // 🔥 REQUIRED FOR FILTER
+  store: req.body.store || reqDoc.store || null,
+  grnDate: req.body.grnDate || new Date(),
+  items: (req.body.items || []).map(it => ({
+    item: it.item,
+    receivedQty: Number(it.receivedQty || 0),
+    pendingQty: 0,
+    remark: it.remark || "",
+  })),
+};
+
+let grnDoc;
+if (GRNModel) {
+  grnDoc = await GRNModel.create(grnPayload);
+
+  await RequisitionModel.findByIdAndUpdate(id, {
+    $set: { status: "GRN_CREATED" },
+  });
+} else {
+  grnDoc = { _id: `grn_${Date.now()}`, ...grnPayload };
+  memGRNs.push(grnDoc);
+}
+
+return res.status(201).json(grnDoc);
+
 
     // 4️⃣ Update requisition
     reqDoc.grn = {
