@@ -1,6 +1,7 @@
 // src/pages/superAdmin/VendorList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -39,6 +40,8 @@ const emptyForm = () => ({
 });
 
 const VendorList = () => {
+  
+  const { selectedResort } = useResort(); 
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -775,35 +778,61 @@ const VendorList = () => {
   };
 
   const filtered = useMemo(() => {
-    return vendors.filter((v) => {
-      if (
-        filterName &&
-        !v.name?.toLowerCase().includes(filterName.toLowerCase())
-      )
+  return vendors.filter((v) => {
+
+    // 🔥 RESORT WISE FILTER (GLOBAL DROPDOWN)
+    if (selectedResort && selectedResort !== "ALL") {
+      const vendorResorts = Array.isArray(v.resorts)
+        ? v.resorts.map(String)
+        : [];
+
+      if (!vendorResorts.includes(String(selectedResort))) {
         return false;
-      if (
-        filterCode &&
-        !v.code?.toLowerCase().includes(filterCode.toLowerCase())
-      )
-        return false;
-      if (
-        filterCity &&
-        !v.city?.toLowerCase().includes(filterCity.toLowerCase())
-      )
-        return false;
-      if (
-        filterPhone &&
-        !v.phone?.toLowerCase().includes(filterPhone.toLowerCase())
-      )
-        return false;
-      if (
-        filterEmail &&
-        !v.email?.toLowerCase().includes(filterEmail.toLowerCase())
-      )
-        return false;
-      return true;
-    });
-  }, [vendors, filterName, filterCode, filterCity, filterPhone, filterEmail]);
+      }
+    }
+
+    // Existing filters
+    if (
+      filterName &&
+      !v.name?.toLowerCase().includes(filterName.toLowerCase())
+    )
+      return false;
+
+    if (
+      filterCode &&
+      !v.code?.toLowerCase().includes(filterCode.toLowerCase())
+    )
+      return false;
+
+    if (
+      filterCity &&
+      !v.city?.toLowerCase().includes(filterCity.toLowerCase())
+    )
+      return false;
+
+    if (
+      filterPhone &&
+      !v.phone?.toLowerCase().includes(filterPhone.toLowerCase())
+    )
+      return false;
+
+    if (
+      filterEmail &&
+      !v.email?.toLowerCase().includes(filterEmail.toLowerCase())
+    )
+      return false;
+
+    return true;
+  });
+}, [
+  vendors,
+  selectedResort,
+  filterName,
+  filterCode,
+  filterCity,
+  filterPhone,
+  filterEmail,
+]);
 
   const cities = useMemo(
     () => Array.from(new Set(vendors.map((x) => x.city).filter(Boolean))),
