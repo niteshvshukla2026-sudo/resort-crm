@@ -177,33 +177,30 @@ const RequisitionList = () => {
 
   // lookup helpers
   // Accepts either id string or an object { _id, name } or even name string.
-  const lookupName = (list, ref) => {
-    if (!ref && ref !== 0) return "-";
+const lookupName = (list, ref) => {
+  if (!ref && ref !== 0) return "-";
+  if (!Array.isArray(list)) return "-";
 
-    // if ref is object with _id or name
-    let refId = ref;
-    let refName = null;
-    if (typeof ref === "object") {
-      refId = ref._id ?? ref.id ?? ref;
-      refName = ref.name ?? ref.title ?? null;
-    }
+  let refId = ref;
+  let refName = null;
 
-    // try to find by id or alias fields
-    const found = list.find(
-      (x) =>
-        String(x._id) === String(refId) ||
-        String(x.id) === String(refId) ||
-        String(x.code) === String(refId) ||
-        String(x.name) === String(refId) ||
-        (refName && String(x.name) === String(refName))
-    );
+  if (typeof ref === "object") {
+    refId = ref._id ?? ref.id ?? ref;
+    refName = ref.name ?? ref.title ?? null;
+  }
 
-    if (found) return found.name || found.code || String(refId);
-    // fallback to a readable name if we have it from the object
-    if (refName) return refName;
-    // finally fallback to the raw refId/string
-    return typeof refId === "string" ? refId : "-";
-  };
+  const found = list.find(
+    (x) =>
+      String(x._id) === String(refId) ||
+      String(x.id) === String(refId) ||
+      (refName && String(x.name) === String(refName))
+  );
+
+  if (found && found.name) return found.name;
+  if (refName) return refName;
+
+  return "-";
+};
 
   const getResortName = (r) => lookupName(resorts, r);
   const getDepartmentName = (d) => lookupName(departments, d);
