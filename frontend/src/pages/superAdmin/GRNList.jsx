@@ -5,120 +5,73 @@ import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// row template
-const line = () => ({
-  lineId: `grn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-  item: "",
-  poQty: 0,
-  receivedQty: 0,
-  rejectedQty: 0,
-  acceptedQty: 0,
-});
-
 const GRNList = () => {
   const navigate = useNavigate();
-  const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT FILTER
+  const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT
 
-  const [grnList, setGrnList] = useState([]);
-  const [poList, setPoList] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [resorts, setResorts] = useState([]);
-  const [stores, setStores] = useState([]);
-  const [items, setItems] = useState([]);
-
+  const [grns, setGrns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ===============================
-  // LOAD DATA
-  // ===============================
-  const loadData = async () => {
+  // ---------------------------------------
+  // LOAD GRNs
+  // ---------------------------------------
+  const loadGrns = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [
-        grnRes,
-        poRes,
-        vendorRes,
-        resortRes,
-        storeRes,
-        itemRes,
-      ] = await Promise.all([
-        axios.get(`${API_BASE}/api/grn`),
-        axios.get(`${API_BASE}/api/po`),
-        axios.get(`${API_BASE}/api/vendors`),
-        axios.get(`${API_BASE}/api/resorts`),
-        axios.get(`${API_BASE}/api/stores`),
-        axios.get(`${API_BASE}/api/items`),
-      ]);
+      const res = await axios.get(`${API_BASE}/api/grn`);
 
-      const serverGrns = Array.isArray(grnRes.data) ? grnRes.data : [];
-
-      // 🔥 IMPORTANT NORMALIZATION
-      const normalizedGrns = serverGrns
-        .filter((g) => g.poId || g.requisitionId)
-        .map((g) => ({
-          ...g,
-          lines: Array.isArray(g.lines)
-            ? g.lines
-            : Array.isArray(g.items)
-            ? g.items
-            : [],
-        }));
-
-      setGrnList(normalizedGrns);
-      setPoList(Array.isArray(poRes.data) ? poRes.data : []);
-      setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
+      // ✅ ALWAYS ensure array
+      const list = Array.isArray(res.data) ? res.data : [];
+      setGrns(list);
     } catch (err) {
       console.error("GRN load error", err);
-      setError(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load GRN data"
-      );
-      setGrnList([]);
+      setError("Failed to load GRNs");
+      setGrns([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadGrns();
   }, []);
 
-  // ===============================
-  // RESORT FILTER (GLOBAL)
-  // ===============================
+  // ---------------------------------------
+  // FILTER BY RESORT (GLOBAL DROPDOWN)
+  // ---------------------------------------
   const filteredGrns = useMemo(() => {
-    if (!selectedResort || selectedResort === "ALL") return grnList;
-    return grnList.filter((g) => g.resort === selectedResort);
-  }, [grnList, selectedResort]);
+    if (!selectedResort || selectedResort === "ALL") return grns;
 
-  // ===============================
-  // HELPERS
-  // ===============================
-  const viewGrn = (g) => {
-    const id = g._id || g.grnNo;
-    if (!id) return;
-    navigate(`/super-admin/grn/${id}`);
+    return grns.filter(
+      (g) => String(g.resort) === String(selectedResort)
+    );
+  }, [grns, selectedResort]);
+
+  // ---------------------------------------
+  // ACTIONS
+  // ---------------------------------------
+  const viewGrn = (grn) => {
+    navigate(`/super-admin/grn/${grn._id}`);
   };
 
-  const getVendorName = (id) =>
-    vendors.find((v) => v._id === id)?.name || id || "-";
+  const deleteGrn = async (grn) => {
+    if (!window.confirm(`Delete GRN ${grn.grnNo}?`)) return;
 
-  const getResortName = (id) =>
-    resorts.find((r) => r._id === id)?.name || id || "-";
+    try {
+      await axios.delete(`${API_BASE}/api/grn/${grn._id}`);
+      loadGrns();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete GRN");
+    }
+  };
 
-  const getStoreName = (id) =>
-    stores.find((s) => s._id === id)?.name || id || "-";
-
-  // ===============================
-  // RENDER
-  // ===============================
+  // ---------------------------------------
+  // UI
+  // ---------------------------------------
   return (
     <div className="sa-page">
       {/* HEADER */}
@@ -130,23 +83,19 @@ const GRNList = () => {
 
         <button
           className="sa-secondary-button"
-          onClick={loadData}
+          onClick={loadGrns}
         >
           Refresh
         </button>
       </div>
 
       {/* ERROR */}
-      {error && (
-        <div className="sa-alert sa-alert-error">
-          {error}
-        </div>
-      )}
+      {error && <div className="sa-error">{error}</div>}
 
       {/* TABLE */}
       <div className="sa-card">
         {loading ? (
-          <div>Loading...</div>
+          <div style={{ padding: 20 }}>Loading...</div>
         ) : (
           <table className="sa-table">
             <thead>
@@ -173,25 +122,40 @@ const GRNList = () => {
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
                     <td
-                      style={{ cursor: "pointer", color: "#0b69ff" }}
+                      style={{ color: "#4ea1ff", cursor: "pointer" }}
                       onClick={() => viewGrn(g)}
                     >
                       {g.grnNo}
                     </td>
-                    <td>{g.poId || "-"}</td>
-                    <td>{getVendorName(g.vendor)}</td>
-                    <td>{getResortName(g.resort)}</td>
-                    <td>{getStoreName(g.store)}</td>
-                    <td>{g.grnDate?.slice(0, 10)}</td>
-                    <td>{g.status || "OPEN"}</td>
 
+                    <td>{g.poId || "-"}</td>
+                    <td>{g.vendor || "-"}</td>
+                    <td>{g.resort || "-"}</td>
+                    <td>{g.store || "-"}</td>
                     <td>
+                      {g.grnDate
+                        ? new Date(g.grnDate).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td>{g.status || "CREATED"}</td>
+
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {/* VIEW */}
                       <span
-                        style={{ cursor: "pointer", padding: 6 }}
-                        onClick={() => viewGrn(g)}
                         title="View"
+                        style={{ cursor: "pointer", marginRight: 10 }}
+                        onClick={() => viewGrn(g)}
                       >
                         <i className="ri-eye-line" />
+                      </span>
+
+                      {/* DELETE */}
+                      <span
+                        title="Delete"
+                        style={{ cursor: "pointer", color: "#ff6b6b" }}
+                        onClick={() => deleteGrn(g)}
+                      >
+                        <i className="ri-delete-bin-line" />
                       </span>
                     </td>
                   </tr>
