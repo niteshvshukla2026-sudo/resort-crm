@@ -231,6 +231,63 @@ function createRouter({ useMongo, mongoose }) {
 
     console.log("Requisition model initialised (Mongo)");
 
+    // =======================================================
+// 🧾 CREATE PO FROM REQUISITION  (🔥 MISSING ROUTE FIX)
+// =======================================================
+router.post("/api/requisitions/:id/create-po", async (req, res) => {
+  try {
+    const requisitionId = req.params.id;
+
+    if (!RequisitionModel || !POModel) {
+      return res.status(500).json({ message: "Models not initialised" });
+    }
+
+    const reqDoc = await RequisitionModel.findById(requisitionId);
+    if (!reqDoc) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    if (reqDoc.type !== "VENDOR") {
+      return res
+        .status(400)
+        .json({ message: "PO allowed only for VENDOR requisition" });
+    }
+
+    const poNo = makePoNo();
+
+    const poPayload = {
+      poNo,
+      requisitionId,
+      vendor: reqDoc.vendor,
+      resort: reqDoc.resort,
+      deliverTo: reqDoc.store,
+      poDate: new Date(),
+      items: (reqDoc.lines || []).map((l) => ({
+        item: l.item,
+        qty: l.qty,
+        rate: 0,
+        amount: 0,
+        remark: l.remark || "",
+      })),
+      subTotal: 0,
+      taxPercent: 0,
+      taxAmount: 0,
+      total: 0,
+    };
+
+    const po = await POModel.create(poPayload);
+
+    await RequisitionModel.findByIdAndUpdate(requisitionId, {
+      $set: { status: "PO_CREATED" },
+    });
+
+    return res.status(201).json(po);
+  } catch (err) {
+    console.error("CREATE PO ERROR", err);
+    return res.status(500).json({ message: "Failed to create PO" });
+  }
+});
+
     // ------------------------
     // PO model
     // ------------------------
