@@ -481,17 +481,18 @@ const POList = () => {
   const getResortName = (resort) => {
   if (!resort) return "-";
 
-  // ✅ case 1: backend already populated object
+  // case 1: already populated object
   if (typeof resort === "object") {
-    return resort.name || resort._id || "-";
+    return resort.name || "-";
   }
 
-  // ✅ case 2: only id present → lookup from master list
+  // case 2: try from master list
   const found = resorts.find(
     (r) => r._id?.toString() === resort?.toString()
   );
 
-  return found ? found.name : resort;
+  // case 3: fallback
+  return found ? found.name : "-";
 };
 
 
@@ -722,7 +723,8 @@ const POList = () => {
                     </td>
                     <td>{getReqText(po.requisitionId)}</td>
                     <td>{getVendorName(po.vendor)}</td>
-                    <td>{getResortName(po.resort)}</td>
+                   <td>{getResortName(po.resort || po.resortName)}</td>
+
                     <td>{getStoreName(po.store)}</td>
                     <td>{(po.poDate || po.date || "").slice(0, 10)}</td>
                     <td>{po.status || "Open"}</td>
