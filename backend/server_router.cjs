@@ -239,18 +239,32 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
     const requisitionId = req.params.id;
 
     if (!RequisitionModel || !POModel) {
-      return res.status(500).json({ message: "Models not initialised" });
+      return res.status(500).json({ message: "Models not ready" });
     }
 
-    const reqDoc = await RequisitionModel.findById(requisitionId);
+    const reqDoc = await RequisitionModel.findById(requisitionId).lean();
     if (!reqDoc) {
       return res.status(404).json({ message: "Requisition not found" });
     }
 
+    // 🔴 ONLY VENDOR TYPE ALLOWED
     if (reqDoc.type !== "VENDOR") {
       return res
         .status(400)
         .json({ message: "PO allowed only for VENDOR requisition" });
+    }
+
+    // 🔴 HARD VALIDATIONS (THIS WAS MISSING)
+    if (!reqDoc.vendor) {
+      return res.status(400).json({ message: "Vendor missing in requisition" });
+    }
+
+    if (!reqDoc.store) {
+      return res.status(400).json({ message: "Store missing in requisition" });
+    }
+
+    if (!Array.isArray(reqDoc.lines) || reqDoc.lines.length === 0) {
+      return res.status(400).json({ message: "No items in requisition" });
     }
 
     const poNo = makePoNo();
@@ -262,31 +276,39 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
       resort: reqDoc.resort,
       deliverTo: reqDoc.store,
       poDate: new Date(),
-      items: (reqDoc.lines || []).map((l) => ({
+
+      items: reqDoc.lines.map((l) => ({
         item: l.item,
-        qty: l.qty,
+        qty: Number(l.qty),
         rate: 0,
         amount: 0,
         remark: l.remark || "",
       })),
+
       subTotal: 0,
       taxPercent: 0,
       taxAmount: 0,
       total: 0,
+      status: "OPEN",
     };
 
     const po = await POModel.create(poPayload);
 
+    // ✅ UPDATE REQUISITION STATUS
     await RequisitionModel.findByIdAndUpdate(requisitionId, {
       $set: { status: "PO_CREATED" },
     });
 
     return res.status(201).json(po);
   } catch (err) {
-    console.error("CREATE PO ERROR", err);
-    return res.status(500).json({ message: "Failed to create PO" });
+    console.error("CREATE PO ERROR:", err);
+    return res.status(500).json({
+      message: "Failed to create PO",
+      error: err.message,
+    });
   }
 });
+
 
     // ------------------------
     // PO model
