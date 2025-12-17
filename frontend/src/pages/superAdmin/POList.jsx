@@ -36,16 +36,7 @@ const POList = () => {
   const [requisitions, setRequisitions] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [resorts, setResorts] = useState([]);
-  // 🔑 Resort lookup map (id → name)
-const resortMap = React.useMemo(() => {
-  const map = {};
-  resorts.forEach((r) => {
-    if (r._id) map[String(r._id)] = r.name;
-    if (r.id) map[String(r.id)] = r.name;
-  });
-  return map;
-}, [resorts]);
-
+  
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
 
@@ -488,10 +479,24 @@ const resortMap = React.useMemo(() => {
 
   // helper display functions (use local state lists)
   const getVendorName = (id) => vendors.find((v) => v._id === id || v.id === id)?.name || id || "-";
-const getResortName = (resort) => {
-  return resort?.name || "-";
-};
+ const getResortName = (resort) => {
+  if (!resort) return "-";
 
+  // 🟢 Case 1: populated object
+  if (typeof resort === "object") {
+    return resort.name || "-";
+  }
+
+  // 🟢 Case 2: string / ObjectId → lookup
+  const found = resorts.find(
+    (r) =>
+      r._id?.toString() === resort?.toString() ||
+      r.id?.toString() === resort?.toString()
+  );
+
+  // 🟢 Case 3: fallback (jab resorts late aaye)
+  return found?.name || resort;
+};
 
 
   const getStoreName = (id) => stores.find((s) => s._id === id || s.id === id)?.name || id || "-";
@@ -502,14 +507,11 @@ const getResortName = (resort) => {
   const applyFilters = () => {
     return poList.filter((p) => {
           // 🌍 GLOBAL HEADER RESORT FILTER
-  // 🌍 GLOBAL HEADER RESORT FILTER (FIXED)
-if (selectedResort) {
-  const resortId = p.resort?._id || p.resort;
-  if (String(resortId) !== String(selectedResort)) {
-    return false;
-  }
-}
-
+    if (selectedResort) {
+      if (p.resort?.toString() !== selectedResort.toString()) {
+        return false;
+      }
+    }
 
       // STATUS
       if (statusFilter !== "ALL") {
@@ -528,14 +530,10 @@ if (selectedResort) {
       }
 
       // RESORT
-     // RESORT (FINAL FIX)
-if (resortFilter) {
-  const resortName = p.resort?.name || "";
-  if (!resortName.toLowerCase().includes(resortFilter.toLowerCase())) {
-    return false;
-  }
-}
-
+      if (resortFilter) {
+        const val = p.resort || p.resortName || p.resortId || "";
+        if (!val.toString().toLowerCase().includes(resortFilter.toString().toLowerCase())) return false;
+      }
 
       // VENDOR
       if (vendorFilter) {
