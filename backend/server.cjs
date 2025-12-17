@@ -13,6 +13,7 @@ process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION ❌", err?.stack || err);
   process.exit(1);
 });
+
 process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION ❌", reason?.stack || reason);
   process.exit(1);
@@ -21,7 +22,7 @@ process.on("unhandledRejection", (reason) => {
 async function start() {
   const app = express();
 
-  // ---------------- CORS ----------------
+  // ================== CORS ==================
   let frontend =
     process.env.FRONTEND_URL || "https://resort-crm.vercel.app";
   frontend = String(frontend).replace(/\/+$/, "");
@@ -54,48 +55,37 @@ async function start() {
     allowAllOrigins
   );
 
-  // ---------------- Mongo ----------------
-  let mongoose = null;
-  let useMongo = false;
-
+  // ================== MONGO ==================
   if (process.env.MONGO_URI) {
     try {
-      mongoose = require("mongoose");
+      const mongoose = require("mongoose");
       await mongoose.connect(process.env.MONGO_URI);
-      useMongo = true;
       console.log("Mongo connected");
     } catch (e) {
       console.error("Mongo connect failed:", e?.stack || e);
+      process.exit(1);
     }
   } else {
-    console.warn("MONGO_URI not set, running without DB");
+    console.warn("⚠️ MONGO_URI not set");
   }
 
-  // ---------------- MASTER ROUTER ----------------
-  let router;
-  try {
-    const { createRouter } = require("./server_router.cjs");
-    router = createRouter({ useMongo, mongoose });
-  } catch (err) {
-    console.error(
-      "Failed to load server_router.cjs:",
-      err?.stack || err
-    );
-  }
+  // ================== ROUTES ==================
+  // 🔥 DIRECT ROUTE MOUNT (NO server_router.cjs)
 
-  if (router) {
-    app.use("/", router); // 👈 VERY IMPORTANT
-    console.log("✅ server_router mounted at /");
-  } else {
-    console.warn("⚠️ No router mounted");
-  }
+  const requisitionRoutes = require("./routes/requisitions.routes");
 
-  // root
-  app.get("/", (req, res) => res.json({ ok: true, msg: "root" }));
+  app.use("/api/requisitions", requisitionRoutes);
+
+  console.log("✅ requisitions.routes mounted at /api/requisitions");
+
+  // ================== ROOT ==================
+  app.get("/", (req, res) =>
+    res.json({ ok: true, msg: "Resort CRM Backend Running" })
+  );
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () =>
-    console.log(`Server listening on port ${PORT}`)
+    console.log(`🚀 Server listening on port ${PORT}`)
   );
 }
 
