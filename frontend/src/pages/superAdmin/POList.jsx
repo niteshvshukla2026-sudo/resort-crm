@@ -502,11 +502,14 @@ const getResortName = (resort) => {
   const applyFilters = () => {
     return poList.filter((p) => {
           // 🌍 GLOBAL HEADER RESORT FILTER
-    if (selectedResort) {
-      if (p.resort?.toString() !== selectedResort.toString()) {
-        return false;
-      }
-    }
+  // 🌍 GLOBAL HEADER RESORT FILTER (FIXED)
+if (selectedResort) {
+  const resortId = p.resort?._id || p.resort;
+  if (String(resortId) !== String(selectedResort)) {
+    return false;
+  }
+}
+
 
       // STATUS
       if (statusFilter !== "ALL") {
