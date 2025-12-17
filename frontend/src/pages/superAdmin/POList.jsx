@@ -478,17 +478,22 @@ const POList = () => {
 
   // helper display functions (use local state lists)
   const getVendorName = (id) => vendors.find((v) => v._id === id || v.id === id)?.name || id || "-";
-  const getResortName = (id) => {
-  if (!id) return "-";
+  const getResortName = (resort) => {
+  if (!resort) return "-";
 
-  const resort = resorts.find(
-    (r) =>
-      r._id?.toString() === id?.toString() ||
-      r.id?.toString() === id?.toString()
+  // ✅ case 1: backend already populated object
+  if (typeof resort === "object") {
+    return resort.name || resort._id || "-";
+  }
+
+  // ✅ case 2: only id present → lookup from master list
+  const found = resorts.find(
+    (r) => r._id?.toString() === resort?.toString()
   );
 
-  return resort ? resort.name : id;
+  return found ? found.name : resort;
 };
+
 
   const getStoreName = (id) => stores.find((s) => s._id === id || s.id === id)?.name || id || "-";
   const getReqText = (id) => (requisitions.find((r) => (r._id || r.id) === id)?.requisitionNo) || id || "-";
