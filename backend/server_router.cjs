@@ -1330,7 +1330,8 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
 // ==================================================
 // 📦 CREATE GRN FROM REQUISITION
 // ==================================================
-router.post("/api/requisitions/:id/create-grn", async (req, res) => {
+router.post("/:id/create-grn", async (req, res) => {
+
   try {
     const id = req.params.id;
 
