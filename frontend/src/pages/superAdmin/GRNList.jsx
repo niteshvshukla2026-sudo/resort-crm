@@ -3,12 +3,10 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useResort } from "../../context/ResortContext";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE =
+  import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 /* ---------------- HELPERS ---------------- */
-
-// GRN schema me status nahi hai → default CREATED
-const normalizeStatus = () => "CREATED";
 
 const getId = (v) => (typeof v === "object" ? v?._id : v || "");
 
@@ -24,16 +22,19 @@ const getVendorName = (g) =>
 const getStoreName = (g) =>
   g.store?.name || g.requisition?.store?.name || "-";
 
-const getPoNo = (g) =>
-  g.po?.poNo || g.po || "-";
+const getPoNo = (g) => g.po?.poNo || g.po || "-";
 
 const getReqNo = (g) =>
   g.requisition?.requisitionNo || g.requisition || "-";
 
 /* ---------------- COMPONENT ---------------- */
+
 const GRNList = () => {
   const navigate = useNavigate();
-  const { selectedResort } = useResort();
+
+  // ✅ SAFE CONTEXT (no crash)
+  const resortCtx = useResort?.();
+  const selectedResort = resortCtx?.selectedResort;
 
   const [grns, setGrns] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -49,6 +50,7 @@ const GRNList = () => {
   const [searchText, setSearchText] = useState("");
 
   /* ---------------- LOAD DATA ---------------- */
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -60,9 +62,28 @@ const GRNList = () => {
         axios.get(`${API_BASE}/api/resorts`),
       ]);
 
-      setGrns(Array.isArray(grnRes.data) ? grnRes.data : []);
-      setVendors(vendorRes.data || []);
-      setResorts(resortRes.data || []);
+      // ✅ NORMALIZE RESPONSES (array OR object)
+      const grnData = Array.isArray(grnRes.data)
+        ? grnRes.data
+        : Array.isArray(grnRes.data?.data)
+        ? grnRes.data.data
+        : [];
+
+      const vendorData = Array.isArray(vendorRes.data)
+        ? vendorRes.data
+        : Array.isArray(vendorRes.data?.data)
+        ? vendorRes.data.data
+        : [];
+
+      const resortData = Array.isArray(resortRes.data)
+        ? resortRes.data
+        : Array.isArray(resortRes.data?.data)
+        ? resortRes.data.data
+        : [];
+
+      setGrns(grnData);
+      setVendors(vendorData);
+      setResorts(resortData);
     } catch (e) {
       console.error(e);
       setError("Failed to load GRNs");
@@ -76,52 +97,55 @@ const GRNList = () => {
   }, []);
 
   /* ---------------- FILTER ---------------- */
+
   const filteredGrns = useMemo(() => {
-    return grns.filter((g) => {
-      // 🌍 Global resort
-      if (selectedResort && selectedResort !== "ALL") {
-        const rid = getResortId(g);
-        if (rid && String(rid) !== String(selectedResort)) return false;
-      }
+    return Array.isArray(grns)
+      ? grns.filter((g) => {
+          // 🌍 Global resort
+          if (selectedResort && selectedResort !== "ALL") {
+            const rid = getResortId(g);
+            if (rid && String(rid) !== String(selectedResort)) return false;
+          }
 
-      if (resortFilter) {
-        const rid = getResortId(g);
-        if (rid && String(rid) !== String(resortFilter)) return false;
-      }
+          if (resortFilter) {
+            const rid = getResortId(g);
+            if (rid && String(rid) !== String(resortFilter)) return false;
+          }
 
-      if (vendorFilter) {
-        const vid = getId(g.vendor) || getId(g.requisition?.vendor);
-        if (vid && String(vid) !== String(vendorFilter)) return false;
-      }
+          if (vendorFilter) {
+            const vid = getId(g.vendor) || getId(g.requisition?.vendor);
+            if (vid && String(vid) !== String(vendorFilter)) return false;
+          }
 
-      if (dateFrom) {
-        const d = g.receivedDate ? new Date(g.receivedDate) : null;
-        if (!d || d < new Date(dateFrom)) return false;
-      }
+          if (dateFrom) {
+            const d = g.receivedDate ? new Date(g.receivedDate) : null;
+            if (!d || d < new Date(dateFrom)) return false;
+          }
 
-      if (dateTo) {
-        const d = g.receivedDate ? new Date(g.receivedDate) : null;
-        if (!d || d > new Date(dateTo)) return false;
-      }
+          if (dateTo) {
+            const d = g.receivedDate ? new Date(g.receivedDate) : null;
+            if (!d || d > new Date(dateTo)) return false;
+          }
 
-      if (searchText.trim()) {
-        const q = searchText.toLowerCase();
-        const blob = [
-          g.grnNo,
-          getPoNo(g),
-          getReqNo(g),
-          getVendorName(g),
-          getStoreName(g),
-          getResortName(g),
-        ]
-          .join(" ")
-          .toLowerCase();
+          if (searchText.trim()) {
+            const q = searchText.toLowerCase();
+            const blob = [
+              g.grnNo,
+              getPoNo(g),
+              getReqNo(g),
+              getVendorName(g),
+              getStoreName(g),
+              getResortName(g),
+            ]
+              .join(" ")
+              .toLowerCase();
 
-        if (!blob.includes(q)) return false;
-      }
+            if (!blob.includes(q)) return false;
+          }
 
-      return true;
-    });
+          return true;
+        })
+      : [];
   }, [
     grns,
     selectedResort,
@@ -133,6 +157,7 @@ const GRNList = () => {
   ]);
 
   /* ---------------- ACTIONS ---------------- */
+
   const viewGrn = (g) => navigate(`/super-admin/grn/${g._id}`);
 
   const deleteGrn = async (g) => {
@@ -142,6 +167,7 @@ const GRNList = () => {
   };
 
   /* ---------------- UI ---------------- */
+
   return (
     <div className="sa-page">
       <div className="sa-page-header">
@@ -155,35 +181,58 @@ const GRNList = () => {
       </div>
 
       {/* FILTER */}
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div
+        className="sa-card"
+        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+      >
         <label>
           Resort
-          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)}>
+          <select
+            value={resortFilter}
+            onChange={(e) => setResortFilter(e.target.value)}
+          >
             <option value="">All</option>
-            {resorts.map((r) => (
-              <option key={r._id} value={r._id}>{r.name}</option>
-            ))}
+            {Array.isArray(resorts) &&
+              resorts.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name}
+                </option>
+              ))}
           </select>
         </label>
 
         <label>
           Vendor
-          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
+          <select
+            value={vendorFilter}
+            onChange={(e) => setVendorFilter(e.target.value)}
+          >
             <option value="">All</option>
-            {vendors.map((v) => (
-              <option key={v._id} value={v._id}>{v.name}</option>
-            ))}
+            {Array.isArray(vendors) &&
+              vendors.map((v) => (
+                <option key={v._id} value={v._id}>
+                  {v.name}
+                </option>
+              ))}
           </select>
         </label>
 
         <label>
           Date from
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
         </label>
 
         <label>
           Date to
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
         </label>
 
         <label style={{ flex: 1 }}>
@@ -227,7 +276,10 @@ const GRNList = () => {
               ) : (
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
-                    <td onClick={() => viewGrn(g)} style={{ color: "#4ea1ff", cursor: "pointer" }}>
+                    <td
+                      onClick={() => viewGrn(g)}
+                      style={{ color: "#4ea1ff", cursor: "pointer" }}
+                    >
                       {g.grnNo}
                     </td>
                     <td>{getPoNo(g)}</td>
@@ -235,10 +287,17 @@ const GRNList = () => {
                     <td>{getVendorName(g)}</td>
                     <td>{getResortName(g)}</td>
                     <td>{getStoreName(g)}</td>
-                    <td>{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : "-"}</td>
-                    <td>{normalizeStatus()}</td>
                     <td>
-                      <i className="ri-eye-line" onClick={() => viewGrn(g)} />
+                      {g.receivedDate
+                        ? new Date(g.receivedDate).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td>CREATED</td>
+                    <td>
+                      <i
+                        className="ri-eye-line"
+                        onClick={() => viewGrn(g)}
+                      />
                       <i
                         className="ri-delete-bin-line"
                         style={{ marginLeft: 10, color: "#ff6b6b" }}
