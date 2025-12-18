@@ -289,7 +289,8 @@ function createRouter({ useMongo, mongoose }) {
     const grnSchema = new Schema(
       {
         grnNo: { type: String, required: true, unique: true },
-        poId: { type: String, required: true },
+       poId: { type: String, default: null },
+
         requisitionId: { type: String },
         vendor: { type: String },
         resort: { type: String },
@@ -1563,128 +1564,66 @@ router.get("/api/grn", async (req, res) => {
 // - Requisition → GRN (poId OPTIONAL)
 // - PO → GRN
 // --------------------------------
-router.post("/api/grn", async (req, res) => {
-  try {
-    const data = req.body || {};
-    const grnNo = data.grnNo || makeGrnNo();
+// ❌ DISABLED ROUTE (safe to keep, but cleaned)
+if (false) {
+  router.post("/api/grn", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const grnNo = data.grnNo || makeGrnNo();
 
-    if (!Array.isArray(data.items) || data.items.length === 0) {
-      return res.status(400).json({ message: "items required" });
-    }
+      if (!Array.isArray(data.items) || data.items.length === 0) {
+        return res.status(400).json({ message: "items required" });
+      }
 
-    const payload = {
-      grnNo,
-      poId: data.poId || null, // ✅ OPTIONAL
-      requisitionId: data.requisitionId || null,
-      vendor: data.vendor || null,
-      resort: data.resort || null,
-      store: data.store || null,
-      grnDate: data.grnDate || new Date(),
-      items: data.items.map((it) => ({
-        item: it.item,
-        qtyReceived: Number(it.qtyReceived || 0), // ✅ FIXED NAME
-        pendingQty: 0,
-        remark: it.remark || "",
-      })),
-    };
+      // ✅ CLEAN PAYLOAD (NO poId)
+      const payload = {
+        grnNo,
+        requisitionId: data.requisitionId || null,
+        vendor: data.vendor || null,
+        resort: data.resort || null,
+        store: data.store || null,
+        grnDate: data.grnDate || new Date(),
+        items: data.items.map((it) => ({
+          item: it.item,
+          qtyReceived: Number(it.qtyReceived || 0),
+          pendingQty: 0,
+          remark: it.remark || "",
+        })),
+      };
 
-    // --------------------------
-    // CREATE GRN
-    // --------------------------
-    let doc = null;
-    if (GRNModel) {
-      doc = await GRNModel.create(payload);
-    } else {
-      doc = { _id: `grn_${Date.now()}`, ...payload };
-      memGRNs.push(doc);
-    }
+      // --------------------------
+      // CREATE GRN
+      // --------------------------
+      let doc;
+      if (GRNModel) {
+        doc = await GRNModel.create(payload);
+      } else {
+        doc = { _id: `grn_${Date.now()}`, ...payload };
+        memGRNs.push(doc);
+      }
 
-    // --------------------------
-    // UPDATE REQUISITION STATUS
-    // --------------------------
-    if (data.requisitionId && RequisitionModel) {
-      await RequisitionModel.findByIdAndUpdate(data.requisitionId, {
-        $set: {
-          status: "GRN_CREATED",
-          grn: doc._id,
-        },
+      // --------------------------
+      // UPDATE REQUISITION STATUS
+      // --------------------------
+      if (data.requisitionId && RequisitionModel) {
+        await RequisitionModel.findByIdAndUpdate(data.requisitionId, {
+          $set: {
+            status: "GRN_CREATED",
+            grn: doc._id,
+          },
+        });
+      }
+
+      return res.status(201).json(doc);
+    } catch (err) {
+      console.error("POST /api/grn", err);
+      return res.status(500).json({
+        message: "Failed to create GRN",
+        error: err.message,
       });
     }
-
-    // --------------------------
-    // UPDATE PO STATUS (ONLY IF poId EXISTS)
-    // --------------------------
-    if (data.poId) {
-      // ---- DB PO ----
-      if (POModel && GRNModel) {
-        const po = await POModel.findById(data.poId).lean();
-        if (po) {
-          const grns = await GRNModel.find({ poId: data.poId }).lean();
-          const receivedMap = {};
-
-          grns.forEach((g) => {
-            (g.items || []).forEach((it) => {
-              receivedMap[it.item] =
-                (receivedMap[it.item] || 0) + Number(it.qtyReceived || 0);
-            });
-          });
-
-          let allFulfilled = true;
-          let partial = false;
-
-          (po.items || []).forEach((pItem) => {
-            const want = Number(pItem.qty || 0);
-            const got = Number(receivedMap[pItem.item] || 0);
-            if (got > 0 && got < want) partial = true;
-            if (got < want) allFulfilled = false;
-          });
-
-          const newStatus = allFulfilled ? "CLOSED" : partial ? "PARTIAL" : "OPEN";
-          await POModel.findByIdAndUpdate(data.poId, { $set: { status: newStatus } });
-        }
-      }
-
-      // ---- IN-MEMORY PO ----
-      if (!POModel) {
-        const poIdx = memPOs.findIndex((p) => p._id === data.poId);
-        if (poIdx !== -1) {
-          const po = memPOs[poIdx];
-          const receivedMap = {};
-
-          memGRNs
-            .filter((g) => g.poId === data.poId)
-            .forEach((g) => {
-              (g.items || []).forEach((it) => {
-                receivedMap[it.item] =
-                  (receivedMap[it.item] || 0) + Number(it.qtyReceived || 0);
-              });
-            });
-
-          let allFulfilled = true;
-          let partial = false;
-
-          (po.items || []).forEach((pItem) => {
-            const want = Number(pItem.qty || 0);
-            const got = Number(receivedMap[pItem.item] || 0);
-            if (got > 0 && got < want) partial = true;
-            if (got < want) allFulfilled = false;
-          });
-
-          po.status = allFulfilled ? "CLOSED" : partial ? "PARTIAL" : "OPEN";
-          memPOs[poIdx] = po;
-        }
-      }
-    }
-
-    return res.status(201).json(doc);
-  } catch (err) {
-    console.error("POST /api/grn", err);
-    res.status(500).json({
-      message: "Failed to create GRN",
-      error: err.message,
-    });
-  }
-});
+  });
+}
 
 // --------------------------------
 // DELETE GRN
