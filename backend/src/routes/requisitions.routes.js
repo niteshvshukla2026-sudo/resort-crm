@@ -215,47 +215,86 @@ router.post("/:id/create-po", async (req, res) => {
   }
 });
 
-/**
- * =====================================================
- * POST /api/requisitions/:id/create-grn
- * =====================================================
- */
-router.post("/:id/create-grn", async (req, res) => {
-  try {
-    const requisition = await Requisition.findById(req.params.id)
-      .populate("po")
-      .populate("grn");
+// CREATE GRN FROM REQUISITION
+router.post(
+  "/api/requisitions/:id/create-grn",
+  async (req, res) => {
+    try {
+      const requisitionId = req.params.id;
+      const {
+        grnNo,
+        receivedBy,
+        receivedDate,
+        challanNo,
+        billNo,
+        store,
+        items,
+      } = req.body;
 
-    if (!requisition)
-      return res.status(404).json({ message: "Requisition not found" });
+      if (!grnNo) {
+        return res.status(400).json({ message: "GRN No is required" });
+      }
 
-    if (requisition.type !== "VENDOR")
-      return res.status(400).json({ message: "GRN only for vendor requisition" });
+      if (!challanNo) {
+        return res.status(400).json({ message: "Challan No is required" });
+      }
 
-    if (requisition.po || requisition.grn)
-      return res.status(400).json({
-        message: "PO or GRN already created for this requisition",
+      if (!store) {
+        return res.status(400).json({ message: "Store is required for GRN" });
+      }
+
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "GRN must have items" });
+      }
+
+      const requisition = await Requisition.findById(requisitionId);
+      if (!requisition) {
+        return res.status(404).json({ message: "Requisition not found" });
+      }
+
+      // ❌ DO NOT block direct GRN (frontend allows it)
+      // if (requisition.po) { ... }
+
+      // Prevent duplicate GRN
+      if (requisition.grn) {
+        return res
+          .status(400)
+          .json({ message: "GRN already exists for this requisition" });
+      }
+
+      // Create GRN
+      const grn = await Grn.create({
+        grnNo,
+        requisition: requisition._id,
+        resort: requisition.resort,
+        store,
+        receivedBy,
+        receivedDate,
+        challanNo,
+        billNo,
+        items: items.map((it) => ({
+          item: it.item,
+          qtyRequested: it.qtyRequested,
+          qtyReceived: it.qtyReceived,
+          remark: it.remark,
+        })),
+        status: "CREATED",
       });
 
-    const grn = await GRN.create({
-      requisition: requisition._id,
-      items: requisition.lines,
-      receivedDate: new Date(),
-    });
+      // Update requisition
+      requisition.status = "GRN_CREATED";
+      requisition.grn = grn._id;
+      await requisition.save();
 
-    requisition.grn = grn._id;
-    requisition.status = "GRN_CREATED";
-    await requisition.save();
-
-    const populated = await Requisition.findById(requisition._id)
-      .populate("po")
-      .populate("grn");
-
-    res.json({ grn, requisition: populated });
-  } catch (err) {
-    console.error("CREATE GRN error", err);
-    res.status(500).json({ message: "Failed to create GRN" });
+      return res.json({
+        requisition,
+        grn,
+      });
+    } catch (err) {
+      console.error("CREATE GRN ERROR ❌", err);
+      res.status(500).json({
+        message: err.message || "Failed to create GRN",
+      });
+    }
   }
-});
-
-module.exports = router;
+);

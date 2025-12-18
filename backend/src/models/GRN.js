@@ -2,43 +2,37 @@ const mongoose = require("mongoose");
 
 const grnItemSchema = new mongoose.Schema({
   item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
-  qtyRequested: { type: Number, required: true },
-  qtyReceived: { type: Number, required: true },
-  remark: { type: String, default: "" },
+  qtyRequested: { type: Number, default: 0 },
+  qtyReceived: { type: Number, default: 0 },
+  remark: String,
 });
 
 const grnSchema = new mongoose.Schema(
   {
-    grnNo: { type: String, required: true, unique: true },
-
+    grnNo: { type: String, required: true },
     requisition: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Requisition",
+      required: true,
     },
-
-    po: {
+    resort: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "PO",
-      default: null,
+      ref: "Resort",
+      required: true,
     },
-
     store: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Store",
       required: true,
     },
-
-    receivedBy: { type: String, default: "" },
-    receivedDate: { type: Date, required: true },
-
+    receivedBy: String,
+    receivedDate: Date,
     challanNo: { type: String, required: true },
-    billNo: { type: String },
-
+    billNo: String,
     items: [grnItemSchema],
-
-    createdAt: { type: Date, default: Date.now },
+    status: { type: String, default: "CREATED" },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("GRN", grnSchema);
+module.exports = mongoose.model("Grn", grnSchema);
