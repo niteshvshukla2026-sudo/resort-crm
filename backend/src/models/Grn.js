@@ -14,7 +14,10 @@ const grnItemSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  remark: String,
+  remark: {
+    type: String,
+    default: "",
+  },
 });
 
 const grnSchema = new mongoose.Schema(
@@ -22,22 +25,20 @@ const grnSchema = new mongoose.Schema(
     grnNo: {
       type: String,
       required: true,
-      trim: true,
     },
 
-    // 🔗 ALWAYS linked to requisition
+    // 🔑 VERY IMPORTANT — poId OPTIONAL
+    poId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PurchaseOrder",
+      required: false,
+      default: null,
+    },
+
     requisition: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Requisition",
       required: true,
-    },
-
-    // 🟡 OPTIONAL: only when GRN is created FROM PO
-    poId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "PurchaseOrder",
-      required: false, // ✅ VERY IMPORTANT (fixes your error)
-      default: null,
     },
 
     resort: {
@@ -54,7 +55,7 @@ const grnSchema = new mongoose.Schema(
 
     receivedBy: {
       type: String,
-      trim: true,
+      default: "",
     },
 
     receivedDate: {
@@ -65,25 +66,18 @@ const grnSchema = new mongoose.Schema(
     challanNo: {
       type: String,
       required: true,
-      trim: true,
     },
 
     billNo: {
       type: String,
-      trim: true,
+      default: "",
     },
 
-    items: {
-      type: [grnItemSchema],
-      validate: [
-        (v) => Array.isArray(v) && v.length > 0,
-        "GRN must have at least one item",
-      ],
-    },
+    items: [grnItemSchema],
 
     status: {
       type: String,
-      enum: ["CREATED", "POSTED", "CANCELLED"],
+      enum: ["CREATED", "PARTIAL", "CLOSED"],
       default: "CREATED",
     },
   },

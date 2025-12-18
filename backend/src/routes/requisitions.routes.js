@@ -3,7 +3,7 @@ const router = express.Router();
 
 const Requisition = require("../models/Requisition");
 const PurchaseOrder = require("../models/PurchaseOrder");
-const GRN = require("../models/GRN");
+const GRN = require("../models/Grn");
 
 /**
  * =====================================================

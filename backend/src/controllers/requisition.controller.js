@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 const Requisition = require('../models/requisition.model');
 const Store = require('../models/store.model');
+const GRN = require('../models/Grn'); // ✅ Correct GRN model (poId OPTIONAL)
 
 function generateRequisitionNo() {
   return `REQ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -28,7 +29,7 @@ exports.getAll = async (req, res) => {
 
     res.json(list);
   } catch (err) {
-    console.error('getAll requisitions error:', err && err.stack ? err.stack : err);
+    console.error('getAll requisitions error:', err);
     res.status(500).json({ message: 'Failed to fetch requisitions', error: err.message });
   }
 };
@@ -45,27 +46,23 @@ exports.getOne = async (req, res) => {
       .populate('store')
       .populate('resort')
       .populate('department')
-      .populate('lines.item');
+      .populate('lines.item')
+      .populate('grn');
 
     if (!rec) return res.status(404).json({ message: 'Requisition not found' });
     res.json(rec);
   } catch (err) {
-    console.error('getOne requisition error:', err && err.stack ? err.stack : err);
+    console.error('getOne requisition error:', err);
     res.status(500).json({ message: 'Failed to fetch requisition', error: err.message });
   }
 };
 
 /**
  * POST /api/requisitions
- * Validates input, creates requisition and returns populated doc
  */
 exports.create = async (req, res) => {
   try {
     const body = req.body || {};
-    // Debug/log (remove or tone down in production if verbose)
-    console.log('--- createRequisition incoming body ---');
-    console.log(JSON.stringify(body));
-
     const {
       type,
       resort,
@@ -79,78 +76,55 @@ exports.create = async (req, res) => {
       requisitionNo,
     } = body;
 
-    // validate type
     if (!type || !['INTERNAL', 'VENDOR'].includes(type)) {
-      return res.status(400).json({ message: 'Invalid or missing "type".' });
+      return res.status(400).json({ message: 'Invalid or missing type' });
     }
 
-    // VENDOR-specific validation
     if (type === 'VENDOR') {
       if (!vendor || !isValidId(vendor)) {
-        return res.status(400).json({ message: 'Missing or invalid "vendor" id.' });
+        return res.status(400).json({ message: 'Missing/invalid vendor' });
       }
       if (!store || !isValidId(store)) {
-        return res.status(400).json({ message: 'Missing or invalid "store" id.' });
+        return res.status(400).json({ message: 'Missing/invalid store' });
       }
     }
 
-    // INTERNAL-specific validation
     if (type === 'INTERNAL') {
-      if (!fromStore || !isValidId(fromStore) || !toStore || !isValidId(toStore)) {
-        return res.status(400).json({ message: 'Missing or invalid "fromStore"/"toStore" ids.' });
+      if (!fromStore || !toStore) {
+        return res.status(400).json({ message: 'Missing fromStore / toStore' });
       }
     }
 
-    // optional resort validate
-    if (resort && !isValidId(resort)) {
-      return res.status(400).json({ message: 'Invalid "resort" id.' });
-    }
-
-    // requiredBy (date) validate
-    let parsedRequiredBy = undefined;
+    let parsedRequiredBy;
     if (requiredBy) {
       const dt = new Date(requiredBy);
       if (isNaN(dt.getTime())) {
-        return res.status(400).json({ message: 'Invalid "requiredBy" date.' });
+        return res.status(400).json({ message: 'Invalid requiredBy date' });
       }
       parsedRequiredBy = dt;
     }
 
-    // lines validate
     if (!Array.isArray(lines) || lines.length === 0) {
-      return res.status(400).json({ message: 'Requisition must contain at least one line in "lines".' });
+      return res.status(400).json({ message: 'Lines required' });
     }
 
-    const normalizedLines = [];
-    for (let i = 0; i < lines.length; i++) {
-      const ln = lines[i] || {};
-      const item = ln.item;
-      const qty = ln.qty;
-
-      if (!item || !isValidId(item)) {
-        return res.status(400).json({ message: `Line ${i}: missing/invalid "item" id.` });
+    const normalizedLines = lines.map((ln, i) => {
+      if (!ln.item || !isValidId(ln.item)) {
+        throw new Error(`Line ${i}: invalid item`);
       }
-      const qtyNum = Number(qty);
-      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-        return res.status(400).json({ message: `Line ${i}: "qty" must be a positive number.` });
+      if (!ln.qty || Number(ln.qty) <= 0) {
+        throw new Error(`Line ${i}: invalid qty`);
       }
+      return {
+        itemCategory: ln.itemCategory || undefined,
+        item: ln.item,
+        qty: Number(ln.qty),
+        remark: ln.remark || '',
+      };
+    });
 
-      let itemCategory = ln.itemCategory;
-      if (itemCategory && !isValidId(itemCategory)) {
-        return res.status(400).json({ message: `Line ${i}: invalid "itemCategory" id.` });
-      }
-
-      normalizedLines.push({
-        itemCategory: itemCategory || undefined,
-        item: item,
-        qty: qtyNum,
-        remark: ln.remark || ''
-      });
-    }
-
-    // Build document to save
     const doc = {
-      requisitionNo: requisitionNo || undefined,
+      requisitionNo: requisitionNo || generateRequisitionNo(),
       type,
       resort: resort || undefined,
       department: department || undefined,
@@ -166,28 +140,7 @@ exports.create = async (req, res) => {
       doc.toStore = toStore;
     }
 
-    // ===== IMPORTANT: ensure unique, non-null requisitionNo to avoid E11000 =====
-    doc.requisitionNo = doc.requisitionNo || generateRequisitionNo();
-    // ========================================================================
-
-    // Save
-    const newReq = new Requisition(doc);
-
-    try {
-      await newReq.save();
-    } catch (saveErr) {
-      // If duplicate key or other DB error, provide a helpful message and log full error
-      console.error('Requisition save error:', saveErr && saveErr.stack ? saveErr.stack : saveErr);
-      // handle duplicate key more gracefully
-      if (saveErr && saveErr.code === 11000) {
-        return res.status(409).json({
-          message: 'Duplicate key error while creating requisition',
-          error: saveErr.message,
-          keyValue: saveErr.keyValue || null
-        });
-      }
-      return res.status(500).json({ message: 'Failed to create requisition', error: saveErr.message });
-    }
+    const newReq = await Requisition.create(doc);
 
     const full = await Requisition.findById(newReq._id)
       .populate('vendor')
@@ -200,7 +153,7 @@ exports.create = async (req, res) => {
 
     res.status(201).json(full);
   } catch (err) {
-    console.error('create requisition error:', err && err.stack ? err.stack : err);
+    console.error('create requisition error:', err);
     res.status(500).json({ message: 'Failed to create requisition', error: err.message });
   }
 };
@@ -218,11 +171,12 @@ exports.update = async (req, res) => {
       .populate('store')
       .populate('resort')
       .populate('department')
-      .populate('lines.item');
+      .populate('lines.item')
+      .populate('grn');
 
     res.json(full);
   } catch (err) {
-    console.error('update requisition error:', err && err.stack ? err.stack : err);
+    console.error('update requisition error:', err);
     res.status(500).json({ message: 'Failed to update requisition', error: err.message });
   }
 };
@@ -235,7 +189,7 @@ exports.delete = async (req, res) => {
     await Requisition.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
-    console.error('delete requisition error:', err && err.stack ? err.stack : err);
+    console.error('delete requisition error:', err);
     res.status(500).json({ message: 'Failed to delete requisition', error: err.message });
   }
 };
@@ -249,7 +203,7 @@ exports.approve = async (req, res) => {
     const updated = await Requisition.findById(req.params.id);
     res.json(updated);
   } catch (err) {
-    console.error('approve requisition error:', err && err.stack ? err.stack : err);
+    console.error('approve requisition error:', err);
     res.status(500).json({ message: 'Failed to approve requisition', error: err.message });
   }
 };
@@ -263,8 +217,8 @@ exports.hold = async (req, res) => {
     const updated = await Requisition.findById(req.params.id);
     res.json(updated);
   } catch (err) {
-    console.error('hold requisition error:', err && err.stack ? err.stack : err);
-    res.status(500).json({ message: 'Failed to put requisition on hold', error: err.message });
+    console.error('hold requisition error:', err);
+    res.status(500).json({ message: 'Failed to hold requisition', error: err.message });
   }
 };
 
@@ -280,7 +234,65 @@ exports.reject = async (req, res) => {
     const updated = await Requisition.findById(req.params.id);
     res.json(updated);
   } catch (err) {
-    console.error('reject requisition error:', err && err.stack ? err.stack : err);
+    console.error('reject requisition error:', err);
     res.status(500).json({ message: 'Failed to reject requisition', error: err.message });
+  }
+};
+
+/**
+ * POST /api/requisitions/:id/create-grn
+ * Create GRN directly from requisition (NO poId required)
+ */
+exports.createGRN = async (req, res) => {
+  try {
+    const {
+      grnNo,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      store,
+      items,
+    } = req.body || {};
+
+    if (!grnNo || !receivedDate || !challanNo || !store) {
+      return res.status(400).json({ message: 'Missing required GRN fields' });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'GRN items required' });
+    }
+
+    const requisition = await Requisition.findById(req.params.id);
+    if (!requisition) {
+      return res.status(404).json({ message: 'Requisition not found' });
+    }
+
+    const grn = await GRN.create({
+      grnNo,
+      requisition: requisition._id,
+      resort: requisition.resort || null,
+      store,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      items: items.map((it) => ({
+        item: it.item,
+        qtyRequested: it.qtyRequested || 0,
+        qtyReceived: it.qtyReceived || 0,
+        remark: it.remark || '',
+      })),
+      status: 'CREATED',
+    });
+
+    requisition.status = 'GRN_CREATED';
+    requisition.grn = grn._id;
+    await requisition.save();
+
+    res.status(201).json(grn);
+  } catch (err) {
+    console.error('create GRN error:', err);
+    res.status(500).json({ message: 'Failed to create GRN', error: err.message });
   }
 };
