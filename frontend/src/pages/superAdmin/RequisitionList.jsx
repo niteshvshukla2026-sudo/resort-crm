@@ -629,7 +629,7 @@ const openCreateGRN = (req) => {
     if (!challanNo.trim()) return setError("Challan No is required");
     if (!grnItems || grnItems.length === 0) return setError("GRN must include at least one item");
 
-    if (req.po) return setError("PO exists for this requisition — create GRN from PO instead.");
+    // if (req.po) return setError("PO exists for this requisition — create GRN from PO instead.");
 
     for (const it of grnItems) {
       if (!it.item) return setError("Each GRN line must have an item");
@@ -646,14 +646,22 @@ const openCreateGRN = (req) => {
       }));
 
       const payload = {
-        grnNo,
-        receivedBy: receivedBy || undefined,
-        receivedDate,
-        challanNo: challanNo.trim(),
-        billNo: billNo?.trim() || undefined,
-        items: itemsPayload,
-        store: req.toStore || req.store || undefined,
-      };
+  grnNo,
+
+  // ⭐⭐ FIX: backend expects poId (even if null)
+  poId: req.po || null,
+
+  // ⭐⭐ link GRN to requisition
+  requisitionId: req._id,
+
+  receivedBy: receivedBy || undefined,
+  receivedDate,
+  challanNo: challanNo.trim(),
+  billNo: billNo?.trim() || undefined,
+  items: itemsPayload,
+  store: req.toStore || req.store || undefined,
+};
+
 
       const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
 
