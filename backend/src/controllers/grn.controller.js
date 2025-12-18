@@ -13,7 +13,7 @@ exports.createGRN = async (req, res) => {
       items,
     } = req.body;
 
-    // 🔍 Find requisition with PO
+    // 1️⃣ Requisition fetch karo with PO
     const requisition = await Requisition.findById(req.params.id).populate("po");
 
     if (!requisition) {
@@ -24,11 +24,11 @@ exports.createGRN = async (req, res) => {
       return res.status(400).json({ message: "PO not linked with requisition" });
     }
 
-    // ✅ CREATE GRN (MODEL FIELD NAMES EXACT)
+    // 2️⃣ GRN create karo (❌ poId nahi, ✅ po)
     const grn = new GRN({
       grnNo,
       requisition: requisition._id,
-      po: requisition.po._id,          // ✅ CORRECT (NOT poId)
+      po: requisition.po._id,     // ⭐ MOST IMPORTANT LINE
       store,
       receivedBy,
       receivedDate,
@@ -39,18 +39,15 @@ exports.createGRN = async (req, res) => {
 
     await grn.save();
 
-    // 🔄 Update requisition
+    // 3️⃣ Requisition update
     requisition.status = "GRN_CREATED";
     requisition.grn = grn._id;
     await requisition.save();
 
-    res.status(201).json({
-      message: "GRN created successfully",
-      grn,
-    });
+    return res.status(201).json({ grn });
   } catch (err) {
-    console.error("Create GRN error", err);
-    res.status(500).json({
+    console.error("Create GRN Error:", err);
+    return res.status(500).json({
       message: "Failed to create GRN",
       error: err.message,
     });
