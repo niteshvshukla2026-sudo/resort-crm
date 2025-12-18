@@ -1,5 +1,5 @@
 // src/pages/superAdmin/RequisitionListNew.jsx
-// ✅ CLEAN, SIMPLE, NEW REQUISITION LIST (NO LEGACY LOGIC)
+// ✅ COMPLETE CLEAN REQUISITION SYSTEM (APPROVAL + PO + GRN + STOCK READY)
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -20,6 +20,7 @@ const RequisitionListNew = () => {
   const [items, setItems] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const [showForm, setShowForm] = useState(false);
@@ -33,7 +34,7 @@ const RequisitionListNew = () => {
     lines: [emptyLine()],
   });
 
-  /* ---------------- LOAD DATA ---------------- */
+  /* ---------------- LOAD ---------------- */
   const load = async () => {
     try {
       setLoading(true);
@@ -48,15 +49,13 @@ const RequisitionListNew = () => {
       setVendors(vd.data || []);
       setItems(it.data || []);
     } catch (e) {
-      setError("Failed to load requisitions");
+      setError("Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   /* ---------------- FORM ---------------- */
   const updateForm = (e) => {
@@ -74,16 +73,11 @@ const RequisitionListNew = () => {
 
   const addLine = () => setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }));
 
-  /* ---------------- SAVE ---------------- */
+  /* ---------------- CREATE ---------------- */
   const save = async () => {
     try {
       setError("");
-
-      if (!selectedResort || selectedResort === "ALL") {
-        return setError("Select resort first");
-      }
-
-      if (form.lines.length === 0) return setError("Add at least one item");
+      if (!selectedResort || selectedResort === "ALL") return setError("Select resort first");
 
       const payload = {
         type: form.type,
@@ -93,19 +87,60 @@ const RequisitionListNew = () => {
         vendor: form.type === "VENDOR" ? form.vendor : undefined,
         store: form.type === "VENDOR" ? form.store : undefined,
         requiredBy: form.requiredBy,
-        lines: form.lines.map((l) => ({
-          item: l.item,
-          qty: Number(l.qty),
-          remark: l.remark,
-        })),
+        lines: form.lines.map((l) => ({ item: l.item, qty: Number(l.qty), remark: l.remark })),
       };
 
+      setSaving(true);
       const res = await axios.post(`${API}/requisitions`, payload);
       setList((p) => [res.data, ...p]);
       setShowForm(false);
-      setForm({ type: "INTERNAL", fromStore: "", toStore: "", vendor: "", store: "", requiredBy: "", lines: [emptyLine()] });
     } catch (e) {
       setError(e.response?.data?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------- STATUS ---------------- */
+  const updateStatus = async (id, action) => {
+    try {
+      const res = await axios.post(`${API}/requisitions/${id}/${action}`);
+      setList((p) => p.map((r) => (r._id === id ? res.data : r)));
+    } catch {
+      setError("Status update failed");
+    }
+  };
+
+  /* ---------------- PO ---------------- */
+  const createPO = async (r) => {
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API}/requisitions/${r._id}/create-po`, {
+        poNo: `PO-${Date.now()}`,
+      });
+      navigate(`/super-admin/po/${res.data._id}`);
+    } catch {
+      setError("PO creation failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------- GRN ---------------- */
+  const createGRN = async (r) => {
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API}/requisitions/${r._id}/create-grn`, {
+        grnNo: `GRN-${Date.now()}`,
+        challanNo: "AUTO",
+        store: r.store || r.toStore,
+        items: r.lines.map((l) => ({ item: l.item, qtyRequested: l.qty, qtyReceived: l.qty })),
+      });
+      navigate(`/super-admin/grn/${res.data._id}`);
+    } catch {
+      setError("GRN creation failed");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -113,7 +148,7 @@ const RequisitionListNew = () => {
   return (
     <div className="sa-page">
       <div className="sa-page-header">
-        <h2>Requisitions (New)</h2>
+        <h2>Requisitions (Clean)</h2>
         <button className="sa-primary-button" onClick={() => setShowForm(true)}>+ New</button>
       </div>
 
@@ -123,12 +158,7 @@ const RequisitionListNew = () => {
         {loading ? "Loading..." : (
           <table className="sa-table">
             <thead>
-              <tr>
-                <th>No</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
+              <tr><th>No</th><th>Type</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {list.map((r) => (
@@ -136,7 +166,11 @@ const RequisitionListNew = () => {
                   <td>{r.requisitionNo || r._id}</td>
                   <td>{r.type}</td>
                   <td>{r.status || "PENDING"}</td>
-                  <td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button onClick={() => updateStatus(r._id, "approve")}>Approve</button>
+                    <button onClick={() => updateStatus(r._id, "reject")}>Reject</button>
+                    {r.type === "VENDOR" && <button onClick={() => createPO(r)}>PO</button>}
+                    {r.type === "VENDOR" && <button onClick={() => createGRN(r)}>GRN</button>}
                     <button onClick={() => navigate(`/super-admin/requisition/${r._id}`)}>View</button>
                   </td>
                 </tr>
@@ -151,55 +185,44 @@ const RequisitionListNew = () => {
           <div className="sa-modal">
             <h3>Create Requisition</h3>
 
-            <label>Type
-              <select name="type" value={form.type} onChange={updateForm}>
-                <option value="INTERNAL">Internal</option>
-                <option value="VENDOR">Vendor</option>
-              </select>
-            </label>
+            <select name="type" value={form.type} onChange={updateForm}>
+              <option value="INTERNAL">Internal</option>
+              <option value="VENDOR">Vendor</option>
+            </select>
 
             {form.type === "INTERNAL" && (
               <>
-                <label>From Store
-                  <select name="fromStore" value={form.fromStore} onChange={updateForm}>
-                    <option value="">--select--</option>
-                    {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                  </select>
-                </label>
-                <label>To Store
-                  <select name="toStore" value={form.toStore} onChange={updateForm}>
-                    <option value="">--select--</option>
-                    {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                  </select>
-                </label>
+                <select name="fromStore" value={form.fromStore} onChange={updateForm}>
+                  <option value="">From Store</option>
+                  {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                </select>
+                <select name="toStore" value={form.toStore} onChange={updateForm}>
+                  <option value="">To Store</option>
+                  {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                </select>
               </>
             )}
 
             {form.type === "VENDOR" && (
               <>
-                <label>Vendor
-                  <select name="vendor" value={form.vendor} onChange={updateForm}>
-                    <option value="">--select--</option>
-                    {vendors.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
-                  </select>
-                </label>
-                <label>Store
-                  <select name="store" value={form.store} onChange={updateForm}>
-                    <option value="">--select--</option>
-                    {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                  </select>
-                </label>
+                <select name="vendor" value={form.vendor} onChange={updateForm}>
+                  <option value="">Vendor</option>
+                  {vendors.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
+                </select>
+                <select name="store" value={form.store} onChange={updateForm}>
+                  <option value="">Store</option>
+                  {stores.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                </select>
               </>
             )}
 
             <table className="sa-table">
-              <thead><tr><th>Item</th><th>Qty</th><th>Remark</th></tr></thead>
               <tbody>
                 {form.lines.map((l, i) => (
                   <tr key={i}>
                     <td>
                       <select value={l.item} onChange={(e) => updateLine(i, "item", e.target.value)}>
-                        <option value="">--item--</option>
+                        <option value="">Item</option>
                         {items.map(it => <option key={it._id} value={it._id}>{it.name}</option>)}
                       </select>
                     </td>
@@ -210,11 +233,11 @@ const RequisitionListNew = () => {
               </tbody>
             </table>
 
-            <button onClick={addLine}>+ Add Item</button>
+            <button onClick={addLine}>+ Item</button>
 
             <div className="sa-modal-actions">
               <button onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="sa-primary-button" onClick={save}>Save</button>
+              <button className="sa-primary-button" onClick={save} disabled={saving}>Save</button>
             </div>
           </div>
         </div>
@@ -222,5 +245,13 @@ const RequisitionListNew = () => {
     </div>
   );
 };
+
+/* ==================================================
+   🔐 PERMISSIONS (FRONTEND PLACEHOLDER)
+   Replace these with real role checks from auth context
+================================================== */
+const canApprove = () => true;
+const canCreatePO = () => true;
+const canCreateGRN = () => true;
 
 export default RequisitionListNew;
