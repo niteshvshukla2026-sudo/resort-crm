@@ -3,47 +3,53 @@ const Requisition = require("../models/requisition.model");
 
 exports.createGRN = async (req, res) => {
   try {
-    const { grnNo, receivedBy, receivedDate, challanNo, billNo, store, items } =
-      req.body;
-
-    // 1️⃣ Find requisition
-    const requisition = await Requisition.findById(req.params.id);
-
-    if (!requisition) {
-      return res.status(404).json({ message: "Requisition not found" });
-    }
-
-    // 2️⃣ PO MUST EXIST
-    if (!requisition.po) {
-      return res.status(400).json({
-        message: "PO not found for this requisition",
-      });
-    }
-
-    // 3️⃣ Create GRN WITH poId ✅
-    const grn = new GRN({
+    const {
       grnNo,
-      poId: requisition.po,        // 🔥 FIX
-      requisition: requisition._id,
       receivedBy,
       receivedDate,
       challanNo,
       billNo,
       store,
       items,
-      status: "CREATED",
+    } = req.body;
+
+    // 🔍 Find requisition with PO
+    const requisition = await Requisition.findById(req.params.id).populate("po");
+
+    if (!requisition) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    if (!requisition.po) {
+      return res.status(400).json({ message: "PO not linked with requisition" });
+    }
+
+    // ✅ CREATE GRN (MODEL FIELD NAMES EXACT)
+    const grn = new GRN({
+      grnNo,
+      requisition: requisition._id,
+      po: requisition.po._id,          // ✅ CORRECT (NOT poId)
+      store,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      items,
     });
 
     await grn.save();
 
-    // 4️⃣ Update requisition
+    // 🔄 Update requisition
     requisition.status = "GRN_CREATED";
     requisition.grn = grn._id;
     await requisition.save();
 
-    res.status(201).json({ grn });
+    res.status(201).json({
+      message: "GRN created successfully",
+      grn,
+    });
   } catch (err) {
-    console.error("Create GRN Error:", err);
+    console.error("Create GRN error", err);
     res.status(500).json({
       message: "Failed to create GRN",
       error: err.message,
