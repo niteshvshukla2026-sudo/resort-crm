@@ -1559,13 +1559,13 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       const data = req.body || {};
       const grnNo = data.grnNo || makeGrnNo();
 
-      if (!data.poId) return res.status(400).json({ message: "poId is required" });
+      // if (!data.poId) return res.status(400).json({ message: "poId is required" });
       if (!Array.isArray(data.items) || data.items.length === 0) return res.status(400).json({ message: "items required" });
 
       const payload = {
         grnNo,
-        poId: data.poId,
-        requisitionId: data.requisitionId || null,
+        poId: data.poId || null,   // ✅ OPTIONAL
+  requisitionId: data.requisitionId || null,
         vendor: data.vendor || null,
         resort: data.resort || null,
         store: data.store || null,
