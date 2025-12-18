@@ -6,28 +6,16 @@ const grnItemSchema = new mongoose.Schema({
     ref: "Item",
     required: true,
   },
-  qtyRequested: {
-    type: Number,
-    default: 0,
-  },
-  qtyReceived: {
-    type: Number,
-    default: 0,
-  },
-  remark: {
-    type: String,
-    default: "",
-  },
+  qtyRequested: { type: Number, default: 0 },
+  qtyReceived: { type: Number, default: 0 },
+  remark: { type: String, default: "" },
 });
 
 const grnSchema = new mongoose.Schema(
   {
-    grnNo: {
-      type: String,
-      required: true,
-    },
+    grnNo: { type: String, required: true },
 
-    // 🔑 VERY IMPORTANT — poId OPTIONAL
+    // 🔴 IMPORTANT: poId OPTIONAL
     poId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PurchaseOrder",
@@ -53,35 +41,20 @@ const grnSchema = new mongoose.Schema(
       required: true,
     },
 
-    receivedBy: {
-      type: String,
-      default: "",
-    },
-
-    receivedDate: {
-      type: Date,
-      required: true,
-    },
-
-    challanNo: {
-      type: String,
-      required: true,
-    },
-
-    billNo: {
-      type: String,
-      default: "",
-    },
+    receivedBy: String,
+    receivedDate: { type: Date, required: true },
+    challanNo: { type: String, required: true },
+    billNo: String,
 
     items: [grnItemSchema],
 
-    status: {
-      type: String,
-      enum: ["CREATED", "PARTIAL", "CLOSED"],
-      default: "CREATED",
-    },
+    status: { type: String, default: "CREATED" },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Grn", grnSchema);
+/**
+ * 🔥 VERY IMPORTANT
+ * model name CHANGE kiya to avoid mongoose cache
+ */
+module.exports = mongoose.model("GrnNew", grnSchema);

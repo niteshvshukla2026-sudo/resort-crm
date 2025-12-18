@@ -217,6 +217,7 @@ router.post("/:id/create-po", async (req, res) => {
 
 // CREATE GRN FROM REQUISITION
 
+
 router.post("/api/requisitions/:id/create-grn", async (req, res) => {
   try {
     const requisitionId = req.params.id;
@@ -230,7 +231,6 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       items,
     } = req.body;
 
-    // 🔴 BASIC VALIDATION
     if (!grnNo || !receivedDate || !challanNo || !store) {
       return res.status(400).json({ message: "Missing required fields" });
     }
@@ -239,13 +239,12 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       return res.status(400).json({ message: "Items are required" });
     }
 
-    // 🔎 FIND REQUISITION
     const requisition = await Requisition.findById(requisitionId);
     if (!requisition) {
       return res.status(404).json({ message: "Requisition not found" });
     }
 
-    // ✅ CREATE GRN (NO poId AT ALL)
+    // ✅ NO poId HERE
     const grn = await Grn.create({
       grnNo,
       requisition: requisition._id,
@@ -256,17 +255,15 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       challanNo,
       billNo,
       items,
-      status: "CREATED",
     });
 
-    // 🔗 LINK GRN TO REQUISITION
     requisition.grn = grn._id;
     requisition.status = "GRN_CREATED";
     await requisition.save();
 
-    return res.status(201).json(grn);
+    res.status(201).json(grn);
   } catch (err) {
-    console.error("Create GRN from requisition error:", err);
+    console.error("Create GRN error:", err);
     res.status(500).json({
       message: "Failed to create GRN",
       error: err.message,
