@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+mongoose.deleteModel(/Grn/i);
 
 const Requisition = require("../models/Requisition");
 const PurchaseOrder = require("../models/PurchaseOrder");
