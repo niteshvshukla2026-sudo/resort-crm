@@ -664,7 +664,7 @@ const openCreateGRN = (req) => {
 };
 
 
-      const res = await axios.post(`${API_BASE}/api/requisitions/${req._id}/create-grn`, payload);
+      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/create-grn`, payload);
 
       if (res?.data?.requisition) {
         setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data.requisition : r)));
