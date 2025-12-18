@@ -216,85 +216,60 @@ router.post("/:id/create-po", async (req, res) => {
 });
 
 // CREATE GRN FROM REQUISITION
-router.post(
-  "/api/requisitions/:id/create-grn",
-  async (req, res) => {
-    try {
-      const requisitionId = req.params.id;
-      const {
-        grnNo,
-        receivedBy,
-        receivedDate,
-        challanNo,
-        billNo,
-        store,
-        items,
-      } = req.body;
 
-      if (!grnNo) {
-        return res.status(400).json({ message: "GRN No is required" });
-      }
+router.post("/api/requisitions/:id/create-grn", async (req, res) => {
+  try {
+    const requisitionId = req.params.id;
+    const {
+      grnNo,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      store,
+      items,
+    } = req.body;
 
-      if (!challanNo) {
-        return res.status(400).json({ message: "Challan No is required" });
-      }
-
-      if (!store) {
-        return res.status(400).json({ message: "Store is required for GRN" });
-      }
-
-      if (!items || items.length === 0) {
-        return res.status(400).json({ message: "GRN must have items" });
-      }
-
-      const requisition = await Requisition.findById(requisitionId);
-      if (!requisition) {
-        return res.status(404).json({ message: "Requisition not found" });
-      }
-
-      // ❌ DO NOT block direct GRN (frontend allows it)
-      // if (requisition.po) { ... }
-
-      // Prevent duplicate GRN
-      if (requisition.grn) {
-        return res
-          .status(400)
-          .json({ message: "GRN already exists for this requisition" });
-      }
-
-      // Create GRN
-      const grn = await Grn.create({
-        grnNo,
-        requisition: requisition._id,
-        resort: requisition.resort,
-        store,
-        receivedBy,
-        receivedDate,
-        challanNo,
-        billNo,
-        items: items.map((it) => ({
-          item: it.item,
-          qtyRequested: it.qtyRequested,
-          qtyReceived: it.qtyReceived,
-          remark: it.remark,
-        })),
-        status: "CREATED",
-      });
-
-      // Update requisition
-      requisition.status = "GRN_CREATED";
-      requisition.grn = grn._id;
-      await requisition.save();
-
-      return res.json({
-        requisition,
-        grn,
-      });
-    } catch (err) {
-      console.error("CREATE GRN ERROR ❌", err);
-      res.status(500).json({
-        message: err.message || "Failed to create GRN",
-      });
+    // 🔴 BASIC VALIDATION
+    if (!grnNo || !receivedDate || !challanNo || !store) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Items are required" });
+    }
+
+    // 🔎 FIND REQUISITION
+    const requisition = await Requisition.findById(requisitionId);
+    if (!requisition) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    // ✅ CREATE GRN (NO poId AT ALL)
+    const grn = await Grn.create({
+      grnNo,
+      requisition: requisition._id,
+      resort: requisition.resort,
+      store,
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      items,
+      status: "CREATED",
+    });
+
+    // 🔗 LINK GRN TO REQUISITION
+    requisition.grn = grn._id;
+    requisition.status = "GRN_CREATED";
+    await requisition.save();
+
+    return res.status(201).json(grn);
+  } catch (err) {
+    console.error("Create GRN from requisition error:", err);
+    res.status(500).json({
+      message: "Failed to create GRN",
+      error: err.message,
+    });
   }
-);
+});
