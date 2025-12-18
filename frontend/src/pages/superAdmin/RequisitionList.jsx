@@ -645,21 +645,22 @@ const openCreateGRN = (req) => {
         remark: it.remark || "",
       }));
 
-      const payload = {
+    const payload = {
   grnNo,
-
-  // ⭐⭐ FIX: backend expects poId (even if null)
-  poId: req.po || null,
-
-  // ⭐⭐ link GRN to requisition
-  requisitionId: req._id,
-
   receivedBy: receivedBy || undefined,
   receivedDate,
   challanNo: challanNo.trim(),
   billNo: billNo?.trim() || undefined,
-  items: itemsPayload,
-  store: req.toStore || req.store || undefined,
+
+  store: req.toStore || req.store,   // REQUIRED
+  requisitionId: req._id,             // REQUIRED
+
+  items: grnItems.map(it => ({
+    item: it.item,
+    qtyRequested: Number(it.qtyRequested || 0),
+    qtyReceived: Number(it.qtyReceived || 0),
+    remark: it.remark || "",
+  }))
 };
 
 
