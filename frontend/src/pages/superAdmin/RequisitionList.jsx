@@ -789,13 +789,34 @@ const getResortId = (resort) => {
       }
      // 🔥 GLOBAL RESORT FILTER (TOP DROPDOWN)
 // ✅ STRICT RESORT FILTER (ID BASED)
+// ✅ STRICT RESORT FILTER (ID + NAME SAFE)
 if (selectedResort && selectedResort !== "ALL") {
-  const reqResortId = getResortId(r.resort);
+  const reqResortId =
+    typeof r.resort === "object"
+      ? r.resort._id
+      : r.resort;
 
-  if (String(reqResortId) !== String(selectedResort)) {
+  const reqResortName =
+    typeof r.resort === "object"
+      ? r.resort.name
+      : typeof r.resort === "string"
+      ? r.resort
+      : "";
+
+  const selectedResortObj = resorts.find(
+    (x) => String(x._id) === String(selectedResort)
+  );
+
+  const selectedResortName = selectedResortObj?.name || "";
+
+  if (
+    String(reqResortId) !== String(selectedResort) &&
+    String(reqResortName) !== String(selectedResortName)
+  ) {
     return false;
   }
 }
+
 
 
       if (dateFrom) {
