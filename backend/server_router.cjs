@@ -191,7 +191,12 @@ function createRouter({ useMongo, mongoose }) {
         requisitionNo: { type: String, required: true, unique: true },
         type: { type: String, enum: ["INTERNAL", "VENDOR"], required: true },
 
-        resort: { type: String }, // Resort _id
+        resort: {
+  type: Schema.Types.ObjectId,
+  ref: "Resort",
+  required: true,
+},
+
         department: { type: String }, // Dept _id
         fromStore: { type: String }, // Store _id
         toStore: { type: String }, // Store _id
@@ -1076,39 +1081,35 @@ function createRouter({ useMongo, mongoose }) {
   });
 
   // CREATE
-  router.post("/api/requisitions", async (req, res) => {
-    try {
-      const data = req.body || {};
-      const reqNo = makeReqNo();
+  // ================================
+// CREATE REQUISITION (FIXED)
+// ================================
+app.post("/api/requisitions", async (req, res) => {
+  try {
+    const { resort } = req.body;
 
-      const payload = {
-        requisitionNo: reqNo,
-        type: data.type,
-        resort: data.resort,
-        department: data.department,
-        fromStore: data.fromStore,
-        toStore: data.toStore,
-        vendor: data.vendor,
-        store: data.store,
-        requiredBy: data.requiredBy || null,
-        status: "PENDING",
-        lines: Array.isArray(data.lines) ? data.lines : [],
-        createdBy: req.user?.id || "SYSTEM",
-      };
-
-      if (RequisitionModel) {
-        const doc = await RequisitionModel.create(payload);
-        return res.status(201).json(doc);
-      }
-
-      const created = { _id: `req_${Date.now()}`, ...payload };
-      memRequisitions.push(created);
-      return res.status(201).json(created);
-    } catch (err) {
-      console.error("POST /api/requisitions", err);
-      res.status(500).json({ message: "Failed to create requisition" });
+    if (!resort) {
+      return res.status(400).json({
+        message: "Resort is required",
+      });
     }
-  });
+
+    const requisition = new Requisition({
+      ...req.body,
+      resort: new mongoose.Types.ObjectId(resort), // 🔥 FORCE ObjectId
+    });
+
+    await requisition.save();
+
+    const populatedReq = await Requisition.findById(requisition._id)
+      .populate("resort", "name");
+
+    res.json(populatedReq);
+  } catch (err) {
+    console.error("Create requisition error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
 
   // UPDATE
   router.put("/api/requisitions/:id", async (req, res) => {
