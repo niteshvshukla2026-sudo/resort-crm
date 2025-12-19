@@ -791,6 +791,7 @@ const getResortId = (resort) => {
 // ✅ STRICT RESORT FILTER (ID BASED)
 // ✅ STRICT RESORT FILTER (ID + NAME SAFE)
 // ✅ FINAL RESORT FILTER (STRING SAFE)
+// ✅ FINAL & ONLY RESORT FILTER (STRING SAFE)
 if (selectedResort && selectedResort !== "ALL") {
   const reqResortId =
     typeof r.resort === "string"
