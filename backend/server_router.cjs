@@ -1128,6 +1128,7 @@ router.post("/api/requisitions", async (req, res) => {
     }));
 
     const requisition = new RequisitionModel({
+        requisitionNo: generateReqNo(),   // 🔥 THIS WAS MISSING
       type,
       resort: new mongoose.Types.ObjectId(resort),
       department,
