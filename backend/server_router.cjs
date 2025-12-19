@@ -1108,7 +1108,6 @@ router.post("/api/requisitions", async (req, res) => {
       lines,
     } = req.body;
 
-    // 🔴 BASIC VALIDATION
     if (!type) {
       return res.status(400).json({ message: "Type is required" });
     }
@@ -1118,47 +1117,35 @@ router.post("/api/requisitions", async (req, res) => {
     }
 
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
-      return res.status(400).json({ message: "At least one item line is required" });
+      return res.status(400).json({ message: "At least one item is required" });
     }
 
-    // 🔢 GENERATE REQUISITION NO
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const rand = Math.floor(Math.random() * 900) + 100;
+    // 🔥 EXACT FIX
+    const cleanedLines = lines.map(l => ({
+      item: l.item,
+      qty: l.qty,
+      remark: l.remark || ""
+    }));
 
-    const requisitionNo = `REQ-${y}${m}${d}-${rand}`;
-
-    // 🧾 CREATE DOCUMENT
     const requisition = new RequisitionModel({
-      requisitionNo,
       type,
-      resort,          // ✅ string ObjectId (as per your DB)
+      resort: new mongoose.Types.ObjectId(resort),
       department,
       fromStore,
       toStore,
       store,
       vendor,
       requiredBy,
+      lines: cleanedLines,
       status: "PENDING",
-      lines: lines.map((l) => ({
-        item: l.item,
-        qty: Number(l.qty || 0),
-        remark: l.remark || "",
-      })),
-      createdAt: new Date(),
     });
 
     await requisition.save();
+    res.json(requisition);
 
-    return res.json(requisition);
   } catch (err) {
-    console.error("POST /api/requisitions ERROR:", err);
-    return res.status(500).json({
-      message: "Failed to create requisition",
-      error: err.message,
-    });
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 });
 
