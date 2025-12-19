@@ -755,6 +755,13 @@ const openCreateGRN = (req) => {
     );
   };
 
+  // 🔥 NORMALIZE RESORT ID (IMPORTANT)
+const getResortId = (resort) => {
+  if (!resort) return "";
+  if (typeof resort === "string") return resort;
+  return resort._id || resort.id || "";
+};
+
   // filtering
   const applyFilters = () => {
     return requisitions.filter((r) => {
@@ -765,16 +772,15 @@ const openCreateGRN = (req) => {
         if ((r.type || "INTERNAL").toUpperCase() !== typeFilter.toUpperCase()) return false;
       }
      // 🔥 GLOBAL RESORT FILTER (TOP DROPDOWN)
+// ✅ STRICT RESORT FILTER (ID BASED)
 if (selectedResort && selectedResort !== "ALL") {
-  const reqResort =
-    r.resort?._id ||
-    r.resort ||
-    "";
+  const reqResortId = getResortId(r.resort);
 
-  if (String(reqResort) !== String(selectedResort)) {
+  if (String(reqResortId) !== String(selectedResort)) {
     return false;
   }
 }
+
 
       if (dateFrom) {
         const rd = r.date ? new Date(r.date).setHours(0, 0, 0, 0) : null;
