@@ -1070,27 +1070,23 @@ function createRouter({ useMongo, mongoose }) {
   // ===================================================
 // LIST REQUISITIONS (RESORT FILTER FIXED)
 // ===================================================
+// ===============================
+// LIST REQUISITIONS (FINAL)
+// ===============================
 router.get("/api/requisitions", async (req, res) => {
   try {
     const { resort } = req.query;
 
-    // 🔥 IMPORTANT: apply resort filter
     const filter = {};
     if (resort && resort !== "ALL") {
-      filter.resort = resort;
+      filter.resort = resort;   // 🔥 ONLY ID MATCH
     }
 
-    if (RequisitionModel) {
-      const docs = await RequisitionModel.find(filter).lean();
-      return res.json(docs);
-    }
-
-    return res.json(memRequisitions);
+    const docs = await RequisitionModel.find(filter).lean();
+    res.json(docs);
   } catch (err) {
     console.error("GET /api/requisitions", err);
-    res.status(500).json({
-      message: "Failed to fetch requisitions",
-    });
+    res.status(500).json({ message: "Failed to fetch requisitions" });
   }
 });
 

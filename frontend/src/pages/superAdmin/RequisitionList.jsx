@@ -135,7 +135,10 @@ const RequisitionList = () => {
         vendorRes,
         catRes,
       ] = await Promise.all([
-        axios.get(`${API_BASE}/requisitions`),
+        axios.get(`${API_BASE}/requisitions`, {
+  params: { resort: selectedResort },
+}),
+
         axios.get(`${API_BASE}/resorts`),
         axios.get(`${API_BASE}/departments`),
         axios.get(`${API_BASE}/stores`),
