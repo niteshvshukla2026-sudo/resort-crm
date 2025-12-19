@@ -1104,20 +1104,21 @@ router.get("/api/requisitions", async (req, res) => {
 // ===================================================
 router.post("/api/requisitions", async (req, res) => {
   try {
-    const requisition = new RequisitionModel({
-      requisitionNo: generateReqNo(), // ✅ MUST
-      type: req.body.type,
-      resort: req.body.resort,
-      department: req.body.department,
-      fromStore: req.body.fromStore,
-      toStore: req.body.toStore,
-      store: req.body.store,
-      vendor: req.body.vendor,
-      requiredBy: req.body.requiredBy,
-      status: "PENDING",
-      lines: req.body.lines,
-      createdBy: "SYSTEM",
-    });
+   const requisition = new RequisitionModel({
+  requisitionNo: generateReqNo(),
+  type: req.body.type,
+  resort: new mongoose.Types.ObjectId(req.body.resort), // ✅ FIX
+  department: req.body.department,
+  fromStore: req.body.fromStore,
+  toStore: req.body.toStore,
+  store: req.body.store,
+  vendor: req.body.vendor,
+  requiredBy: req.body.requiredBy,
+  status: "PENDING",
+  lines: req.body.lines,
+  createdBy: "SYSTEM",
+});
+
 
     await requisition.save();
     res.json(requisition);
