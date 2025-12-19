@@ -1080,34 +1080,74 @@ function createRouter({ useMongo, mongoose }) {
     }
   });
 
-  // CREATE
-  // ================================
-// CREATE REQUISITION (FIXED)
-// ================================
-app.post("/api/requisitions", async (req, res) => {
+  // ===================================================
+// CREATE REQUISITION (FINAL & WORKING)
+// ===================================================
+router.post("/api/requisitions", async (req, res) => {
   try {
-    const { resort } = req.body;
+    const {
+      type,
+      resort,
+      department,
+      fromStore,
+      toStore,
+      store,
+      vendor,
+      requiredBy,
+      lines,
+    } = req.body;
 
-    if (!resort) {
-      return res.status(400).json({
-        message: "Resort is required",
-      });
+    // 🔴 BASIC VALIDATION
+    if (!type) {
+      return res.status(400).json({ message: "Type is required" });
     }
 
-    const requisition = new Requisition({
-      ...req.body,
-      resort: new mongoose.Types.ObjectId(resort), // 🔥 FORCE ObjectId
+    if (!resort) {
+      return res.status(400).json({ message: "Resort is required" });
+    }
+
+    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ message: "At least one item line is required" });
+    }
+
+    // 🔢 GENERATE REQUISITION NO
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const rand = Math.floor(Math.random() * 900) + 100;
+
+    const requisitionNo = `REQ-${y}${m}${d}-${rand}`;
+
+    // 🧾 CREATE DOCUMENT
+    const requisition = new RequisitionModel({
+      requisitionNo,
+      type,
+      resort,          // ✅ string ObjectId (as per your DB)
+      department,
+      fromStore,
+      toStore,
+      store,
+      vendor,
+      requiredBy,
+      status: "PENDING",
+      lines: lines.map((l) => ({
+        item: l.item,
+        qty: Number(l.qty || 0),
+        remark: l.remark || "",
+      })),
+      createdAt: new Date(),
     });
 
     await requisition.save();
 
-    const populatedReq = await Requisition.findById(requisition._id)
-      .populate("resort", "name");
-
-    res.json(populatedReq);
+    return res.json(requisition);
   } catch (err) {
-    console.error("Create requisition error:", err);
-    res.status(500).json({ message: err.message });
+    console.error("POST /api/requisitions ERROR:", err);
+    return res.status(500).json({
+      message: "Failed to create requisition",
+      error: err.message,
+    });
   }
 });
 
