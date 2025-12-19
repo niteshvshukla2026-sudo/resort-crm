@@ -17,6 +17,14 @@ function createRouter({ useMongo, mongoose }) {
   // ------------------------
   // Helpers
   // ------------------------
+const generateReqNo = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const rand = Math.floor(100 + Math.random() * 900);
+  return `REQ-${y}${m}${day}-${rand}`;
+};
 
   // Safe wrapper for controllers-based routes
   const safe = (name) => {
@@ -1096,58 +1104,29 @@ router.get("/api/requisitions", async (req, res) => {
 // ===================================================
 router.post("/api/requisitions", async (req, res) => {
   try {
-    const {
-      type,
-      resort,
-      department,
-      fromStore,
-      toStore,
-      store,
-      vendor,
-      requiredBy,
-      lines,
-    } = req.body;
-
-    if (!type) {
-      return res.status(400).json({ message: "Type is required" });
-    }
-
-    if (!resort) {
-      return res.status(400).json({ message: "Resort is required" });
-    }
-
-    if (!lines || !Array.isArray(lines) || lines.length === 0) {
-      return res.status(400).json({ message: "At least one item is required" });
-    }
-
-    // 🔥 EXACT FIX
-    const cleanedLines = lines.map(l => ({
-      item: l.item,
-      qty: l.qty,
-      remark: l.remark || ""
-    }));
-
     const requisition = new RequisitionModel({
-      type,
-      resort: new mongoose.Types.ObjectId(resort),
-      department,
-      fromStore,
-      toStore,
-      store,
-      vendor,
-      requiredBy,
-      lines: cleanedLines,
+      requisitionNo: generateReqNo(), // ✅ MUST
+      type: req.body.type,
+      resort: req.body.resort,
+      department: req.body.department,
+      fromStore: req.body.fromStore,
+      toStore: req.body.toStore,
+      store: req.body.store,
+      vendor: req.body.vendor,
+      requiredBy: req.body.requiredBy,
       status: "PENDING",
+      lines: req.body.lines,
+      createdBy: "SYSTEM",
     });
 
     await requisition.save();
     res.json(requisition);
-
   } catch (err) {
-    console.error(err);
+    console.error("CREATE REQUISITION ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 });
+
 
   // UPDATE
   router.put("/api/requisitions/:id", async (req, res) => {
