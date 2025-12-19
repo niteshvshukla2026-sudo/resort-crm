@@ -347,16 +347,32 @@ const openCreateForm = () => {
     }
 
     // derive resort from selected store if not selected
-    let derivedResort = form.resort || undefined;
-    if (form.type === "INTERNAL") {
-      const from = stores.find((s) => (s._id || s.id) === form.fromStore);
-      const fromResort = from?.resort || (from?.resort && (from.resort._id || from.resort.name)) || undefined;
-      if (fromResort) derivedResort = fromResort;
-    } else {
-      const st = stores.find((s) => (s._id || s.id) === form.store);
-      const stResort = st?.resort || (st?.resort && (st.resort._id || st.resort.name)) || undefined;
-      if (stResort) derivedResort = stResort;
-    }
+   // 🔥 derive resort STRICTLY AS ID
+let derivedResort =
+  selectedResort && selectedResort !== "ALL"
+    ? selectedResort
+    : undefined;
+
+if (form.type === "INTERNAL") {
+  const from = stores.find((s) => (s._id || s.id) === form.fromStore);
+
+  const fromResortId =
+    typeof from?.resort === "object"
+      ? from.resort._id
+      : from?.resort;
+
+  if (fromResortId) derivedResort = fromResortId;
+} else {
+  const st = stores.find((s) => (s._id || s.id) === form.store);
+
+  const stResortId =
+    typeof st?.resort === "object"
+      ? st.resort._id
+      : st?.resort;
+
+  if (stResortId) derivedResort = stResortId;
+}
+
 
     try {
       setSaving(true);
