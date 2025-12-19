@@ -1108,7 +1108,6 @@ router.post("/api/requisitions", async (req, res) => {
       lines,
     } = req.body;
 
-    // 🔴 BASIC VALIDATION
     if (!type) {
       return res.status(400).json({ message: "Type is required" });
     }
@@ -1121,28 +1120,35 @@ router.post("/api/requisitions", async (req, res) => {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
-    // 🔥 KEY FIX — FORCE CURRENT SELECTED RESORT
+    // 🔥 EXACT FIX
+    const cleanedLines = lines.map(l => ({
+      item: l.item,
+      qty: l.qty,
+      remark: l.remark || ""
+    }));
+
     const requisition = new RequisitionModel({
       type,
-      resort: new mongoose.Types.ObjectId(resort), // ✅ THIS FIXES EVERYTHING
+      resort: new mongoose.Types.ObjectId(resort),
       department,
       fromStore,
       toStore,
       store,
       vendor,
       requiredBy,
-      lines,
+      lines: cleanedLines,
       status: "PENDING",
     });
 
     await requisition.save();
-
     res.json(requisition);
+
   } catch (err) {
-    console.error("CREATE REQUISITION ERROR", err);
-    res.status(500).json({ message: "Failed to create requisition" });
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 });
+
 
   // UPDATE
   router.put("/api/requisitions/:id", async (req, res) => {
