@@ -5,7 +5,7 @@ import { useResort } from "../../context/ResortContext";
 const API_BASE =
   (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
-const emptyForm = () => ({ _id: undefined, name: "", code: "" });
+const emptyForm = () => ({ _id: undefined, name: "" });
 
 const StoreList = () => {
   const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT
@@ -30,7 +30,6 @@ const StoreList = () => {
       setError("");
 
       let url = `${API_BASE}/stores`;
-
       if (selectedResort && selectedResort !== "ALL") {
         url += `?resort=${selectedResort}`;
       }
@@ -85,7 +84,6 @@ const StoreList = () => {
     setForm({
       _id: s._id,
       name: s.name || "",
-      code: s.code || "",
     });
     setShowForm(true);
   };
@@ -115,8 +113,7 @@ const StoreList = () => {
 
       const payload = {
         name: form.name.trim(),
-        code: form.code?.trim() || "",
-        resort: selectedResort, // 🔥 IMPORTANT
+        resort: selectedResort,
       };
 
       if (form._id) {
@@ -244,16 +241,6 @@ const StoreList = () => {
                   value={form.name}
                   onChange={handleChange}
                   required
-                />
-              </label>
-
-              <label>
-                Code
-                <input
-                  name="code"
-                  value={form.code}
-                  onChange={handleChange}
-                  placeholder="MAIN / BAR / HK"
                 />
               </label>
 

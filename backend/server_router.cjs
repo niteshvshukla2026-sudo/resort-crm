@@ -377,79 +377,136 @@ const generateReqNo = () => {
   // 🏪 STORES (FULL CRUD)
   // =======================================================
 
-  const listStoresHandler = async (req, res) => {
-    try {
-      if (StoreModel) {
-        const docs = await StoreModel.find().lean();
-        return res.json(docs);
-      }
-      return res.json(memStores);
-    } catch (err) {
-      console.error("GET /api/stores error", err);
-      res.status(500).json({ message: "Failed to list stores" });
+const listStoresHandler = async (req, res) => {
+  try {
+    const { resort } = req.query;
+
+    const filter = {};
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;   // 🔥 MAIN FIX
     }
-  };
 
-  const createStoreHandler = async (req, res) => {
-    try {
-      const { resort, name, code } = req.body || {};
+    if (StoreModel) {
+      const docs = await StoreModel.find(filter).lean();
+      return res.json(docs);
+    }
 
-      if (!resort || !name) {
-        return res.status(400).json({ message: "resort & name are required" });
+    // in-memory fallback
+    let data = memStores;
+    if (filter.resort) {
+      data = data.filter((s) => s.resort === filter.resort);
+    }
+    return res.json(data);
+  } catch (err) {
+    console.error("GET /api/stores error", err);
+    res.status(500).json({ message: "Failed to list stores" });
+  }
+};
+
+
+ const createStoreHandler = async (req, res) => {
+  try {
+    const { resort, name } = req.body || {};
+
+    if (!resort || !name) {
+      return res.status(400).json({ message: "resort & name are required" });
+    }
+
+    let code = "";
+
+    if (StoreModel) {
+      // 🔥 same resort ka last store nikal lo
+      const lastStore = await StoreModel
+        .findOne({ resort })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      let nextNo = 1;
+      if (lastStore?.code) {
+        const n = parseInt(lastStore.code.split("-")[1]);
+        if (!isNaN(n)) nextNo = n + 1;
       }
 
-      if (StoreModel) {
-        const doc = await StoreModel.create({
-          resort,
-          name,
-          code: code || "",
-        });
-        return res.status(201).json(doc);
-      }
+      code = `STR-${String(nextNo).padStart(3, "0")}`;
 
-      const created = {
-        _id: `store_${Date.now()}`,
+      const doc = await StoreModel.create({
         resort,
         name,
-        code: code || "",
-      };
-      memStores.push(created);
-      return res.status(201).json(created);
-    } catch (err) {
-      console.error("POST /api/stores error", err);
-      res.status(500).json({ message: "Failed to create store" });
+        code,
+      });
+
+      return res.status(201).json(doc);
     }
-  };
 
-  const updateStoreHandler = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { resort, name, code } = req.body || {};
+    // in-memory
+    const sameResort = memStores.filter((s) => s.resort === resort);
+    code = `STR-${String(sameResort.length + 1).padStart(3, "0")}`;
 
-      const update = {};
-      if (resort != null) update.resort = resort;
-      if (name != null) update.name = name;
-      if (code != null) update.code = code;
+    const created = {
+      _id: `store_${Date.now()}`,
+      resort,
+      name,
+      code,
+    };
 
-      if (StoreModel) {
-        const updated = await StoreModel.findByIdAndUpdate(id, { $set: update }, { new: true });
-        if (!updated) {
-          return res.status(404).json({ message: "Store not found" });
-        }
-        return res.json(updated);
-      }
+    memStores.push(created);
+    return res.status(201).json(created);
+  } catch (err) {
+    console.error("POST /api/stores error", err);
+    res.status(500).json({ message: "Failed to create store" });
+  }
+};
 
-      const idx = memStores.findIndex((s) => s._id === id);
-      if (idx === -1) {
+const updateStoreHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ✅ ONLY NAME IS ALLOWED TO UPDATE
+    const { name } = req.body || {};
+
+    const update = {};
+    if (name != null && name.trim() !== "") {
+      update.name = name.trim();
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({
+        message: "Nothing to update",
+      });
+    }
+
+    if (StoreModel) {
+      const updated = await StoreModel.findByIdAndUpdate(
+        id,
+        { $set: update },
+        { new: true }
+      );
+
+      if (!updated) {
         return res.status(404).json({ message: "Store not found" });
       }
-      memStores[idx] = { ...memStores[idx], ...update };
-      return res.json(memStores[idx]);
-    } catch (err) {
-      console.error("PUT /api/stores/:id error", err);
-      res.status(500).json({ message: "Failed to update store" });
+
+      return res.json(updated);
     }
-  };
+
+    // -------- in-memory fallback --------
+    const idx = memStores.findIndex((s) => s._id === id);
+    if (idx === -1) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    memStores[idx] = {
+      ...memStores[idx],
+      ...update,
+    };
+
+    return res.json(memStores[idx]);
+  } catch (err) {
+    console.error("PUT /api/stores/:id error", err);
+    res.status(500).json({ message: "Failed to update store" });
+  }
+};
+
 
   const deleteStoreHandler = async (req, res) => {
     try {
