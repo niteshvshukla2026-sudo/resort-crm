@@ -95,11 +95,17 @@ const RequisitionList = () => {
   const navigate = useNavigate();
 
   // filtered stores for modal selects: use page-level resortFilter
-  const filteredStoresForModal = stores.filter((s) => {
-    if (!resortFilter) return true;
-    const storeResort = s.resort || s.resortId || s.resortName || (s.resort && (s.resort._id || s.resort.name)) || s.resort;
-    return String(storeResort) === String(resortFilter);
-  });
+ const filteredStoresForModal = stores.filter((s) => {
+  if (!selectedResort || selectedResort === "ALL") return true;
+
+  const storeResortId =
+    typeof s.resort === "object"
+      ? s.resort._id
+      : s.resort;
+
+  return String(storeResortId) === String(selectedResort);
+});
+
 
   // Normalize category entries so UI always sees objects { _id, name }
   const normalizeCategories = (raw) => {
@@ -1202,11 +1208,22 @@ if (selectedResort && selectedResort !== "ALL") {
                     Vendor
                     <select name="vendor" value={form.vendor} onChange={updateForm} required>
                       <option value="">-- Select Vendor --</option>
-                      {vendors.map((v) => (
-                        <option key={v._id || v.id} value={v._id || v.id}>
-                          {v.name}
-                        </option>
-                      ))}
+                     {vendors
+  .filter((v) => {
+    if (!selectedResort || selectedResort === "ALL") return true;
+
+    const vendorResorts = Array.isArray(v.resorts)
+      ? v.resorts.map(String)
+      : [];
+
+    return vendorResorts.includes(String(selectedResort));
+  })
+  .map((v) => (
+    <option key={v._id || v.id} value={v._id || v.id}>
+      {v.name}
+    </option>
+  ))}
+
                     </select>
                   </label>
 
