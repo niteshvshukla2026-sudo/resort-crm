@@ -1545,69 +1545,71 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
   // ==================================================
 // 📦 CREATE GRN FROM PO  ✅ REQUIRED
 // ==================================================
+// ==================================================
+// 📦 CREATE GRN FROM PO (🔥 MISSING ROUTE FIX)
+// ==================================================
 router.post("/api/po/:id/create-grn", async (req, res) => {
   try {
     const poId = req.params.id;
 
+    if (!POModel || !GRNModel) {
+      return res.status(500).json({ message: "Models not initialized" });
+    }
+
     // 1️⃣ Find PO
-    const po = await POModel.findById(poId);
+    const po = await POModel.findById(poId).lean();
     if (!po) {
       return res.status(404).json({ message: "PO not found" });
     }
 
-    // 2️⃣ Prevent duplicate GRN
-    if (po.grn) {
-      return res.status(400).json({
-        message: "GRN already exists for this PO",
-      });
-    }
+    // 2️⃣ Create GRN payload from PO
+    const grnPayload = {
+      grnNo: req.body.grnNo || makeGrnNo(),
+      poId: poId,
+      requisitionId: po.requisitionId || null,
+      vendor: po.vendor || null,
+      resort: po.resort || null,
+      store: po.deliverTo || null,
+      grnDate: req.body.receivedDate || new Date(),
 
-    // 3️⃣ Validate payload
-    const {
-      grnNo,
-      challanNo,
-      receivedDate,
-      receivedBy,
-      billNo,
-      store,
-      items,
-    } = req.body;
+      items: (po.items || []).map((it) => ({
+        item: it.item,
+        receivedQty: Number(
+          req.body.items?.find((x) => x.item === it.item)?.qtyReceived || it.qty
+        ),
+        pendingQty: 0,
+        remark:
+          req.body.items?.find((x) => x.item === it.item)?.remark || "",
+      })),
+    };
 
-    if (!grnNo || !challanNo || !items || items.length === 0) {
-      return res.status(400).json({
-        message: "Missing GRN fields",
-      });
-    }
+    // 3️⃣ Save GRN
+    const grn = await GRNModel.create(grnPayload);
 
-    // 4️⃣ Create GRN
-    const grn = await GRNModel.create({
-      grnNo,
-      challanNo,
-      receivedDate,
-      receivedBy,
-      billNo,
-      store,
-      items,
-      po: po._id,
-      vendor: po.vendor,
-      resort: po.resort,
-      status: "CREATED",
+    // 4️⃣ Update PO status
+    await POModel.findByIdAndUpdate(poId, {
+      $set: { status: "CLOSED" },
     });
 
-    // 5️⃣ Update PO
-    po.grn = grn._id;
-    po.status = "CLOSED";
-    await po.save();
+    // 5️⃣ Update requisition (if linked)
+    if (po.requisitionId) {
+      await RequisitionModel.findByIdAndUpdate(po.requisitionId, {
+        $set: { status: "GRN_CREATED" },
+      });
+    }
 
-    res.json({ po, grn });
+    return res.status(201).json(grn);
   } catch (err) {
     console.error("CREATE GRN FROM PO ❌", err);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to create GRN from PO",
+      error: err.message,
     });
   }
 });
 
+
+   
   // CREATE PO (including from requisition)
   router.post("/api/po", async (req, res) => {
     try {
