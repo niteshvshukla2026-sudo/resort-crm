@@ -77,6 +77,29 @@ const generateReqNo = () => {
       { timestamps: true }
     );
 
+// ================================
+// 🏬 STORE STOCK MODEL  ✅ REQUIRED
+// ================================
+const storeStockSchema = new Schema(
+  {
+    store: { type: String, required: true }, // store _id
+    item: { type: String, required: true },  // item _id
+    qty: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+
+// ek store + ek item = ek row
+storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
+
+const StoreStock =
+  mongoose.models.StoreStock ||
+  mongoose.model("StoreStock", storeStockSchema);
+
+console.log("StoreStock model initialised (Mongo)");
+
+
+
     // Item
     const itemSchema = new Schema(
       {
@@ -1363,39 +1386,6 @@ router.post("/api/requisitions", async (req, res) => {
   });
 
 
-  // ==================================================
-// 🔒 CLOSE GRN
-// ==================================================
-router.post("/api/grn/:id/close", async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    let grn = null;
-
-    if (GRNModel) {
-      grn = await GRNModel.findById(id);
-    } else {
-      return res.status(500).json({ message: "GRN model not available" });
-    }
-
-    if (!grn) {
-      return res.status(404).json({ message: "GRN not found" });
-    }
-
-    if (grn.status === "CLOSED") {
-      return res.status(400).json({ message: "GRN already closed" });
-    }
-
-    // ✅ CLOSE GRN
-    grn.status = "CLOSED";
-    await grn.save();
-
-    return res.json(grn);
-  } catch (err) {
-    console.error("Close GRN error", err);
-    return res.status(500).json({ message: "Failed to close GRN" });
-  }
-});
 // ==================================================
 // 🔒 CLOSE GRN + ADD STOCK
 // ==================================================
