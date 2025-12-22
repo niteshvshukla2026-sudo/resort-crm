@@ -1541,6 +1541,73 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
     }
   });
 
+
+  // ==================================================
+// 📦 CREATE GRN FROM PO  ✅ REQUIRED
+// ==================================================
+router.post("/api/po/:id/create-grn", async (req, res) => {
+  try {
+    const poId = req.params.id;
+
+    // 1️⃣ Find PO
+    const po = await POModel.findById(poId);
+    if (!po) {
+      return res.status(404).json({ message: "PO not found" });
+    }
+
+    // 2️⃣ Prevent duplicate GRN
+    if (po.grn) {
+      return res.status(400).json({
+        message: "GRN already exists for this PO",
+      });
+    }
+
+    // 3️⃣ Validate payload
+    const {
+      grnNo,
+      challanNo,
+      receivedDate,
+      receivedBy,
+      billNo,
+      store,
+      items,
+    } = req.body;
+
+    if (!grnNo || !challanNo || !items || items.length === 0) {
+      return res.status(400).json({
+        message: "Missing GRN fields",
+      });
+    }
+
+    // 4️⃣ Create GRN
+    const grn = await GRNModel.create({
+      grnNo,
+      challanNo,
+      receivedDate,
+      receivedBy,
+      billNo,
+      store,
+      items,
+      po: po._id,
+      vendor: po.vendor,
+      resort: po.resort,
+      status: "CREATED",
+    });
+
+    // 5️⃣ Update PO
+    po.grn = grn._id;
+    po.status = "CLOSED";
+    await po.save();
+
+    res.json({ po, grn });
+  } catch (err) {
+    console.error("CREATE GRN FROM PO ❌", err);
+    res.status(500).json({
+      message: "Failed to create GRN from PO",
+    });
+  }
+});
+
   // CREATE PO (including from requisition)
   router.post("/api/po", async (req, res) => {
     try {
