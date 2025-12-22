@@ -1396,6 +1396,53 @@ router.post("/api/grn/:id/close", async (req, res) => {
     return res.status(500).json({ message: "Failed to close GRN" });
   }
 });
+// ==================================================
+// 🔒 CLOSE GRN + ADD STOCK
+// ==================================================
+router.post("/api/grn/:id/close", async (req, res) => {
+  try {
+    const grnId = req.params.id;
+
+    const GRNModel = mongoose.models.GRN;
+    const StoreStock = mongoose.models.StoreStock;
+
+    const grn = await GRNModel.findById(grnId);
+    if (!grn) {
+      return res.status(404).json({ message: "GRN not found" });
+    }
+
+    if (grn.status === "CLOSED") {
+      return res.status(400).json({ message: "GRN already closed" });
+    }
+
+    // 🔁 ADD STOCK
+    for (const line of grn.items || []) {
+      const itemId = line.item;
+      const qty = Number(line.qtyReceived || 0);
+      const storeId = grn.store;
+
+      if (!itemId || !storeId || qty <= 0) continue;
+
+      await StoreStock.findOneAndUpdate(
+        { store: storeId, item: itemId },
+        { $inc: { qty: qty } },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 🔒 CLOSE GRN
+    grn.status = "CLOSED";
+    await grn.save();
+
+    return res.json({
+      message: "GRN closed & stock updated",
+      grn,
+    });
+  } catch (err) {
+    console.error("CLOSE GRN ERROR ❌", err);
+    res.status(500).json({ message: "Failed to close GRN" });
+  }
+});
 
   // =======================================================
 // 🛒 CREATE PO FROM REQUISITION
