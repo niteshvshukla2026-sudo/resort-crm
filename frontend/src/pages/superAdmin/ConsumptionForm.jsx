@@ -1,9 +1,10 @@
-// src/pages/superAdmin/ConsumptionForm.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
+import { useResort } from "../../context/ResortContext";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 const TYPE_OPTIONS = [
   { value: "LUMPSUM", label: "Lumpsum" },
@@ -23,102 +24,77 @@ const emptyLine = () => ({
 const ConsumptionForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { selectedResort } = useResort(); // 🌍 GLOBAL RESORT
 
   const [type, setType] = useState("LUMPSUM");
   const [storeFrom, setStoreFrom] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
-  const [referenceNo, setReferenceNo] = useState("");
 
   const [lines, setLines] = useState([emptyLine()]);
 
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [categories, setCategories] = useState([]); // NEW: categories master
+  const [categories, setCategories] = useState([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const isRecipeType = type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION";
+  const isRecipeType =
+    type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION";
 
-  // ---- master data ----
+  // ================= LOAD MASTERS (RESORT-WISE) =================
   const loadMasters = async () => {
-    try {
-      const [storeRes, itemRes, recipeRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/recipes`).catch(() => ({ data: [] })),
-      ]);
-
-      setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
-      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
-      setRecipes(Array.isArray(recipeRes.data) ? recipeRes.data : []);
-
-      // Try to load categories (preferred endpoint). Fallback attempted if empty.
-      let catRes = await axios.get(`${API_BASE}/api/item-categories`).catch(() => ({ data: [] }));
-      if (!Array.isArray(catRes.data) || catRes.data.length === 0) {
-        // fallback to a generic categories endpoint if present
-        catRes = await axios.get(`${API_BASE}/api/categories`).catch(() => ({ data: [] }));
-      }
-      setCategories(Array.isArray(catRes.data) ? catRes.data : []);
-    } catch (err) {
-      console.error("load masters error", err);
-      // non-fatal
+    if (!selectedResort || selectedResort === "ALL") {
+      setStores([]);
+      setItems([]);
+      setRecipes([]);
+      setCategories([]);
+      return;
     }
-  };
 
-  // ---- existing entry (edit mode) ----
-  const loadExisting = async () => {
-    if (!id) return;
     try {
-      const res = await axios.get(`${API_BASE}/api/consumption/${id}`);
-      const c = res.data || {};
-      const existingType = c.type || "LUMPSUM";
-      const entryIsRecipeType =
-        existingType === "RECIPE_LUMPSUM" || existingType === "RECIPE_PORTION";
+      const [storeRes, itemRes, recipeRes, catRes] =
+        await Promise.all([
+          axios.get(`${API_BASE}/stores`, {
+            params: { resort: selectedResort },
+          }),
+          axios.get(`${API_BASE}/items`, {
+            params: { resort: selectedResort },
+          }),
+          axios.get(`${API_BASE}/recipes`, {
+            params: { resort: selectedResort },
+          }),
+          axios.get(`${API_BASE}/item-categories`),
+        ]);
 
-      setType(existingType);
-      setStoreFrom(c.storeFrom?._id || c.storeFrom || "");
-      setDate(c.date ? c.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
-      setNotes(c.notes || "");
-      setReferenceNo(c.referenceNo || "");
-
-      setLines(
-        (c.lines || []).map((ln) => ({
-          category: ln.category || "", // keep whatever id stored so dropdown can match
-          recipe: entryIsRecipeType ? ln.recipe?._id || ln.recipe || "" : "",
-          item: !entryIsRecipeType ? ln.item?._id || ln.item || "" : "",
-          qty: ln.qty ?? "",
-          uom: ln.uom || "",
-          remarks: ln.remarks || "",
-        })) || [emptyLine()]
-      );
+      setStores(storeRes.data || []);
+      setItems(itemRes.data || []);
+      setRecipes(recipeRes.data || []);
+      setCategories(catRes.data || []);
     } catch (err) {
-      console.error("load consumption error", err);
-      setError("Failed to load existing consumption entry");
+      console.error("Load masters error", err);
     }
   };
 
   useEffect(() => {
     loadMasters();
-    loadExisting();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line
+  }, [selectedResort]);
 
-  // ---- derived: categories list for dropdown (id + name) ----
-  // normalize category objects to { id, name }
-  const itemCategories = (categories || []).map((c) => {
-    const id = c._id || c.id || c.code || c.value || c.name;
-    const name = c.name || c.label || c.title || id;
-    return { id, name };
+  // ================= FILTER RECIPES BY TYPE =================
+  const filteredRecipes = recipes.filter((r) => {
+    if (type === "RECIPE_LUMPSUM") return r.type === "RECIPE_LUMPSUM";
+    if (type === "RECIPE_PORTION") return r.type === "RECIPE_PORTION";
+    return true;
   });
 
-  // ---- line changes ----
-  const handleLineChange = (index, field, value) => {
+  // ================= LINE HANDLING =================
+  const handleLineChange = (idx, field, value) => {
     setLines((prev) => {
       const next = [...prev];
-      let row = { ...next[index] };
+      const row = { ...next[idx] };
 
       if (field === "category") {
         row.category = value;
@@ -126,50 +102,37 @@ const ConsumptionForm = () => {
         row.uom = "";
       } else if (field === "item") {
         row.item = value;
-        const it = items.find((i) => (i._id || i.id) === value);
+        const it = items.find((i) => i._id === value);
         if (it) {
-          row.uom = it.uom || it.UOM || it.unit || it.unitOfMeasure || it.measure || row.uom || "";
-          // if item has category id -> sync it (keeps dropdown consistent)
-          const catId = it.categoryId || it.category || it.itemCategory || "";
-          if (catId) row.category = catId;
-        } else {
-          row.uom = row.uom || "";
+          row.uom = it.uom || "";
+          row.category = it.itemCategory || row.category;
         }
-      } else if (field === "recipe") {
-        row.recipe = value;
       } else {
         row[field] = value;
       }
 
-      next[index] = row;
+      next[idx] = row;
       return next;
     });
   };
 
-  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
-  const removeLine = (idx) => setLines((prev) => prev.filter((_, i) => i !== idx));
+  const addLine = () => setLines((p) => [...p, emptyLine()]);
+  const removeLine = (idx) =>
+    setLines((p) => p.filter((_, i) => i !== idx));
 
-  // ---- validation ----
+  // ================= VALIDATION =================
   const validate = () => {
-    if (!type) {
-      setError("Type is required.");
-      return false;
-    }
-
     if (!storeFrom) {
-      setError("Store From is required.");
+      setError("Store is required");
       return false;
     }
 
-    let validLines;
-    if (isRecipeType) {
-      validLines = lines.filter((ln) => ln.recipe && ln.qty && Number(ln.qty) > 0);
-    } else {
-      validLines = lines.filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0);
-    }
+    const validLines = isRecipeType
+      ? lines.filter((l) => l.recipe && Number(l.qty) > 0)
+      : lines.filter((l) => l.item && Number(l.qty) > 0);
 
     if (validLines.length === 0) {
-      setError(isRecipeType ? "Add at least one recipe with quantity." : "Add at least one item line with quantity.");
+      setError("Add at least one valid line");
       return false;
     }
 
@@ -177,81 +140,64 @@ const ConsumptionForm = () => {
     return true;
   };
 
-  // ---- submit ----
+  // ================= SUBMIT =================
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
-    let linePayload;
-    if (isRecipeType) {
-      linePayload = lines
-        .filter((ln) => ln.recipe && ln.qty && Number(ln.qty) > 0)
-        .map((ln) => ({
-          recipe: ln.recipe,
-          qty: Number(ln.qty),
-          remarks: ln.remarks || "",
-        }));
-    } else {
-      linePayload = lines
-        .filter((ln) => ln.item && ln.qty && Number(ln.qty) > 0)
-        .map((ln) => ({
-          item: ln.item,
-          qty: Number(ln.qty),
-          uom: ln.uom || "",
-          remarks: ln.remarks || "",
-          category: ln.category || undefined,
-        }));
-    }
-
     const payload = {
+      resort: selectedResort,
       type,
       storeFrom,
       date,
-      notes: notes || undefined,
-      referenceNo: referenceNo || undefined,
-      lines: linePayload,
+      notes,
+      lines: isRecipeType
+        ? lines
+            .filter((l) => l.recipe && l.qty)
+            .map((l) => ({
+              recipe: l.recipe,
+              qty: Number(l.qty),
+              remarks: l.remarks,
+            }))
+        : lines
+            .filter((l) => l.item && l.qty)
+            .map((l) => ({
+              item: l.item,
+              qty: Number(l.qty),
+              uom: l.uom,
+              category: l.category,
+              remarks: l.remarks,
+            })),
     };
 
     try {
       setSaving(true);
       if (id) {
-        await axios.put(`${API_BASE}/api/consumption/${id}`, payload);
+        await axios.put(`${API_BASE}/consumption/${id}`, payload);
       } else {
-        await axios.post(`${API_BASE}/api/consumption`, payload);
+        await axios.post(`${API_BASE}/consumption`, payload);
       }
       navigate("/super-admin/consumption");
     } catch (err) {
-      console.error("save consumption error", err);
-      setError(err.response?.data?.message || "Failed to save consumption entry");
+      console.error(err);
+      setError(err.response?.data?.message || "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
-  const pageTitle = id ? "Edit Consumption" : "New Consumption";
-
+  // ================= UI =================
   return (
     <div className="sa-page">
       <div className="sa-page-header">
-        <div>
-          <h2>{pageTitle}</h2>
-          <p>{isRecipeType ? "Record stock consumption by recipe." : "Record stock consumption (lumpsum / recipe / portion)."}</p>
-        </div>
+        <h2>{id ? "Edit Consumption" : "New Consumption"}</h2>
       </div>
 
       <form className="sa-card" onSubmit={handleSubmit}>
-        {/* Top grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <label>
             Type
-            <select value={type} onChange={(e) => setType(e.target.value)} required>
+            <select value={type} onChange={(e) => setType(e.target.value)}>
               {TYPE_OPTIONS.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -261,16 +207,14 @@ const ConsumptionForm = () => {
           </label>
 
           <label>
-            Date
-            <input type="date" value={date} disabled />
-          </label>
-
-          <label>
             Store From
-            <select value={storeFrom} onChange={(e) => setStoreFrom(e.target.value)} required>
-              <option value="">Select store</option>
+            <select
+              value={storeFrom}
+              onChange={(e) => setStoreFrom(e.target.value)}
+            >
+              <option value="">Select Store</option>
               {stores.map((s) => (
-                <option key={s._id || s.id} value={s._id || s.id}>
+                <option key={s._id} value={s._id}>
                   {s.name}
                 </option>
               ))}
@@ -278,162 +222,134 @@ const ConsumptionForm = () => {
           </label>
         </div>
 
-        {/* Notes */}
-        <div style={{ marginBottom: 16 }}>
-          <label>
-            Notes (optional)
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any remarks..." />
-          </label>
-        </div>
+        <h3 style={{ marginTop: 16 }}>
+          {isRecipeType ? "Recipes" : "Items"}
+        </h3>
 
-        {/* Lines */}
-        <h3 style={{ marginBottom: 8 }}>{isRecipeType ? "Recipes" : "Items"}</h3>
-        <div className="sa-card" style={{ padding: 12, marginBottom: 16 }}>
-          <table className="sa-table">
-            <thead>
-              {isRecipeType ? (
-                <tr>
-                  <th style={{ width: "45%" }}>Recipe</th>
-                  <th style={{ width: "15%" }}>Consumed Qty</th>
-                  <th>Remarks</th>
-                  <th style={{ width: "5%" }}></th>
-                </tr>
-              ) : (
-                <tr>
-                  <th style={{ width: "20%" }}>Category</th>
-                  <th style={{ width: "30%" }}>Item</th>
-                  <th style={{ width: "15%" }}>Qty</th>
-                  <th style={{ width: "15%" }}>UOM</th>
-                  <th>Remarks</th>
-                  <th style={{ width: "5%" }}></th>
-                </tr>
-              )}
-            </thead>
-            <tbody>
-              {lines.map((ln, idx) => {
-                if (isRecipeType) {
-                  return (
-                    <tr key={idx}>
-                      <td>
-                        <select value={ln.recipe} onChange={(e) => handleLineChange(idx, "recipe", e.target.value)} required>
-                          <option value="">Select recipe</option>
-                          {recipes.map((rc) => (
-                            <option key={rc._id || rc.id} value={rc._id || rc.id}>
-                              {rc.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+        <table className="sa-table">
+          <thead>
+            <tr>
+              {!isRecipeType && <th>Category</th>}
+              <th>{isRecipeType ? "Recipe" : "Item"}</th>
+              <th>Qty</th>
+              {!isRecipeType && <th>UOM</th>}
+              <th>Remarks</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((ln, idx) => (
+              <tr key={idx}>
+                {!isRecipeType && (
+                  <td>
+                    <select
+                      value={ln.category}
+                      onChange={(e) =>
+                        handleLineChange(idx, "category", e.target.value)
+                      }
+                    >
+                      <option value="">All</option>
+                      {categories.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                )}
 
-                      <td>
-                        <input type="number" min="0" value={ln.qty} onChange={(e) => handleLineChange(idx, "qty", e.target.value)} required />
-                      </td>
-
-                      <td>
-                        <input value={ln.remarks} onChange={(e) => handleLineChange(idx, "remarks", e.target.value)} placeholder="optional" />
-                      </td>
-
-                      <td>
-                        {lines.length > 1 && (
-                          <button type="button" onClick={() => removeLine(idx)} className="sa-secondary-button">
-                            -
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                }
-
-                // filter items by category selection (if any)
-                const filteredItems = items.filter((it) => {
-                  const catId =
-                    it.categoryId || it.category || it.itemCategory || it.categoryName || "";
-                  if (!ln.category) return true;
-                  return String(catId) === String(ln.category);
-                });
-
-                return (
-                  <tr key={idx}>
-                    {/* Category */}
-                    <td>
-                      <select value={ln.category} onChange={(e) => handleLineChange(idx, "category", e.target.value)}>
-                        <option value="">Select category</option>
-                        {itemCategories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-
-                    {/* Item */}
-                    <td>
-                      <select value={ln.item} onChange={(e) => handleLineChange(idx, "item", e.target.value)} required disabled={items.length === 0}>
-                        <option value="">Select item</option>
-                        {filteredItems.map((it) => (
-                          <option key={it._id || it.id} value={it._id || it.id}>
+                <td>
+                  {isRecipeType ? (
+                    <select
+                      value={ln.recipe}
+                      onChange={(e) =>
+                        handleLineChange(idx, "recipe", e.target.value)
+                      }
+                    >
+                      <option value="">Select Recipe</option>
+                      {filteredRecipes.map((r) => (
+                        <option key={r._id} value={r._id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={ln.item}
+                      onChange={(e) =>
+                        handleLineChange(idx, "item", e.target.value)
+                      }
+                    >
+                      <option value="">Select Item</option>
+                      {items
+                        .filter(
+                          (it) =>
+                            !ln.category ||
+                            String(it.itemCategory) ===
+                              String(ln.category)
+                        )
+                        .map((it) => (
+                          <option key={it._id} value={it._id}>
                             {it.name}
                           </option>
                         ))}
-                      </select>
-                    </td>
+                    </select>
+                  )}
+                </td>
 
-                    {/* Qty */}
-                    <td>
-                      <input type="number" min="0" value={ln.qty} onChange={(e) => handleLineChange(idx, "qty", e.target.value)} required />
-                    </td>
+                <td>
+                  <input
+                    type="number"
+                    value={ln.qty}
+                    onChange={(e) =>
+                      handleLineChange(idx, "qty", e.target.value)
+                    }
+                  />
+                </td>
 
-                    {/* UOM */}
-                    <td>
-                      <input
-                        value={ln.uom}
-                        readOnly
-                        placeholder="Auto"
-                        style={{
-                          backgroundColor: "#020617",
-                          opacity: 0.95,
-                          color: "#fff",
-                          border: "1px solid rgba(255,255,255,0.06)",
-                          padding: "6px 8px",
-                        }}
-                      />
-                    </td>
+                {!isRecipeType && <td>{ln.uom}</td>}
 
-                    {/* Remarks */}
-                    <td>
-                      <input value={ln.remarks} onChange={(e) => handleLineChange(idx, "remarks", e.target.value)} placeholder="optional" />
-                    </td>
+                <td>
+                  <input
+                    value={ln.remarks}
+                    onChange={(e) =>
+                      handleLineChange(idx, "remarks", e.target.value)
+                    }
+                  />
+                </td>
 
-                    <td>
-                      {lines.length > 1 && (
-                        <button type="button" onClick={() => removeLine(idx)} className="sa-secondary-button">
-                          -
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                <td>
+                  {lines.length > 1 && (
+                    <button type="button" onClick={() => removeLine(idx)}>
+                      ❌
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-          <button type="button" className="sa-secondary-button" style={{ marginTop: 8 }} onClick={addLine}>
-            {isRecipeType ? "+ Add Recipe" : "+ Add Item"}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="sa-secondary-button"
+          onClick={addLine}
+        >
+          + Add
+        </button>
 
-        {error && (
-          <div className="sa-modal-error" style={{ marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="sa-modal-error">{error}</div>}
 
-        <div className="sa-modal-actions" style={{ marginTop: 8 }}>
-          <button type="button" className="sa-secondary-button" onClick={() => navigate("/super-admin/consumption")} disabled={saving}>
+        <div className="sa-modal-actions">
+          <button
+            type="button"
+            className="sa-secondary-button"
+            onClick={() => navigate("/super-admin/consumption")}
+          >
             Cancel
           </button>
-          <button type="submit" className="sa-primary-button" disabled={saving}>
-            {saving ? "Saving..." : "Save Consumption"}
+          <button className="sa-primary-button" disabled={saving}>
+            {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </form>
