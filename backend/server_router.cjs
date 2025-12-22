@@ -1155,6 +1155,33 @@ router.get("/api/requisitions", async (req, res) => {
   }
 });
 
+// ===================================================
+// GET SINGLE REQUISITION (FOR VIEW PAGE)  ✅ FIX 1
+// ===================================================
+router.get("/api/requisitions/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // Mongo enabled
+    if (RequisitionModel) {
+      const doc = await RequisitionModel.findById(id).lean();
+      if (!doc) {
+        return res.status(404).json({ message: "Requisition not found" });
+      }
+      return res.json(doc);
+    }
+
+    // In-memory fallback
+    const r = memRequisitions.find((x) => x._id === id);
+    if (!r) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+    return res.json(r);
+  } catch (err) {
+    console.error("GET /api/requisitions/:id error", err);
+    res.status(500).json({ message: "Failed to fetch requisition" });
+  }
+});
 
   // ===================================================
 // CREATE REQUISITION (FINAL & WORKING)
