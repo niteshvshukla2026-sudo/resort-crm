@@ -37,6 +37,12 @@ const getStoreName = (g, stores) => {
   return s?.name || "-";
 };
 
+// ✅ DATE HANDLER (MOST IMPORTANT FIX)
+const getGrnDate = (g) => {
+  const d = g.receivedDate || g.grnDate || g.createdAt;
+  return d ? new Date(d).toLocaleDateString() : "-";
+};
+
 /* ---------------- COMPONENT ---------------- */
 
 const GRNList = () => {
@@ -99,7 +105,6 @@ const GRNList = () => {
 
   const filteredGrns = useMemo(() => {
     return grns.filter((g) => {
-      // 🌍 global resort
       if (selectedResort && selectedResort !== "ALL") {
         if (String(g.resort) !== String(selectedResort))
           return false;
@@ -111,19 +116,12 @@ const GRNList = () => {
       if (vendorFilter && String(g.vendor) !== vendorFilter)
         return false;
 
-      if (dateFrom) {
-        const d = g.receivedDate
-          ? new Date(g.receivedDate)
-          : null;
-        if (!d || d < new Date(dateFrom)) return false;
-      }
+      const d = g.receivedDate || g.grnDate || g.createdAt;
+      if (dateFrom && (!d || new Date(d) < new Date(dateFrom)))
+        return false;
 
-      if (dateTo) {
-        const d = g.receivedDate
-          ? new Date(g.receivedDate)
-          : null;
-        if (!d || d > new Date(dateTo)) return false;
-      }
+      if (dateTo && (!d || new Date(d) > new Date(dateTo)))
+        return false;
 
       if (searchText.trim()) {
         const q = searchText.toLowerCase();
@@ -167,8 +165,7 @@ const GRNList = () => {
   };
 
   const deleteGrn = async (g) => {
-    if (!window.confirm(`Delete GRN ${g.grnNo}?`))
-      return;
+    if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
     await axios.delete(`${API_BASE}/api/grn/${g._id}`);
     loadData();
   };
@@ -186,50 +183,6 @@ const GRNList = () => {
           Refresh
         </button>
       </div>
-
-      {/* FILTER BAR */}
-      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <label>
-          Resort
-          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)}>
-            <option value="">All</option>
-            {resorts.map((r) => (
-              <option key={r._id} value={r._id}>{r.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Vendor
-          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
-            <option value="">All</option>
-            {vendors.map((v) => (
-              <option key={v._id} value={v._id}>{v.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Date from
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        </label>
-
-        <label>
-          Date to
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-        </label>
-
-        <label style={{ flex: 1 }}>
-          Search
-          <input
-            placeholder="GRN / PO / Requisition / Vendor / Store"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-        </label>
-      </div>
-
-      {error && <div className="sa-error">{error}</div>}
 
       {/* TABLE */}
       <div className="sa-card">
@@ -253,7 +206,9 @@ const GRNList = () => {
             <tbody>
               {filteredGrns.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>No GRNs found</td>
+                  <td colSpan="9" style={{ textAlign: "center" }}>
+                    No GRNs found
+                  </td>
                 </tr>
               ) : (
                 filteredGrns.map((g) => (
@@ -269,36 +224,42 @@ const GRNList = () => {
                     <td>{getVendorName(g, vendors)}</td>
                     <td>{getResortName(g, resorts)}</td>
                     <td>{getStoreName(g, stores)}</td>
-                    <td>
-                      {g.receivedDate
-                        ? new Date(g.receivedDate).toLocaleDateString()
-                        : "-"}
-                    </td>
+                    <td>{getGrnDate(g)}</td>
                     <td>{g.status || "CREATED"}</td>
 
                     {/* ICON ACTIONS */}
                     <td style={{ whiteSpace: "nowrap" }}>
+                      {/* VIEW */}
                       <i
                         className="ri-eye-line"
-                        title="View"
-                        style={{ cursor: "pointer", marginRight: 12 }}
+                        title="View GRN"
+                        style={{ cursor: "pointer", marginRight: 14 }}
                         onClick={() => viewGrn(g)}
                       />
 
+                      {/* CLOSE GRN */}
                       {g.status === "CREATED" && (
                         <i
                           className="ri-lock-line"
                           title="Close GRN"
-                          style={{ cursor: "pointer", marginRight: 12 }}
+                          style={{
+                            cursor: "pointer",
+                            marginRight: 14,
+                            color: "#22c55e",
+                          }}
                           onClick={() => closeGrn(g._id)}
                         />
                       )}
 
+                      {/* DELETE */}
                       {g.status === "CREATED" && (
                         <i
                           className="ri-delete-bin-6-line"
-                          title="Delete"
-                          style={{ cursor: "pointer", color: "#ff6b6b" }}
+                          title="Delete GRN"
+                          style={{
+                            cursor: "pointer",
+                            color: "#ef4444",
+                          }}
                           onClick={() => deleteGrn(g)}
                         />
                       )}
