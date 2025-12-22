@@ -188,7 +188,8 @@ const GRNList = () => {
                     <td>{getResortName(g, resorts)}</td>
                     <td>{getStoreName(g, stores)}</td>
                     <td>{getGrnDate(g)}</td>
-                    <td>{g.status || "CREATED"}</td>
+                    <td>{(g.status || "CREATED").toUpperCase()}</td>
+
 
                     {/* ACTION ICONS */}
                     <td style={{ whiteSpace: "nowrap" }}>
@@ -215,17 +216,19 @@ const GRNList = () => {
                       )}
 
                       {/* DELETE */}
-                      {g.status === "CREATED" && (
-                        <i
-                          className="ri-delete-bin-6-line"
-                          title="Delete GRN"
-                          style={{
-                            cursor: "pointer",
-                            color: "#ef4444",
-                          }}
-                          onClick={() => deleteGrn(g)}
-                        />
-                      )}
+                      {(g.status || "CREATED") === "CREATED" && (
+  <i
+    className="ri-lock-line"
+    title="Close GRN"
+    style={{
+      cursor: "pointer",
+      marginRight: 12,
+      color: "#22c55e",
+    }}
+    onClick={() => closeGrn(g)}
+  />
+)}
+
                     </td>
                   </tr>
                 ))
