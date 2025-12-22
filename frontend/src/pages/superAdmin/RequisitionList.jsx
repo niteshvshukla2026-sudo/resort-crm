@@ -275,32 +275,7 @@ const openCreateForm = () => {
     setShowForm(true);
   };
 
-  const openDuplicateAsCreate = (req) => {
-    setEditingId(null);
-    setForm({
-      type: req.type || "INTERNAL",
-      resort: req?.resort?._id || req?.resort || "",
-      department: req.department || "",
-      fromStore: req.fromStore || "",
-      toStore: req.toStore || req.store || "",
-      store: req.store || "",
-      vendor: req.vendor || "",
-      requiredBy: req.requiredBy ? (typeof req.requiredBy === "string" ? req.requiredBy.slice(0, 10) : new Date(req.requiredBy).toISOString().slice(0, 10)) : "",
-      lines:
-        (req.lines &&
-          req.lines.length > 0 &&
-          req.lines.map((ln) => ({
-            lineId: `dup_${Math.floor(Math.random() * 100000)}`,
-            itemCategory: ln.itemCategory || (ln.item && ln.item.itemCategory) || "",
-            item: ln.item?._id || ln.item || "",
-            qty: ln.qty || 1,
-            remark: ln.remark || "",
-          }))) || [newLine()],
-    });
-    setError("");
-    setShowForm(true);
-  };
-
+ 
   const updateForm = (e) => {
     const { name, value } = e.target;
     if (name === "type") {
@@ -1060,9 +1035,7 @@ if (selectedResort && selectedResort !== "ALL") {
                       <span style={actionStyle} onClick={() => handleView(r)} title="View">
                         <i className="ri-eye-line" />
                       </span>
-                      <span style={actionStyle} onClick={() => openDuplicateAsCreate(r)} title="Create (Duplicate)">
-                        <i className="ri-file-copy-line" />
-                      </span>
+                      
                       <span style={actionStyle} onClick={() => openEditForm(r)} title="Edit">
                         <i className="ri-edit-line" />
                       </span>
