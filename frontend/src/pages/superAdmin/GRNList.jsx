@@ -1,3 +1,4 @@
+// src/pages/superAdmin/GRNList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -10,31 +11,46 @@ const API_BASE =
 
 const getId = (v) => (typeof v === "object" ? v?._id : v || "");
 
-const getResortId = (g) =>
-  getId(g.resort) || getId(g.requisition?.resort);
+// ✅ PO sirf tab dikhe jab PO se GRN bana ho
+const getPoNo = (g) => {
+  if (g.po && typeof g.po === "object") {
+    return g.po.poNo || "-";
+  }
+  return "-";
+};
 
-const getResortName = (g) =>
-  g.resort?.name || g.requisition?.resort?.name || "-";
+// ✅ Requisition sirf tab dikhe jab requisition se bana ho
+const getReqNo = (g) => {
+  if (g.requisition && typeof g.requisition === "object") {
+    return g.requisition.requisitionNo || "-";
+  }
+  return "-";
+};
 
 const getVendorName = (g) =>
-  g.vendor?.name || g.requisition?.vendor?.name || "-";
+  g.vendor?.name ||
+  g.requisition?.vendor?.name ||
+  "-";
 
-const getStoreName = (g) =>
-  g.store?.name || g.requisition?.store?.name || "-";
+const getResortName = (g) => {
+  if (typeof g.resort === "object") return g.resort.name;
+  if (typeof g.requisition?.resort === "object")
+    return g.requisition.resort.name;
+  return "-";
+};
 
-const getPoNo = (g) => g.po?.poNo || g.po || "-";
-
-const getReqNo = (g) =>
-  g.requisition?.requisitionNo || g.requisition || "-";
+const getStoreName = (g) => {
+  if (typeof g.store === "object") return g.store.name;
+  if (typeof g.requisition?.store === "object")
+    return g.requisition.store.name;
+  return "-";
+};
 
 /* ---------------- COMPONENT ---------------- */
 
 const GRNList = () => {
   const navigate = useNavigate();
-
-  // ✅ SAFE CONTEXT (no crash)
-  const resortCtx = useResort?.();
-  const selectedResort = resortCtx?.selectedResort;
+  const { selectedResort } = useResort() || {};
 
   const [grns, setGrns] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -62,28 +78,16 @@ const GRNList = () => {
         axios.get(`${API_BASE}/api/resorts`),
       ]);
 
-      // ✅ NORMALIZE RESPONSES (array OR object)
-      const grnData = Array.isArray(grnRes.data)
-        ? grnRes.data
-        : Array.isArray(grnRes.data?.data)
-        ? grnRes.data.data
-        : [];
+      const normalize = (r) =>
+        Array.isArray(r.data)
+          ? r.data
+          : Array.isArray(r.data?.data)
+          ? r.data.data
+          : [];
 
-      const vendorData = Array.isArray(vendorRes.data)
-        ? vendorRes.data
-        : Array.isArray(vendorRes.data?.data)
-        ? vendorRes.data.data
-        : [];
-
-      const resortData = Array.isArray(resortRes.data)
-        ? resortRes.data
-        : Array.isArray(resortRes.data?.data)
-        ? resortRes.data.data
-        : [];
-
-      setGrns(grnData);
-      setVendors(vendorData);
-      setResorts(resortData);
+      setGrns(normalize(grnRes));
+      setVendors(normalize(vendorRes));
+      setResorts(normalize(resortRes));
     } catch (e) {
       console.error(e);
       setError("Failed to load GRNs");
@@ -99,53 +103,61 @@ const GRNList = () => {
   /* ---------------- FILTER ---------------- */
 
   const filteredGrns = useMemo(() => {
-    return Array.isArray(grns)
-      ? grns.filter((g) => {
-          // 🌍 Global resort
-          if (selectedResort && selectedResort !== "ALL") {
-            const rid = getResortId(g);
-            if (rid && String(rid) !== String(selectedResort)) return false;
-          }
+    return grns.filter((g) => {
+      // 🌍 global resort
+      if (selectedResort && selectedResort !== "ALL") {
+        const rid =
+          g.resort?._id || g.requisition?.resort?._id;
+        if (rid && String(rid) !== String(selectedResort))
+          return false;
+      }
 
-          if (resortFilter) {
-            const rid = getResortId(g);
-            if (rid && String(rid) !== String(resortFilter)) return false;
-          }
+      if (resortFilter) {
+        const rid =
+          g.resort?._id || g.requisition?.resort?._id;
+        if (rid && String(rid) !== String(resortFilter))
+          return false;
+      }
 
-          if (vendorFilter) {
-            const vid = getId(g.vendor) || getId(g.requisition?.vendor);
-            if (vid && String(vid) !== String(vendorFilter)) return false;
-          }
+      if (vendorFilter) {
+        const vid =
+          g.vendor?._id ||
+          g.requisition?.vendor?._id;
+        if (vid && String(vid) !== String(vendorFilter))
+          return false;
+      }
 
-          if (dateFrom) {
-            const d = g.receivedDate ? new Date(g.receivedDate) : null;
-            if (!d || d < new Date(dateFrom)) return false;
-          }
+      if (dateFrom) {
+        const d = g.receivedDate
+          ? new Date(g.receivedDate)
+          : null;
+        if (!d || d < new Date(dateFrom)) return false;
+      }
 
-          if (dateTo) {
-            const d = g.receivedDate ? new Date(g.receivedDate) : null;
-            if (!d || d > new Date(dateTo)) return false;
-          }
+      if (dateTo) {
+        const d = g.receivedDate
+          ? new Date(g.receivedDate)
+          : null;
+        if (!d || d > new Date(dateTo)) return false;
+      }
 
-          if (searchText.trim()) {
-            const q = searchText.toLowerCase();
-            const blob = [
-              g.grnNo,
-              getPoNo(g),
-              getReqNo(g),
-              getVendorName(g),
-              getStoreName(g),
-              getResortName(g),
-            ]
-              .join(" ")
-              .toLowerCase();
+      if (searchText.trim()) {
+        const q = searchText.toLowerCase();
+        const blob = [
+          g.grnNo,
+          getPoNo(g),
+          getReqNo(g),
+          getVendorName(g),
+          getStoreName(g),
+          getResortName(g),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!blob.includes(q)) return false;
+      }
 
-            if (!blob.includes(q)) return false;
-          }
-
-          return true;
-        })
-      : [];
+      return true;
+    });
   }, [
     grns,
     selectedResort,
@@ -158,11 +170,19 @@ const GRNList = () => {
 
   /* ---------------- ACTIONS ---------------- */
 
-  const viewGrn = (g) => navigate(`/super-admin/grn/${g._id}`);
+  const viewGrn = (g) =>
+    navigate(`/super-admin/grn/${g._id}`);
 
   const deleteGrn = async (g) => {
-    if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
+    if (!window.confirm(`Delete GRN ${g.grnNo}?`))
+      return;
     await axios.delete(`${API_BASE}/api/grn/${g._id}`);
+    loadData();
+  };
+
+  const closeGrn = async (id) => {
+    if (!window.confirm("Close this GRN?")) return;
+    await axios.post(`${API_BASE}/api/grn/${id}/close`);
     loadData();
   };
 
@@ -173,9 +193,15 @@ const GRNList = () => {
       <div className="sa-page-header">
         <div>
           <h2>GRN (Goods Receipt Note)</h2>
-          <p>GRNs created from Purchase Orders / Requisitions</p>
+          <p>
+            GRNs created from Purchase Orders /
+            Requisitions
+          </p>
         </div>
-        <button className="sa-secondary-button" onClick={loadData}>
+        <button
+          className="sa-secondary-button"
+          onClick={loadData}
+        >
           Refresh
         </button>
       </div>
@@ -189,15 +215,16 @@ const GRNList = () => {
           Resort
           <select
             value={resortFilter}
-            onChange={(e) => setResortFilter(e.target.value)}
+            onChange={(e) =>
+              setResortFilter(e.target.value)
+            }
           >
             <option value="">All</option>
-            {Array.isArray(resorts) &&
-              resorts.map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name}
-                </option>
-              ))}
+            {resorts.map((r) => (
+              <option key={r._id} value={r._id}>
+                {r.name}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -205,15 +232,16 @@ const GRNList = () => {
           Vendor
           <select
             value={vendorFilter}
-            onChange={(e) => setVendorFilter(e.target.value)}
+            onChange={(e) =>
+              setVendorFilter(e.target.value)
+            }
           >
             <option value="">All</option>
-            {Array.isArray(vendors) &&
-              vendors.map((v) => (
-                <option key={v._id} value={v._id}>
-                  {v.name}
-                </option>
-              ))}
+            {vendors.map((v) => (
+              <option key={v._id} value={v._id}>
+                {v.name}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -222,7 +250,9 @@ const GRNList = () => {
           <input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) =>
+              setDateFrom(e.target.value)
+            }
           />
         </label>
 
@@ -231,7 +261,9 @@ const GRNList = () => {
           <input
             type="date"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) =>
+              setDateTo(e.target.value)
+            }
           />
         </label>
 
@@ -240,7 +272,9 @@ const GRNList = () => {
           <input
             placeholder="GRN / PO / Requisition / Vendor / Store"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) =>
+              setSearchText(e.target.value)
+            }
           />
         </label>
       </div>
@@ -277,8 +311,11 @@ const GRNList = () => {
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
                     <td
+                      style={{
+                        color: "#4ea1ff",
+                        cursor: "pointer",
+                      }}
                       onClick={() => viewGrn(g)}
-                      style={{ color: "#4ea1ff", cursor: "pointer" }}
                     >
                       {g.grnNo}
                     </td>
@@ -289,20 +326,46 @@ const GRNList = () => {
                     <td>{getStoreName(g)}</td>
                     <td>
                       {g.receivedDate
-                        ? new Date(g.receivedDate).toLocaleDateString()
+                        ? new Date(
+                            g.receivedDate
+                          ).toLocaleDateString()
                         : "-"}
                     </td>
-                    <td>CREATED</td>
+                    <td>{g.status || "CREATED"}</td>
                     <td>
-                      <i
-                        className="ri-eye-line"
-                        onClick={() => viewGrn(g)}
-                      />
-                      <i
-                        className="ri-delete-bin-line"
-                        style={{ marginLeft: 10, color: "#ff6b6b" }}
-                        onClick={() => deleteGrn(g)}
-                      />
+                      <div className="action-menu">
+                        <button className="action-btn">
+                          Actions ▾
+                        </button>
+                        <div className="action-dropdown">
+                          <button
+                            onClick={() => viewGrn(g)}
+                          >
+                            View
+                          </button>
+
+                          {g.status === "CREATED" && (
+                            <button
+                              onClick={() =>
+                                closeGrn(g._id)
+                              }
+                            >
+                              Close GRN
+                            </button>
+                          )}
+
+                          {g.status === "CREATED" && (
+                            <button
+                              className="danger"
+                              onClick={() =>
+                                deleteGrn(g)
+                              }
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))
