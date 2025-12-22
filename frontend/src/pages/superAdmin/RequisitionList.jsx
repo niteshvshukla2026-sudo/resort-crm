@@ -1021,7 +1021,7 @@ if (selectedResort && selectedResort !== "ALL") {
                 <tr>
                   <th>Requisition No.</th>
                   <th>Type</th>
-                  <th>Resort</th>
+             
                   <th>Dept / Store / Vendor</th>
                   <th>Status</th>
                   <th>Date</th>
@@ -1033,7 +1033,7 @@ if (selectedResort && selectedResort !== "ALL") {
                   <tr key={r._id}>
                     <td>{r.requisitionNo || r._id}</td>
                     <td>{r.type || "INTERNAL"}</td>
-                    <td>{getResortName(r.resort)}</td>
+                 
                     <td>
                       {r.type === "VENDOR" ? (
                         <>
