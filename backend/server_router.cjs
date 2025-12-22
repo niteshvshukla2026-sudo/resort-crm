@@ -360,6 +360,40 @@ console.log("StoreStock model initialised (Mongo)");
     );
   }
 
+
+  const consumptionLineSchema = new mongoose.Schema(
+  {
+    item: { type: String, required: true },
+    qty: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
+const consumptionSchema = new mongoose.Schema(
+  {
+    date: { type: Date, default: Date.now },
+    type: {
+      type: String,
+      enum: ["LUMPSUM", "RECIPE_LUMPSUM", "RECIPE_PORTION"],
+      required: true,
+    },
+
+    eventName: String,
+    menuName: String,
+
+    resort: { type: String, required: true },   // 🔥 VERY IMPORTANT
+    storeFrom: { type: String, required: true },
+    storeTo: { type: String },
+
+    lines: [consumptionLineSchema],
+    notes: String,
+  },
+  { timestamps: true }
+);
+
+mongoose.models.Consumption ||
+  mongoose.model("Consumption", consumptionSchema);
+
   // ------------------------
   // Demo-auth header (optional)
   // ------------------------
@@ -1977,5 +2011,57 @@ router.delete("/api/grn/:id", async (req, res) => {
 
   return router;
 }
+ 
+router.get("/api/consumption", async (req, res) => {
+  try {
+    const { resort } = req.query;
+
+    const filter = {};
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
+    }
+
+    const docs = await mongoose.models.Consumption
+      .find(filter)
+      .sort({ date: -1 })
+      .lean();
+
+    res.json(docs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch consumption" });
+  }
+});
+
+router.post("/api/consumption", async (req, res) => {
+  try {
+    const data = req.body;
+
+    const Consumption = mongoose.models.Consumption;
+    const StoreStock = mongoose.models.StoreStock;
+
+    // 1️⃣ SAVE CONSUMPTION
+    const doc = await Consumption.create(data);
+
+    // 2️⃣ MINUS STOCK
+    for (const line of data.lines || []) {
+      const qty = Number(line.qty || 0);
+      if (qty <= 0) continue;
+
+      await StoreStock.findOneAndUpdate(
+        { store: data.storeFrom, item: line.item },
+        { $inc: { qty: -qty } },
+        { upsert: true, new: true }
+      );
+    }
+
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error("CONSUMPTION ERROR ❌", err);
+    res.status(500).json({ message: "Failed to create consumption" });
+  }
+});
+
+
 
 module.exports = { createRouter };
