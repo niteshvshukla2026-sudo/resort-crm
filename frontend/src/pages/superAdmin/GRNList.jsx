@@ -1,4 +1,3 @@
-// src/pages/superAdmin/GRNList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -9,41 +8,33 @@ const API_BASE =
 
 /* ---------------- HELPERS ---------------- */
 
-const getId = (v) => (typeof v === "object" ? v?._id : v || "");
+const findById = (list, id) =>
+  list.find((x) => String(x._id) === String(id));
 
-// ✅ PO sirf tab dikhe jab PO se GRN bana ho
-const getPoNo = (g) => {
-  if (g.po && typeof g.po === "object") {
-    return g.po.poNo || "-";
-  }
-  return "-";
+const getPoNo = (g) =>
+  typeof g.po === "object" ? g.po.poNo || "-" : "-";
+
+const getReqNo = (g) =>
+  typeof g.requisition === "object"
+    ? g.requisition.requisitionNo || "-"
+    : "-";
+
+const getVendorName = (g, vendors) => {
+  if (typeof g.vendor === "object") return g.vendor.name;
+  const v = findById(vendors, g.vendor);
+  return v?.name || "-";
 };
 
-// ✅ Requisition sirf tab dikhe jab requisition se bana ho
-const getReqNo = (g) => {
-  if (g.requisition && typeof g.requisition === "object") {
-    return g.requisition.requisitionNo || "-";
-  }
-  return "-";
-};
-
-const getVendorName = (g) =>
-  g.vendor?.name ||
-  g.requisition?.vendor?.name ||
-  "-";
-
-const getResortName = (g) => {
+const getResortName = (g, resorts) => {
   if (typeof g.resort === "object") return g.resort.name;
-  if (typeof g.requisition?.resort === "object")
-    return g.requisition.resort.name;
-  return "-";
+  const r = findById(resorts, g.resort);
+  return r?.name || "-";
 };
 
-const getStoreName = (g) => {
+const getStoreName = (g, stores) => {
   if (typeof g.store === "object") return g.store.name;
-  if (typeof g.requisition?.store === "object")
-    return g.requisition.store.name;
-  return "-";
+  const s = findById(stores, g.store);
+  return s?.name || "-";
 };
 
 /* ---------------- COMPONENT ---------------- */
@@ -55,6 +46,7 @@ const GRNList = () => {
   const [grns, setGrns] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [resorts, setResorts] = useState([]);
+  const [stores, setStores] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -67,27 +59,30 @@ const GRNList = () => {
 
   /* ---------------- LOAD DATA ---------------- */
 
+  const normalize = (r) =>
+    Array.isArray(r.data)
+      ? r.data
+      : Array.isArray(r.data?.data)
+      ? r.data.data
+      : [];
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [grnRes, vendorRes, resortRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/grn`),
-        axios.get(`${API_BASE}/api/vendors`),
-        axios.get(`${API_BASE}/api/resorts`),
-      ]);
-
-      const normalize = (r) =>
-        Array.isArray(r.data)
-          ? r.data
-          : Array.isArray(r.data?.data)
-          ? r.data.data
-          : [];
+      const [grnRes, vendorRes, resortRes, storeRes] =
+        await Promise.all([
+          axios.get(`${API_BASE}/api/grn`),
+          axios.get(`${API_BASE}/api/vendors`),
+          axios.get(`${API_BASE}/api/resorts`),
+          axios.get(`${API_BASE}/api/stores`),
+        ]);
 
       setGrns(normalize(grnRes));
       setVendors(normalize(vendorRes));
       setResorts(normalize(resortRes));
+      setStores(normalize(storeRes));
     } catch (e) {
       console.error(e);
       setError("Failed to load GRNs");
@@ -106,26 +101,15 @@ const GRNList = () => {
     return grns.filter((g) => {
       // 🌍 global resort
       if (selectedResort && selectedResort !== "ALL") {
-        const rid =
-          g.resort?._id || g.requisition?.resort?._id;
-        if (rid && String(rid) !== String(selectedResort))
+        if (String(g.resort) !== String(selectedResort))
           return false;
       }
 
-      if (resortFilter) {
-        const rid =
-          g.resort?._id || g.requisition?.resort?._id;
-        if (rid && String(rid) !== String(resortFilter))
-          return false;
-      }
+      if (resortFilter && String(g.resort) !== resortFilter)
+        return false;
 
-      if (vendorFilter) {
-        const vid =
-          g.vendor?._id ||
-          g.requisition?.vendor?._id;
-        if (vid && String(vid) !== String(vendorFilter))
-          return false;
-      }
+      if (vendorFilter && String(g.vendor) !== vendorFilter)
+        return false;
 
       if (dateFrom) {
         const d = g.receivedDate
@@ -147,9 +131,9 @@ const GRNList = () => {
           g.grnNo,
           getPoNo(g),
           getReqNo(g),
-          getVendorName(g),
-          getStoreName(g),
-          getResortName(g),
+          getVendorName(g, vendors),
+          getStoreName(g, stores),
+          getResortName(g, resorts),
         ]
           .join(" ")
           .toLowerCase();
@@ -160,6 +144,9 @@ const GRNList = () => {
     });
   }, [
     grns,
+    vendors,
+    resorts,
+    stores,
     selectedResort,
     resortFilter,
     vendorFilter,
@@ -173,16 +160,16 @@ const GRNList = () => {
   const viewGrn = (g) =>
     navigate(`/super-admin/grn/${g._id}`);
 
+  const closeGrn = async (id) => {
+    if (!window.confirm("Close this GRN?")) return;
+    await axios.post(`${API_BASE}/api/grn/${id}/close`);
+    loadData();
+  };
+
   const deleteGrn = async (g) => {
     if (!window.confirm(`Delete GRN ${g.grnNo}?`))
       return;
     await axios.delete(`${API_BASE}/api/grn/${g._id}`);
-    loadData();
-  };
-
-  const closeGrn = async (id) => {
-    if (!window.confirm("Close this GRN?")) return;
-    await axios.post(`${API_BASE}/api/grn/${id}/close`);
     loadData();
   };
 
@@ -193,78 +180,43 @@ const GRNList = () => {
       <div className="sa-page-header">
         <div>
           <h2>GRN (Goods Receipt Note)</h2>
-          <p>
-            GRNs created from Purchase Orders /
-            Requisitions
-          </p>
+          <p>GRNs created from Purchase Orders / Requisitions</p>
         </div>
-        <button
-          className="sa-secondary-button"
-          onClick={loadData}
-        >
+        <button className="sa-secondary-button" onClick={loadData}>
           Refresh
         </button>
       </div>
 
-      {/* FILTER */}
-      <div
-        className="sa-card"
-        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-      >
+      {/* FILTER BAR */}
+      <div className="sa-card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <label>
           Resort
-          <select
-            value={resortFilter}
-            onChange={(e) =>
-              setResortFilter(e.target.value)
-            }
-          >
+          <select value={resortFilter} onChange={(e) => setResortFilter(e.target.value)}>
             <option value="">All</option>
             {resorts.map((r) => (
-              <option key={r._id} value={r._id}>
-                {r.name}
-              </option>
+              <option key={r._id} value={r._id}>{r.name}</option>
             ))}
           </select>
         </label>
 
         <label>
           Vendor
-          <select
-            value={vendorFilter}
-            onChange={(e) =>
-              setVendorFilter(e.target.value)
-            }
-          >
+          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
             <option value="">All</option>
             {vendors.map((v) => (
-              <option key={v._id} value={v._id}>
-                {v.name}
-              </option>
+              <option key={v._id} value={v._id}>{v.name}</option>
             ))}
           </select>
         </label>
 
         <label>
           Date from
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) =>
-              setDateFrom(e.target.value)
-            }
-          />
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         </label>
 
         <label>
           Date to
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) =>
-              setDateTo(e.target.value)
-            }
-          />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </label>
 
         <label style={{ flex: 1 }}>
@@ -272,9 +224,7 @@ const GRNList = () => {
           <input
             placeholder="GRN / PO / Requisition / Vendor / Store"
             value={searchText}
-            onChange={(e) =>
-              setSearchText(e.target.value)
-            }
+            onChange={(e) => setSearchText(e.target.value)}
           />
         </label>
       </div>
@@ -303,69 +253,55 @@ const GRNList = () => {
             <tbody>
               {filteredGrns.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>
-                    No GRNs found
-                  </td>
+                  <td colSpan="9" style={{ textAlign: "center" }}>No GRNs found</td>
                 </tr>
               ) : (
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
                     <td
-                      style={{
-                        color: "#4ea1ff",
-                        cursor: "pointer",
-                      }}
+                      style={{ color: "#4ea1ff", cursor: "pointer" }}
                       onClick={() => viewGrn(g)}
                     >
                       {g.grnNo}
                     </td>
                     <td>{getPoNo(g)}</td>
                     <td>{getReqNo(g)}</td>
-                    <td>{getVendorName(g)}</td>
-                    <td>{getResortName(g)}</td>
-                    <td>{getStoreName(g)}</td>
+                    <td>{getVendorName(g, vendors)}</td>
+                    <td>{getResortName(g, resorts)}</td>
+                    <td>{getStoreName(g, stores)}</td>
                     <td>
                       {g.receivedDate
-                        ? new Date(
-                            g.receivedDate
-                          ).toLocaleDateString()
+                        ? new Date(g.receivedDate).toLocaleDateString()
                         : "-"}
                     </td>
                     <td>{g.status || "CREATED"}</td>
-                    <td>
-                      <div className="action-menu">
-                        <button className="action-btn">
-                          Actions ▾
-                        </button>
-                        <div className="action-dropdown">
-                          <button
-                            onClick={() => viewGrn(g)}
-                          >
-                            View
-                          </button>
 
-                          {g.status === "CREATED" && (
-                            <button
-                              onClick={() =>
-                                closeGrn(g._id)
-                              }
-                            >
-                              Close GRN
-                            </button>
-                          )}
+                    {/* ICON ACTIONS */}
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <i
+                        className="ri-eye-line"
+                        title="View"
+                        style={{ cursor: "pointer", marginRight: 12 }}
+                        onClick={() => viewGrn(g)}
+                      />
 
-                          {g.status === "CREATED" && (
-                            <button
-                              className="danger"
-                              onClick={() =>
-                                deleteGrn(g)
-                              }
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-lock-line"
+                          title="Close GRN"
+                          style={{ cursor: "pointer", marginRight: 12 }}
+                          onClick={() => closeGrn(g._id)}
+                        />
+                      )}
+
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-delete-bin-6-line"
+                          title="Delete"
+                          style={{ cursor: "pointer", color: "#ff6b6b" }}
+                          onClick={() => deleteGrn(g)}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))
