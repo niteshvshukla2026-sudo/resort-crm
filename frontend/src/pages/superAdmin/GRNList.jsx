@@ -8,87 +8,49 @@ const API_BASE =
 
 /* ---------------- HELPERS ---------------- */
 
-const findById = (list, id) =>
-  list.find((x) => String(x._id) === String(id));
+const getId = (v) => (typeof v === "object" ? v?._id : v || "");
+
+const getResortId = (g) =>
+  getId(g.resort) || getId(g.requisition?.resort);
+
+const getResortName = (g) =>
+  g.resort?.name || g.requisition?.resort?.name || "-";
+
+const getVendorName = (g) =>
+  g.vendor?.name || g.requisition?.vendor?.name || "-";
+
+const getStoreName = (g) =>
+  g.store?.name || g.requisition?.store?.name || "-";
 
 const getPoNo = (g) =>
-  typeof g.po === "object" ? g.po.poNo || "-" : "-";
+  g.po?.poNo || g.po?.po_number || g.po || "-";
 
 const getReqNo = (g) =>
-  typeof g.requisition === "object"
-    ? g.requisition.requisitionNo || "-"
-    : "-";
-
-const getVendorName = (g, vendors) => {
-  if (typeof g.vendor === "object") return g.vendor.name;
-  const v = findById(vendors, g.vendor);
-  return v?.name || "-";
-};
-
-const getResortName = (g, resorts) => {
-  if (typeof g.resort === "object") return g.resort.name;
-  const r = findById(resorts, g.resort);
-  return r?.name || "-";
-};
-
-const getStoreName = (g, stores) => {
-  if (typeof g.store === "object") return g.store.name;
-  const s = findById(stores, g.store);
-  return s?.name || "-";
-};
-
-// ✅ DATE HANDLER (MOST IMPORTANT FIX)
-const getGrnDate = (g) => {
-  const d = g.receivedDate || g.grnDate || g.createdAt;
-  return d ? new Date(d).toLocaleDateString() : "-";
-};
+  g.requisition?.requisitionNo || g.requisition || "-";
 
 /* ---------------- COMPONENT ---------------- */
 
 const GRNList = () => {
   const navigate = useNavigate();
-  const { selectedResort } = useResort() || {};
+  const { selectedResort } = useResort();
 
   const [grns, setGrns] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [resorts, setResorts] = useState([]);
-  const [stores, setStores] = useState([]);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [resortFilter, setResortFilter] = useState("");
-  const [vendorFilter, setVendorFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [searchText, setSearchText] = useState("");
-
   /* ---------------- LOAD DATA ---------------- */
-
-  const normalize = (r) =>
-    Array.isArray(r.data)
-      ? r.data
-      : Array.isArray(r.data?.data)
-      ? r.data.data
-      : [];
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [grnRes, vendorRes, resortRes, storeRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/api/grn`),
-          axios.get(`${API_BASE}/api/vendors`),
-          axios.get(`${API_BASE}/api/resorts`),
-          axios.get(`${API_BASE}/api/stores`),
-        ]);
+      const res = await axios.get(`${API_BASE}/api/grn`);
+      const data = Array.isArray(res.data)
+        ? res.data
+        : res.data?.data || [];
 
-      setGrns(normalize(grnRes));
-      setVendors(normalize(vendorRes));
-      setResorts(normalize(resortRes));
-      setStores(normalize(storeRes));
+      setGrns(data);
     } catch (e) {
       console.error(e);
       setError("Failed to load GRNs");
@@ -101,73 +63,33 @@ const GRNList = () => {
     loadData();
   }, []);
 
-  /* ---------------- FILTER ---------------- */
+  /* ---------------- FILTER (GLOBAL RESORT) ---------------- */
 
   const filteredGrns = useMemo(() => {
     return grns.filter((g) => {
       if (selectedResort && selectedResort !== "ALL") {
-        if (String(g.resort) !== String(selectedResort))
-          return false;
+        const rid = getResortId(g);
+        if (rid && String(rid) !== String(selectedResort)) return false;
       }
-
-      if (resortFilter && String(g.resort) !== resortFilter)
-        return false;
-
-      if (vendorFilter && String(g.vendor) !== vendorFilter)
-        return false;
-
-      const d = g.receivedDate || g.grnDate || g.createdAt;
-      if (dateFrom && (!d || new Date(d) < new Date(dateFrom)))
-        return false;
-
-      if (dateTo && (!d || new Date(d) > new Date(dateTo)))
-        return false;
-
-      if (searchText.trim()) {
-        const q = searchText.toLowerCase();
-        const blob = [
-          g.grnNo,
-          getPoNo(g),
-          getReqNo(g),
-          getVendorName(g, vendors),
-          getStoreName(g, stores),
-          getResortName(g, resorts),
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!blob.includes(q)) return false;
-      }
-
       return true;
     });
-  }, [
-    grns,
-    vendors,
-    resorts,
-    stores,
-    selectedResort,
-    resortFilter,
-    vendorFilter,
-    dateFrom,
-    dateTo,
-    searchText,
-  ]);
+  }, [grns, selectedResort]);
 
   /* ---------------- ACTIONS ---------------- */
 
-  const viewGrn = (g) =>
+  const viewGrn = (g) => {
     navigate(`/super-admin/grn/${g._id}`);
-
-  const closeGrn = async (id) => {
-    if (!window.confirm("Close this GRN?")) return;
-    await axios.post(`${API_BASE}/api/grn/${id}/close`);
-    loadData();
   };
 
-  const deleteGrn = async (g) => {
-    if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
-    await axios.delete(`${API_BASE}/api/grn/${g._id}`);
-    loadData();
+  const closeGrn = async (g) => {
+    if (!window.confirm(`Close GRN ${g.grnNo}?`)) return;
+
+    try {
+      await axios.post(`${API_BASE}/api/grn/${g._id}/close`);
+      loadData();
+    } catch (e) {
+      alert("Failed to close GRN");
+    }
   };
 
   /* ---------------- UI ---------------- */
@@ -184,7 +106,8 @@ const GRNList = () => {
         </button>
       </div>
 
-      {/* TABLE */}
+      {error && <div className="sa-error">{error}</div>}
+
       <div className="sa-card">
         {loading ? (
           <div style={{ padding: 20 }}>Loading...</div>
@@ -200,9 +123,10 @@ const GRNList = () => {
                 <th>Store</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: 120 }}>Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {filteredGrns.length === 0 ? (
                 <tr>
@@ -214,53 +138,48 @@ const GRNList = () => {
                 filteredGrns.map((g) => (
                   <tr key={g._id}>
                     <td
-                      style={{ color: "#4ea1ff", cursor: "pointer" }}
                       onClick={() => viewGrn(g)}
+                      style={{ color: "#4ea1ff", cursor: "pointer" }}
                     >
                       {g.grnNo}
                     </td>
+
                     <td>{getPoNo(g)}</td>
                     <td>{getReqNo(g)}</td>
-                    <td>{getVendorName(g, vendors)}</td>
-                    <td>{getResortName(g, resorts)}</td>
-                    <td>{getStoreName(g, stores)}</td>
-                    <td>{getGrnDate(g)}</td>
+                    <td>{getVendorName(g)}</td>
+                    <td>{getResortName(g)}</td>
+                    <td>{getStoreName(g)}</td>
+
+                    <td>
+                      {g.grnDate
+                        ? new Date(g.grnDate).toLocaleDateString()
+                        : g.receivedDate
+                        ? new Date(g.receivedDate).toLocaleDateString()
+                        : "-"}
+                    </td>
+
                     <td>{g.status || "CREATED"}</td>
 
-                    {/* ICON ACTIONS */}
                     <td style={{ whiteSpace: "nowrap" }}>
                       {/* VIEW */}
                       <i
                         className="ri-eye-line"
                         title="View GRN"
-                        style={{ cursor: "pointer", marginRight: 14 }}
+                        style={{ cursor: "pointer" }}
                         onClick={() => viewGrn(g)}
                       />
 
-                      {/* CLOSE GRN */}
+                      {/* CLOSE */}
                       {g.status === "CREATED" && (
                         <i
                           className="ri-lock-line"
                           title="Close GRN"
                           style={{
+                            marginLeft: 14,
                             cursor: "pointer",
-                            marginRight: 14,
-                            color: "#22c55e",
+                            color: "#facc15",
                           }}
-                          onClick={() => closeGrn(g._id)}
-                        />
-                      )}
-
-                      {/* DELETE */}
-                      {g.status === "CREATED" && (
-                        <i
-                          className="ri-delete-bin-6-line"
-                          title="Delete GRN"
-                          style={{
-                            cursor: "pointer",
-                            color: "#ef4444",
-                          }}
-                          onClick={() => deleteGrn(g)}
+                          onClick={() => closeGrn(g)}
                         />
                       )}
                     </td>

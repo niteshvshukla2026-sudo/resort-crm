@@ -298,6 +298,9 @@ const generateReqNo = () => {
       },
       { _id: false }
     );
+     
+  
+
 
     const grnSchema = new Schema(
       {
@@ -309,12 +312,19 @@ const generateReqNo = () => {
         resort: { type: String },
         store: { type: String },
         grnDate: { type: Date, default: Date.now },
-
+        
+        
+    // ⭐⭐⭐ YAHI ADD KARNA HAI ⭐⭐⭐
+    status: {
+      type: String,
+      enum: ["CREATED", "CLOSED"],
+      default: "CREATED",
+    },
         items: [grnLineSchema],
       },
       { timestamps: true }
     );
-
+    
     GRNModel = mongoose.models.GRN || mongoose.model("GRN", grnSchema);
     console.log("GRN model initialised (Mongo)");
   } else {
@@ -1351,6 +1361,41 @@ router.post("/api/requisitions", async (req, res) => {
       res.status(500).json({ message: "Failed to reject requisition" });
     }
   });
+
+
+  // ==================================================
+// 🔒 CLOSE GRN
+// ==================================================
+router.post("/api/grn/:id/close", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    let grn = null;
+
+    if (GRNModel) {
+      grn = await GRNModel.findById(id);
+    } else {
+      return res.status(500).json({ message: "GRN model not available" });
+    }
+
+    if (!grn) {
+      return res.status(404).json({ message: "GRN not found" });
+    }
+
+    if (grn.status === "CLOSED") {
+      return res.status(400).json({ message: "GRN already closed" });
+    }
+
+    // ✅ CLOSE GRN
+    grn.status = "CLOSED";
+    await grn.save();
+
+    return res.json(grn);
+  } catch (err) {
+    console.error("Close GRN error", err);
+    return res.status(500).json({ message: "Failed to close GRN" });
+  }
+});
 
   // =======================================================
 // 🛒 CREATE PO FROM REQUISITION
