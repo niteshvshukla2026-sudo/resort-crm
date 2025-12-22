@@ -82,12 +82,16 @@ const generateReqNo = () => {
 // ================================
 const storeStockSchema = new Schema(
   {
-    store: { type: String, required: true }, // store _id
-    item: { type: String, required: true },  // item _id
+    store: { type: String, required: true },
+    item: { type: String, required: true },
     qty: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
+
+mongoose.models.StoreStock ||
+  mongoose.model("StoreStock", storeStockSchema);
+
 
 // ek store + ek item = ek row
 storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
@@ -1657,8 +1661,9 @@ router.post("/api/po/:id/create-grn", async (req, res) => {
       items: (po.items || []).map((it) => ({
         item: it.item,
         receivedQty: Number(
-          req.body.items?.find((x) => x.item === it.item)?.qtyReceived || it.qty
-        ),
+  req.body.items?.find((x) => x.item === it.item)?.receivedQty || it.qty
+),
+
         pendingQty: 0,
         remark:
           req.body.items?.find((x) => x.item === it.item)?.remark || "",
