@@ -1051,7 +1051,11 @@ if (selectedResort && selectedResort !== "ALL") {
                       )}
                     </td>
                     <td>{r.status || "PENDING"}</td>
-                    <td>{r.date ? r.date.slice(0, 10) : "-"}</td>
+                    <td>
+  {r.createdAt
+    ? new Date(r.createdAt).toISOString().slice(0, 10)
+    : "-"}
+</td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span style={actionStyle} onClick={() => handleView(r)} title="View">
                         <i className="ri-eye-line" />
