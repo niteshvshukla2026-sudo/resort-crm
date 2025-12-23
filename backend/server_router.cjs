@@ -16,7 +16,7 @@ function createRouter({ useMongo, mongoose }) {
 
   const controllers = createControllers({ useMongo, mongoose });
 const { login, forceResetPassword } =
-  require("./src/controllers/auth.controller.js");
+  require("./src/controllers/auth.controller.cjs");
 
 
   // ------------------------
