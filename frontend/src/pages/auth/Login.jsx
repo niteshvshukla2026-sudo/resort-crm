@@ -4,7 +4,8 @@ import axios from "axios";
 import "../../styles/auth.css";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE || ""; // set this in Vercel env to your Render backend URL
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 const Login = () => {
   const { login: ctxLogin } = useAuth();
