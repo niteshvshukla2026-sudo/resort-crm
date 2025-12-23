@@ -35,8 +35,7 @@ async function start() {
   const { createRouter } = require("./server_router.cjs");
   const router = createRouter({ useMongo, mongoose });
 
-  // 🔥 THIS IS THE FIX
-  app.use("/api", router);
+  app.use("/", router); // 👈 ONLY THIS
 
   app.get("/", (req, res) => res.json({ ok: true }));
 
