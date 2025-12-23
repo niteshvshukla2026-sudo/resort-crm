@@ -13,6 +13,10 @@ const upload = multer({ dest: "tmp/" });
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   const controllers = createControllers({ useMongo, mongoose });
+// 🔴 TEMP TEST ROUTE (DEPLOY CHECK)
+router.get("/api/roles-test", (req, res) => {
+  res.json({ ok: true, message: "ROLES ROUTER LOADED" });
+});
 
   // ------------------------
   // Helpers
