@@ -4,31 +4,41 @@ import axios from "axios";
 const API_BASE =
   (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
+/* ===============================
+   EMPTY FORM
+================================ */
 const emptyForm = {
   name: "",
   email: "",
   password: "",
   role: "",
   resorts: [],
+  stores: [],
   defaultResort: "",
   status: "ACTIVE",
 };
 
+/* ===============================
+   COMPONENT
+================================ */
 const UserCreate = () => {
   const [form, setForm] = useState(emptyForm);
+
   const [roles, setRoles] = useState([]);
   const [resorts, setResorts] = useState([]);
+  const [stores, setStores] = useState([]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  /* ======================
+  /* ===============================
      LOAD ROLES & RESORTS
-  ====================== */
+  ================================ */
   useEffect(() => {
-    loadData();
+    loadInitialData();
   }, []);
 
-  const loadData = async () => {
+  const loadInitialData = async () => {
     try {
       const [roleRes, resortRes] = await Promise.all([
         axios.get(`${API_BASE}/roles`),
@@ -37,14 +47,34 @@ const UserCreate = () => {
 
       setRoles(roleRes.data || []);
       setResorts(resortRes.data || []);
-    } catch (e) {
+    } catch (err) {
       setError("Failed to load roles or resorts");
     }
   };
 
-  /* ======================
+  /* ===============================
+     LOAD STORES (RESORT WISE)
+  ================================ */
+  useEffect(() => {
+    if (!form.resorts.length) {
+      setStores([]);
+      setForm((p) => ({ ...p, stores: [] }));
+      return;
+    }
+
+    const resortId = form.resorts[0]; // primary resort
+
+    axios
+      .get(`${API_BASE}/stores`, {
+        params: { resort: resortId },
+      })
+      .then((res) => setStores(res.data || []))
+      .catch(() => setStores([]));
+  }, [form.resorts]);
+
+  /* ===============================
      HELPERS
-  ====================== */
+  ================================ */
   const selectedRole = roles.find((r) => r.key === form.role);
   const isSingleStore = selectedRole?.storeMode === "SINGLE";
 
@@ -54,8 +84,10 @@ const UserCreate = () => {
     setForm((prev) => {
       let next = { ...prev, [name]: value };
 
-      if (name === "role" && isSingleStore) {
+      // role change → reset scope
+      if (name === "role") {
         next.resorts = [];
+        next.stores = [];
         next.defaultResort = "";
       }
 
@@ -81,12 +113,27 @@ const UserCreate = () => {
     });
   };
 
-  /* ======================
+  const toggleStore = (id) => {
+    setForm((prev) => {
+      const exists = prev.stores.includes(id);
+      const stores = exists
+        ? prev.stores.filter((s) => s !== id)
+        : [...prev.stores, id];
+
+      return { ...prev, stores };
+    });
+  };
+
+  /* ===============================
      SAVE USER
-  ====================== */
+  ================================ */
   const saveUser = async () => {
     if (!form.name || !form.email || !form.password || !form.role) {
-      return setError("All required fields must be filled");
+      return setError("Name, Email, Password & Role are required");
+    }
+
+    if (!form.resorts.length) {
+      return setError("At least one resort must be selected");
     }
 
     try {
@@ -97,9 +144,10 @@ const UserCreate = () => {
         name: form.name,
         email: form.email,
         password: form.password,
-        role: form.role, // role KEY
+        role: form.role,
         resorts: form.resorts,
-        defaultResort: form.defaultResort,
+        stores: form.stores,
+        defaultResort: form.defaultResort || form.resorts[0],
         status: form.status,
       };
 
@@ -107,26 +155,26 @@ const UserCreate = () => {
 
       alert("User created successfully");
       setForm(emptyForm);
-    } catch (e) {
-      setError(e.response?.data?.message || "Failed to create user");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create user");
     } finally {
       setSaving(false);
     }
   };
 
-  /* ======================
+  /* ===============================
      UI
-  ====================== */
+  ================================ */
   return (
     <div className="sa-page">
       <div className="sa-page-header">
         <h2>Create User</h2>
-        <p>Assign role and resort access</p>
+        <p>Assign role, resort & store access</p>
       </div>
 
       {error && <div className="sa-error">{error}</div>}
 
-      <div className="sa-card" style={{ maxWidth: 600 }}>
+      <div className="sa-card" style={{ maxWidth: 650 }}>
         <label>
           Full Name *
           <input
@@ -159,13 +207,10 @@ const UserCreate = () => {
           />
         </label>
 
+        {/* ROLE */}
         <label>
           Role *
-          <select
-            value={form.role}
-            onChange={handleChange}
-            name="role"
-          >
+          <select name="role" value={form.role} onChange={handleChange}>
             <option value="">Select role</option>
             {roles.map((r) => (
               <option key={r._id} value={r.key}>
@@ -182,7 +227,7 @@ const UserCreate = () => {
           </div>
         )}
 
-        {/* RESORT SELECTION */}
+        {/* RESORTS */}
         {form.role && (
           <>
             <div style={{ marginTop: 16, fontWeight: 600 }}>
@@ -221,31 +266,51 @@ const UserCreate = () => {
                 ))}
               </div>
             )}
-
-            <label>
-              Default Resort
-              <select
-                value={form.defaultResort}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    defaultResort: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Select</option>
-                {resorts
-                  .filter((r) => form.resorts.includes(r._id))
-                  .map((r) => (
-                    <option key={r._id} value={r._id}>
-                      {r.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
           </>
         )}
 
+        {/* STORES */}
+        {form.resorts.length > 0 && (
+          <>
+            <div style={{ marginTop: 16, fontWeight: 600 }}>
+              Store Access
+            </div>
+
+            {isSingleStore ? (
+              <select
+                value={form.stores[0] || ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    stores: e.target.value ? [e.target.value] : [],
+                  }))
+                }
+              >
+                <option value="">Select store</option>
+                {stores.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="sa-checkbox-list">
+                {stores.map((s) => (
+                  <label key={s._id}>
+                    <input
+                      type="checkbox"
+                      checked={form.stores.includes(s._id)}
+                      onChange={() => toggleStore(s._id)}
+                    />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* STATUS */}
         <label>
           Status
           <select
