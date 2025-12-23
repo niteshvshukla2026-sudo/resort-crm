@@ -12,7 +12,7 @@ const emptyForm = {
   email: "",
   password: "",
   role: "",
-  resort: "",          // 🔑 SINGLE RESORT
+  resort: "", // ✅ single resort
   stores: [],
   status: "ACTIVE",
 };
@@ -44,9 +44,24 @@ const UserCreate = () => {
         axios.get(`${API_BASE}/resorts`),
       ]);
 
-      setRoles(Array.isArray(roleRes.data) ? roleRes.data : []);
-      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
+      // 🔐 SAFE ARRAY HANDLING
+      setRoles(
+        Array.isArray(roleRes.data)
+          ? roleRes.data
+          : Array.isArray(roleRes.data?.data)
+          ? roleRes.data.data
+          : []
+      );
+
+      setResorts(
+        Array.isArray(resortRes.data)
+          ? resortRes.data
+          : Array.isArray(resortRes.data?.data)
+          ? resortRes.data.data
+          : []
+      );
     } catch (err) {
+      console.error(err);
       setError("Failed to load roles or resorts");
     }
   };
@@ -66,7 +81,13 @@ const UserCreate = () => {
         params: { resort: form.resort },
       })
       .then((res) => {
-        setStores(Array.isArray(res.data) ? res.data : []);
+        setStores(
+          Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res.data?.data)
+            ? res.data.data
+            : []
+        );
       })
       .catch(() => {
         setStores([]);
@@ -115,7 +136,7 @@ const UserCreate = () => {
         email: form.email,
         password: form.password,
         role: form.role,
-        resorts: [form.resort],     // 🔥 BACKEND COMPATIBLE
+        resorts: [form.resort], // ✅ backend compatible
         defaultResort: form.resort,
         stores: form.stores,
         status: form.status,
@@ -126,6 +147,7 @@ const UserCreate = () => {
       alert("User created successfully");
       setForm(emptyForm);
     } catch (err) {
+      console.error(err);
       setError(err.response?.data?.message || "Failed to create user");
     } finally {
       setSaving(false);
@@ -139,7 +161,7 @@ const UserCreate = () => {
     <div className="sa-page">
       <div className="sa-page-header">
         <h2>Create User</h2>
-        <p>Resort-wise user & store assignment</p>
+        <p>Assign role, resort & store access</p>
       </div>
 
       {error && <div className="sa-error">{error}</div>}
@@ -194,7 +216,7 @@ const UserCreate = () => {
           >
             <option value="">Select role</option>
             {roles.map((r) => (
-              <option key={r._id} value={r.key}>
+              <option key={r._id || r.id} value={r.key}>
                 {r.name}
               </option>
             ))}
@@ -216,11 +238,14 @@ const UserCreate = () => {
               }
             >
               <option value="">Select resort</option>
-              {resorts.map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name}
-                </option>
-              ))}
+              {resorts.map((r) => {
+                const resortId = r._id || r.id;
+                return (
+                  <option key={resortId} value={resortId}>
+                    {r.name}
+                  </option>
+                );
+              })}
             </select>
           </label>
         )}
@@ -243,24 +268,30 @@ const UserCreate = () => {
                 }
               >
                 <option value="">Select store</option>
-                {stores.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name}
-                  </option>
-                ))}
+                {stores.map((s) => {
+                  const storeId = s._id || s.id;
+                  return (
+                    <option key={storeId} value={storeId}>
+                      {s.name}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <div className="sa-checkbox-list">
-                {stores.map((s) => (
-                  <label key={s._id}>
-                    <input
-                      type="checkbox"
-                      checked={form.stores.includes(s._id)}
-                      onChange={() => toggleStore(s._id)}
-                    />
-                    {s.name}
-                  </label>
-                ))}
+                {stores.map((s) => {
+                  const storeId = s._id || s.id;
+                  return (
+                    <label key={storeId}>
+                      <input
+                        type="checkbox"
+                        checked={form.stores.includes(storeId)}
+                        onChange={() => toggleStore(storeId)}
+                      />
+                      {s.name}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </>
