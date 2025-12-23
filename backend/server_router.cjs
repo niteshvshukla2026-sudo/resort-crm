@@ -17,8 +17,6 @@ function createRouter({ useMongo, mongoose }) {
  const controllers = createControllers({ useMongo, mongoose });
 
 // 🔥 ENSURE USER MODEL IS REALLY READY
-// expose mongoose for auth controller
-global.mongoose = mongoose;
 
 
 
