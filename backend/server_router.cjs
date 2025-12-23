@@ -313,21 +313,35 @@ console.log("StoreStock model initialised (Mongo)");
     POModel = mongoose.models.PO || mongoose.model("PO", poSchema);
     console.log("PO model initialised (Mongo)");
 
-    // =======================
-// 👤 USER MODEL
-// =======================
-const userSchema = new mongoose.Schema(
+  const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+
     email: { type: String, required: true, unique: true },
+
     password: { type: String, required: true },
 
-    role: { type: String, required: true }, // ROLE KEY (ADMIN, R_M etc)
+    role: { type: String, required: true }, // ADMIN, R_M, S_M
 
-    resorts: { type: [String], default: [] }, // resort _ids
-    stores: { type: [String], default: [] },  // store _ids
+    // 🔥 FIXED: ObjectId refs
+    resorts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Resort",
+      },
+    ],
 
-    defaultResort: { type: String },
+    stores: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Store",
+      },
+    ],
+
+    defaultResort: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
+    },
 
     status: {
       type: String,
@@ -338,9 +352,15 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const UserModel =
-  mongoose.models.User || mongoose.model("User", userSchema);
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await require("bcryptjs").hash(this.password, 10);
+  next();
+});
 
+userSchema.methods.matchPassword = async function (entered) {
+  return await require("bcryptjs").compare(entered, this.password);
+};
 
     // =======================
 // 🔐 ROLE MODEL
