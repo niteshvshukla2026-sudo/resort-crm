@@ -353,15 +353,21 @@ console.log("StoreStock model initialised (Mongo)");
   },
   { timestamps: true }
 );
-mongoose.models.User || mongoose.model("User", userSchema);
-UserModel = mongoose.models.User;
-
-
+// ✅ 1️⃣ PRE-SAVE FIRST
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await require("bcryptjs").hash(this.password, 10);
   next();
 });
+
+// ✅ 2️⃣ THEN REGISTER MODEL
+if (!mongoose.models.User) {
+  mongoose.model("User", userSchema);
+}
+
+// ✅ 3️⃣ ASSIGN UserModel
+UserModel = mongoose.models.User;
+
 
 userSchema.methods.matchPassword = async function (entered) {
   return await require("bcryptjs").compare(entered, this.password);
@@ -2219,9 +2225,22 @@ router.post("/api/users", async (req, res) => {
       email,
       password, // later bcrypt
       role,
-      resorts: resorts || [],
-      stores: stores || [],
-      defaultResort: defaultResort || resorts?.[0],
+      
+  // 🔥 CHANGE 2 START
+  resorts: Array.isArray(resorts)
+    ? resorts.map((r) => new mongoose.Types.ObjectId(r))
+    : [],
+
+  stores: Array.isArray(stores)
+    ? stores.map((s) => new mongoose.Types.ObjectId(s))
+    : [],
+
+  defaultResort: defaultResort
+    ? new mongoose.Types.ObjectId(defaultResort)
+    : resorts?.[0]
+      ? new mongoose.Types.ObjectId(resorts[0])
+      : null,
+  // 🔥 CHANGE 2 END
       status: status || "ACTIVE",
     });
 
