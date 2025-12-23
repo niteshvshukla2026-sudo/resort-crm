@@ -23,13 +23,17 @@ async function start() {
 
   // ---------- DB ----------
   let mongoose = null;
-  let useMongo = false;
-  if (process.env.MONGO_URI) {
-    mongoose = require("mongoose");
-    await mongoose.connect(process.env.MONGO_URI);
-    useMongo = true;
-    console.log("✅ Mongo connected");
-  }
+let useMongo = false;
+
+if (process.env.MONGO_URI) {
+  mongoose = require("mongoose");
+  await mongoose.connect(process.env.MONGO_URI);
+  useMongo = true;
+  console.log("✅ Mongo connected");
+} else {
+  console.log("❌ MONGO_URI missing – using memory DB");
+}
+
 
   // ---------- ROUTER ----------
   const { createRouter } = require("./server_router.cjs");
