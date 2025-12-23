@@ -313,6 +313,34 @@ console.log("StoreStock model initialised (Mongo)");
     POModel = mongoose.models.PO || mongoose.model("PO", poSchema);
     console.log("PO model initialised (Mongo)");
 
+    // =======================
+// 👤 USER MODEL
+// =======================
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+
+    role: { type: String, required: true }, // ROLE KEY (ADMIN, R_M etc)
+
+    resorts: { type: [String], default: [] }, // resort _ids
+    stores: { type: [String], default: [] },  // store _ids
+
+    defaultResort: { type: String },
+
+    status: {
+      type: String,
+      enum: ["ACTIVE", "INACTIVE"],
+      default: "ACTIVE",
+    },
+  },
+  { timestamps: true }
+);
+
+const UserModel =
+  mongoose.models.User || mongoose.model("User", userSchema);
+
 
     // =======================
 // 🔐 ROLE MODEL
@@ -2097,6 +2125,84 @@ router.put("/api/roles/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to update role" });
   }
 });
+
+// =======================
+// 👤 USERS (FULL CRUD)
+// =======================
+
+// LIST USERS
+router.get("/api/users", async (req, res) => {
+  try {
+    const users = await UserModel.find().lean();
+    res.json(users);
+  } catch (err) {
+    console.error("GET USERS ERROR", err);
+    res.status(500).json({ message: "Failed to load users" });
+  }
+});
+
+// CREATE USER
+router.post("/api/users", async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role,
+      resorts,
+      stores,
+      defaultResort,
+      status,
+    } = req.body;
+
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({
+        message: "name, email, password & role are required",
+      });
+    }
+
+    const exists = await UserModel.findOne({ email });
+    if (exists) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+
+    const user = await UserModel.create({
+      name,
+      email,
+      password, // later bcrypt
+      role,
+      resorts: resorts || [],
+      stores: stores || [],
+      defaultResort: defaultResort || resorts?.[0],
+      status: status || "ACTIVE",
+    });
+
+    res.status(201).json(user);
+  } catch (err) {
+    console.error("CREATE USER ERROR", err);
+    res.status(500).json({ message: "Failed to create user" });
+  }
+});
+
+// UPDATE USER
+router.put("/api/users/:id", async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    Object.assign(user, req.body);
+    await user.save();
+
+    res.json(user);
+  } catch (err) {
+    console.error("UPDATE USER ERROR", err);
+    res.status(500).json({ message: "Failed to update user" });
+  }
+});
+
+
 
 router.get("/api/consumption", async (req, res) => {
   try {
