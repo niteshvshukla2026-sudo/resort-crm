@@ -12,6 +12,8 @@ const upload = multer({ dest: "tmp/" });
 
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
+  let UserModel = null;
+
   const controllers = createControllers({ useMongo, mongoose });
 
   // ------------------------
@@ -352,7 +354,8 @@ console.log("StoreStock model initialised (Mongo)");
   { timestamps: true }
 );
 mongoose.models.User || mongoose.model("User", userSchema);
-const UserModel = mongoose.models.User;
+UserModel = mongoose.models.User;
+
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
