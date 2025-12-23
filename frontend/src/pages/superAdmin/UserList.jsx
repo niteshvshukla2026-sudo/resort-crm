@@ -26,7 +26,7 @@ const UserCreate = () => {
 
   const [roles, setRoles] = useState([]);
   const [resorts, setResorts] = useState([]);
-  const [storesByResort, setStoresByResort] = useState({});
+  const [stores, setStores] = useState([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -45,41 +45,36 @@ const UserCreate = () => {
         axios.get(`${API_BASE}/resorts`),
       ]);
 
-      setRoles(roleRes.data || []);
-      setResorts(resortRes.data || []);
+      setRoles(Array.isArray(roleRes.data) ? roleRes.data : []);
+      setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
     } catch (err) {
+      console.error(err);
       setError("Failed to load roles or resorts");
     }
   };
 
   /* ===============================
-     LOAD STORES (RESORT-WISE)
+     LOAD STORES (RESORT WISE)
   ================================ */
   useEffect(() => {
     if (!form.resorts.length) {
-      setStoresByResort({});
+      setStores([]);
       setForm((p) => ({ ...p, stores: [] }));
       return;
     }
 
-    const loadStores = async () => {
-      const map = {};
+    const primaryResortId = form.resorts[0];
 
-      for (const resortId of form.resorts) {
-        try {
-          const res = await axios.get(`${API_BASE}/stores`, {
-            params: { resort: resortId },
-          });
-          map[resortId] = res.data || [];
-        } catch {
-          map[resortId] = [];
-        }
-      }
-
-      setStoresByResort(map);
-    };
-
-    loadStores();
+    axios
+      .get(`${API_BASE}/stores`, {
+        params: { resort: primaryResortId },
+      })
+      .then((res) => {
+        setStores(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {
+        setStores([]);
+      });
   }, [form.resorts]);
 
   /* ===============================
@@ -94,6 +89,7 @@ const UserCreate = () => {
     setForm((prev) => {
       let next = { ...prev, [name]: value };
 
+      // Role change → reset scope
       if (name === "role") {
         next.resorts = [];
         next.stores = [];
@@ -128,6 +124,7 @@ const UserCreate = () => {
       const stores = exists
         ? prev.stores.filter((s) => s !== id)
         : [...prev.stores, id];
+
       return { ...prev, stores };
     });
   };
@@ -152,7 +149,7 @@ const UserCreate = () => {
         name: form.name,
         email: form.email,
         password: form.password,
-        role: form.role,
+        role: form.role, // ROLE KEY
         resorts: form.resorts,
         stores: form.stores,
         defaultResort: form.defaultResort || form.resorts[0],
@@ -163,8 +160,8 @@ const UserCreate = () => {
 
       alert("User created successfully");
       setForm(emptyForm);
-      setStoresByResort({});
     } catch (err) {
+      console.error(err);
       setError(err.response?.data?.message || "Failed to create user");
     } finally {
       setSaving(false);
@@ -183,7 +180,8 @@ const UserCreate = () => {
 
       {error && <div className="sa-error">{error}</div>}
 
-      <div className="sa-card" style={{ maxWidth: 700 }}>
+      <div className="sa-card" style={{ maxWidth: 650 }}>
+        {/* BASIC INFO */}
         <label>
           Full Name *
           <input
@@ -221,11 +219,12 @@ const UserCreate = () => {
           Role *
           <select name="role" value={form.role} onChange={handleChange}>
             <option value="">Select role</option>
-            {roles.map((r) => (
-              <option key={r._id} value={r.key}>
-                {r.name}
-              </option>
-            ))}
+            {Array.isArray(roles) &&
+              roles.map((r) => (
+                <option key={r._id} value={r.key}>
+                  {r.name}
+                </option>
+              ))}
           </select>
         </label>
 
@@ -236,7 +235,7 @@ const UserCreate = () => {
           </div>
         )}
 
-        {/* RESORT SELECTION */}
+        {/* RESORTS */}
         {form.role && (
           <>
             <div style={{ marginTop: 16, fontWeight: 600 }}>
@@ -255,72 +254,76 @@ const UserCreate = () => {
                 }
               >
                 <option value="">Select resort</option>
-                {resorts.map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name}
-                  </option>
-                ))}
+                {Array.isArray(resorts) &&
+                  resorts.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
               </select>
             ) : (
               <div className="sa-checkbox-list">
-                {resorts.map((r) => (
-                  <label key={r._id}>
-                    <input
-                      type="checkbox"
-                      checked={form.resorts.includes(r._id)}
-                      onChange={() => toggleResort(r._id)}
-                    />
-                    {r.name}
-                  </label>
-                ))}
+                {Array.isArray(resorts) &&
+                  resorts.map((r) => (
+                    <label key={r._id}>
+                      <input
+                        type="checkbox"
+                        checked={form.resorts.includes(r._id)}
+                        onChange={() => toggleResort(r._id)}
+                      />
+                      {r.name}
+                    </label>
+                  ))}
               </div>
             )}
           </>
         )}
 
-        {/* STORES – RESORT WISE */}
+        {/* STORES */}
         {form.resorts.length > 0 && (
           <>
-            <div style={{ marginTop: 20, fontWeight: 600 }}>
-              Store Access (Resort-wise)
+            <div style={{ marginTop: 16, fontWeight: 600 }}>
+              Store Access
             </div>
 
-            {form.resorts.map((resortId) => {
-              const resort = resorts.find((r) => r._id === resortId);
-              const storeList = storesByResort[resortId] || [];
-
-              return (
-                <div key={resortId} style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    {resort?.name}
-                  </div>
-
-                  <div className="sa-checkbox-list">
-                    {storeList.length === 0 ? (
-                      <div style={{ fontSize: 12, color: "#888" }}>
-                        No stores for this resort
-                      </div>
-                    ) : (
-                      storeList.map((s) => (
-                        <label key={s._id}>
-                          <input
-                            type="checkbox"
-                            checked={form.stores.includes(s._id)}
-                            onChange={() => toggleStore(s._id)}
-                          />
-                          {s.name}
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {isSingleStore ? (
+              <select
+                value={form.stores[0] || ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    stores: e.target.value ? [e.target.value] : [],
+                  }))
+                }
+              >
+                <option value="">Select store</option>
+                {Array.isArray(stores) &&
+                  stores.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            ) : (
+              <div className="sa-checkbox-list">
+                {Array.isArray(stores) &&
+                  stores.map((s) => (
+                    <label key={s._id}>
+                      <input
+                        type="checkbox"
+                        checked={form.stores.includes(s._id)}
+                        onChange={() => toggleStore(s._id)}
+                      />
+                      {s.name}
+                    </label>
+                  ))}
+              </div>
+            )}
           </>
         )}
 
         {/* STATUS */}
-        <label style={{ marginTop: 16 }}>
+        <label>
           Status
           <select
             value={form.status}
@@ -333,7 +336,7 @@ const UserCreate = () => {
           </select>
         </label>
 
-        <div style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 20 }}>
           <button
             className="sa-primary-button"
             disabled={saving}
