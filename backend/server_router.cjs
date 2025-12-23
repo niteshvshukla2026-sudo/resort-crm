@@ -353,25 +353,28 @@ console.log("StoreStock model initialised (Mongo)");
   },
   { timestamps: true }
 );
-
-// ✅ 1️⃣ PRE-SAVE (hash password)
+// ✅ 1️⃣ PRE-SAVE FIRST
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await require("bcryptjs").hash(this.password, 10);
   next();
 });
 
-// ✅ 2️⃣ ADD METHODS (IMPORTANT: BEFORE model)
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return await require("bcryptjs").compare(
-    enteredPassword,
-    this.password
-  );
+
+userSchema.methods.matchPassword = async function (entered) {
+  return await require("bcryptjs").compare(entered, this.password);
 };
 
-// ✅ 3️⃣ REGISTER MODEL (AFTER everything)
-const User =
-  mongoose.models.User || mongoose.model("User", userSchema);
+// ✅ 2️⃣ THEN REGISTER MODEL
+if (!mongoose.models.User) {
+  mongoose.model("User", userSchema);
+}
+
+// ✅ 3️⃣ ASSIGN UserModel
+UserModel = mongoose.models.User;
+
+
+
 
     // =======================
 // 🔐 ROLE MODEL
