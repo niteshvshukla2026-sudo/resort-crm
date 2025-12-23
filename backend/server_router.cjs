@@ -15,6 +15,10 @@ function createRouter({ useMongo, mongoose }) {
   let UserModel = null;
 
   const controllers = createControllers({ useMongo, mongoose });
+const {
+  login,
+  forceResetPassword
+} = require("./controllers/auth.controller.cjs");
 
   // ------------------------
   // Helpers
@@ -505,8 +509,9 @@ mongoose.models.Consumption ||
   // ------------------------
   // 🔐 AUTH
   // ------------------------
-  router.post("/api/auth/login", safe("login"));
-
+ 
+router.post("/api/auth/login", login);
+router.get("/api/auth/force-reset", forceResetPassword);
   // ------------------------
   // 📊 Dashboard
   // ------------------------
