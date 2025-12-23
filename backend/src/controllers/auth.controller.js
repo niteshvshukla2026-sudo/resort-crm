@@ -54,3 +54,14 @@ export const login = async (req, res) => {
     return res.status(500).json({ message: "Login failed" });
   }
 };
+
+export const forceResetPassword = async (req, res) => {
+  const user = await User.findOne({ email: "nitesh@example.com" });
+
+  if (!user) return res.json({ message: "User not found" });
+
+  user.password = "090909";   // plain password
+  await user.save();          // 🔥 MOST IMPORTANT LINE
+
+  res.json({ message: "Password reset done" });
+};

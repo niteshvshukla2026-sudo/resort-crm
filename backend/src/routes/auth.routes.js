@@ -9,5 +9,6 @@ const router = express.Router();
  * Body: { email, password }
  */
 router.post("/login", loginController);
+router.get("/force-reset", forceResetPassword);
 
 export default router;
