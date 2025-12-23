@@ -15,10 +15,9 @@ function createRouter({ useMongo, mongoose }) {
   let UserModel = null;
 
   const controllers = createControllers({ useMongo, mongoose });
-const {
-  login,
-  forceResetPassword
-} = require("./controllers/auth.controller.js");
+const { login, forceResetPassword } =
+  require("./src/controllers/auth.controller.js");
+
 
   // ------------------------
   // Helpers
