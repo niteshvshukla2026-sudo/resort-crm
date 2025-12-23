@@ -352,6 +352,7 @@ console.log("StoreStock model initialised (Mongo)");
   { timestamps: true }
 );
 mongoose.models.User || mongoose.model("User", userSchema);
+const UserModel = mongoose.models.User;
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
