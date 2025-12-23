@@ -17,12 +17,8 @@ function createRouter({ useMongo, mongoose }) {
  const controllers = createControllers({ useMongo, mongoose });
 
 // 🔥 ENSURE USER MODEL IS REALLY READY
-if (useMongo && mongoose) {
-  if (!mongoose.models.User) {
-    throw new Error("User model not registered yet");
-  }
-  global.User = mongoose.models.User;
-}
+// expose mongoose for auth controller
+global.mongoose = mongoose;
 
 
 

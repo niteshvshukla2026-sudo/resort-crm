@@ -6,7 +6,13 @@ const bcrypt = require("bcryptjs");
  * User model server_router.cjs me bana hua hai
  * aur global.User me attach hai
  */
-const getUserModel = () => global.User;
+const getUserModel = () => {
+  if (!global.mongoose || !global.mongoose.models.User) {
+    throw new Error("User model not ready yet");
+  }
+  return global.mongoose.models.User;
+};
+
 
 // -------------------------
 // JWT TOKEN
@@ -30,7 +36,8 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Email & password required" });
     }
 
-    const User = getUserModel();
+const User = getUserModel();
+
     if (!User) {
       return res.status(500).json({ message: "User model not initialized" });
     }
