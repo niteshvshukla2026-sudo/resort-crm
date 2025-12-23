@@ -12,7 +12,7 @@ const emptyForm = {
   email: "",
   password: "",
   role: "",
-  resort: "", // ✅ single resort
+  resort: "",
   stores: [],
   status: "ACTIVE",
 };
@@ -44,24 +44,16 @@ const UserCreate = () => {
         axios.get(`${API_BASE}/resorts`),
       ]);
 
-      // 🔐 SAFE ARRAY HANDLING
-      setRoles(
-        Array.isArray(roleRes.data)
-          ? roleRes.data
-          : Array.isArray(roleRes.data?.data)
-          ? roleRes.data.data
-          : []
-      );
+      // roles api returns array
+      setRoles(Array.isArray(roleRes.data) ? roleRes.data : []);
 
+      // resorts api returns { ok, resorts: [] }
       setResorts(
-        Array.isArray(resortRes.data)
-          ? resortRes.data
-          : Array.isArray(resortRes.data?.data)
-          ? resortRes.data.data
+        Array.isArray(resortRes.data?.resorts)
+          ? resortRes.data.resorts
           : []
       );
     } catch (err) {
-      console.error(err);
       setError("Failed to load roles or resorts");
     }
   };
@@ -81,13 +73,7 @@ const UserCreate = () => {
         params: { resort: form.resort },
       })
       .then((res) => {
-        setStores(
-          Array.isArray(res.data)
-            ? res.data
-            : Array.isArray(res.data?.data)
-            ? res.data.data
-            : []
-        );
+        setStores(Array.isArray(res.data) ? res.data : []);
       })
       .catch(() => {
         setStores([]);
@@ -103,11 +89,12 @@ const UserCreate = () => {
   const toggleStore = (id) => {
     setForm((prev) => {
       const exists = prev.stores.includes(id);
-      const stores = exists
-        ? prev.stores.filter((s) => s !== id)
-        : [...prev.stores, id];
-
-      return { ...prev, stores };
+      return {
+        ...prev,
+        stores: exists
+          ? prev.stores.filter((s) => s !== id)
+          : [...prev.stores, id],
+      };
     });
   };
 
@@ -136,7 +123,7 @@ const UserCreate = () => {
         email: form.email,
         password: form.password,
         role: form.role,
-        resorts: [form.resort], // ✅ backend compatible
+        resorts: [form.resort],        // backend expects array
         defaultResort: form.resort,
         stores: form.stores,
         status: form.status,
@@ -146,8 +133,8 @@ const UserCreate = () => {
 
       alert("User created successfully");
       setForm(emptyForm);
+      setStores([]);
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Failed to create user");
     } finally {
       setSaving(false);
@@ -166,7 +153,7 @@ const UserCreate = () => {
 
       {error && <div className="sa-error">{error}</div>}
 
-      <div className="sa-card" style={{ maxWidth: 650 }}>
+      <div className="sa-card" style={{ maxWidth: 700 }}>
         {/* BASIC INFO */}
         <label>
           Full Name *
@@ -216,7 +203,7 @@ const UserCreate = () => {
           >
             <option value="">Select role</option>
             {roles.map((r) => (
-              <option key={r._id || r.id} value={r.key}>
+              <option key={r._id} value={r.key}>
                 {r.name}
               </option>
             ))}
@@ -238,14 +225,11 @@ const UserCreate = () => {
               }
             >
               <option value="">Select resort</option>
-              {resorts.map((r) => {
-                const resortId = r._id || r.id;
-                return (
-                  <option key={resortId} value={resortId}>
-                    {r.name}
-                  </option>
-                );
-              })}
+              {resorts.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name}
+                </option>
+              ))}
             </select>
           </label>
         )}
@@ -268,30 +252,24 @@ const UserCreate = () => {
                 }
               >
                 <option value="">Select store</option>
-                {stores.map((s) => {
-                  const storeId = s._id || s.id;
-                  return (
-                    <option key={storeId} value={storeId}>
-                      {s.name}
-                    </option>
-                  );
-                })}
+                {stores.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
             ) : (
               <div className="sa-checkbox-list">
-                {stores.map((s) => {
-                  const storeId = s._id || s.id;
-                  return (
-                    <label key={storeId}>
-                      <input
-                        type="checkbox"
-                        checked={form.stores.includes(storeId)}
-                        onChange={() => toggleStore(storeId)}
-                      />
-                      {s.name}
-                    </label>
-                  );
-                })}
+                {stores.map((s) => (
+                  <label key={s._id}>
+                    <input
+                      type="checkbox"
+                      checked={form.stores.includes(s._id)}
+                      onChange={() => toggleStore(s._id)}
+                    />
+                    {s.name}
+                  </label>
+                ))}
               </div>
             )}
           </>
@@ -311,7 +289,7 @@ const UserCreate = () => {
           </select>
         </label>
 
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 24 }}>
           <button
             className="sa-primary-button"
             disabled={saving}
