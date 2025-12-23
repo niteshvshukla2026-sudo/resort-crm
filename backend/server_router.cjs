@@ -313,6 +313,32 @@ console.log("StoreStock model initialised (Mongo)");
     POModel = mongoose.models.PO || mongoose.model("PO", poSchema);
     console.log("PO model initialised (Mongo)");
 
+
+    // =======================
+// 🔐 ROLE MODEL
+// =======================
+const rolePermissionSchema = new Schema(
+  {
+    module: String,
+    actions: [String],
+  },
+  { _id: false }
+);
+
+const roleSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    key: { type: String, required: true, unique: true },
+    description: String,
+    type: { type: String, enum: ["SYSTEM", "CUSTOM"], default: "CUSTOM" },
+    storeMode: { type: String, enum: ["SINGLE", "MULTI"], default: "MULTI" },
+    permissions: [rolePermissionSchema],
+  },
+  { timestamps: true }
+);
+
+mongoose.models.Role || mongoose.model("Role", roleSchema);
+
     // ------------------------
     // GRN model
     // ------------------------
@@ -2072,12 +2098,6 @@ router.put("/api/roles/:id", async (req, res) => {
   }
 });
 
-
-
-
-  return router;
-}
- 
 router.get("/api/consumption", async (req, res) => {
   try {
     const { resort } = req.query;
@@ -2128,89 +2148,12 @@ router.post("/api/consumption", async (req, res) => {
   }
 });
 
-// =======================
-// 🔐 ROLE MODEL
-// =======================
-const rolePermissionSchema = new mongoose.Schema(
-  {
-    module: String,
-    actions: [String],
-  },
-  { _id: false }
-);
 
-const roleSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    key: { type: String, required: true, unique: true },
-    description: String,
-    type: { type: String, enum: ["SYSTEM", "CUSTOM"], default: "CUSTOM" },
-    storeMode: { type: String, enum: ["SINGLE", "MULTI"], default: "MULTI" },
-    permissions: [rolePermissionSchema],
-  },
-  { timestamps: true }
-);
+  return router;
+}
+ 
 
-const RoleModel =
-  mongoose.models.Role || mongoose.model("Role", roleSchema);
-// =======================
-// 🔐 ROLES (FULL CRUD)
-// =======================
-router.get("/api/roles", async (req, res) => {
-  try {
-    const Role = mongoose.models.Role;
-    const docs = await Role.find().sort({ createdAt: 1 }).lean();
-    res.json(docs);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to load roles" });
-  }
-});
 
-router.post("/api/roles", async (req, res) => {
-  try {
-    const Role = mongoose.models.Role;
-    const { name, key } = req.body;
-
-    if (!name || !key) {
-      return res.status(400).json({ message: "name & key required" });
-    }
-
-    const exists = await Role.findOne({ key });
-    if (exists) {
-      return res.status(400).json({ message: "Role key already exists" });
-    }
-
-    const role = await Role.create(req.body);
-    res.status(201).json(role);
-  } catch (err) {
-    console.error("CREATE ROLE ERROR", err);
-    res.status(500).json({ message: "Failed to create role" });
-  }
-});
-
-router.put("/api/roles/:id", async (req, res) => {
-  try {
-    const Role = mongoose.models.Role;
-    const role = await Role.findById(req.params.id);
-
-    if (!role) {
-      return res.status(404).json({ message: "Role not found" });
-    }
-
-    if (role.type === "SYSTEM") {
-      return res.status(403).json({ message: "System role locked" });
-    }
-
-    Object.assign(role, req.body);
-    await role.save();
-
-    res.json(role);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to update role" });
-  }
-});
 
 
 module.exports = { createRouter };
