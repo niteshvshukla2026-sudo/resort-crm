@@ -665,6 +665,29 @@ const updateStoreHandler = async (req, res) => {
   router.put("/api/stores/:id", updateStoreHandler);
   router.delete("/api/stores/:id", deleteStoreHandler);
 
+
+  // ==================================================
+// 🏨 GET ALL RESORTS
+// ==================================================
+router.get("/resorts", async (req, res) => {
+  try {
+    let resorts = [];
+
+    if (useMongo && ResortModel) {
+      resorts = await ResortModel.find({ isActive: true })
+        .select("_id name code");
+    } else {
+      // fallback for memory mode (optional)
+      resorts = [];
+    }
+
+    res.json(resorts);
+  } catch (err) {
+    console.error("RESORT LIST ERROR:", err);
+    res.status(500).json({ message: "Failed to load resorts" });
+  }
+});
+
   // =======================================================
   // 📁 ITEM CATEGORIES (FULL CRUD)
   // =======================================================
