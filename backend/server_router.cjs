@@ -2062,6 +2062,88 @@ router.post("/api/consumption", async (req, res) => {
   }
 });
 
+// =======================
+// 🔐 ROLE MODEL
+// =======================
+const rolePermissionSchema = new mongoose.Schema(
+  {
+    module: String,
+    actions: [String],
+  },
+  { _id: false }
+);
+
+const roleSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    key: { type: String, required: true, unique: true },
+    description: String,
+    type: { type: String, enum: ["SYSTEM", "CUSTOM"], default: "CUSTOM" },
+    storeMode: { type: String, enum: ["SINGLE", "MULTI"], default: "MULTI" },
+    permissions: [rolePermissionSchema],
+  },
+  { timestamps: true }
+);
+
+const RoleModel =
+  mongoose.models.Role || mongoose.model("Role", roleSchema);
+
+  // =======================
+// 🔐 ROLES (FULL CRUD)
+// =======================
+
+// LIST
+router.get("/api/roles", async (req, res) => {
+  const docs = await RoleModel.find().sort({ createdAt: 1 }).lean();
+  res.json(docs);
+});
+
+// CREATE
+router.post("/api/roles", async (req, res) => {
+  const { name, key } = req.body;
+  if (!name || !key) {
+    return res.status(400).json({ message: "name & key required" });
+  }
+
+  const exists = await RoleModel.findOne({ key });
+  if (exists) {
+    return res.status(400).json({ message: "Role key already exists" });
+  }
+
+  const role = await RoleModel.create(req.body);
+  res.status(201).json(role);
+});
+
+// UPDATE
+router.put("/api/roles/:id", async (req, res) => {
+  const role = await RoleModel.findById(req.params.id);
+  if (!role) return res.status(404).json({ message: "Role not found" });
+
+  if (role.type === "SYSTEM") {
+    return res.status(403).json({ message: "System role locked" });
+  }
+
+  Object.assign(role, req.body);
+  await role.save();
+
+  res.json(role);
+});
+
+const checkPermission = (module, action) => {
+  return (req, res, next) => {
+    const perms = req.user?.permissions || [];
+
+    const allowed = perms.some(
+      (p) => p.module === module && p.actions.includes(action)
+    );
+
+    if (!allowed) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    next();
+  };
+};
 
 
 module.exports = { createRouter };
