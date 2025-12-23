@@ -1018,8 +1018,8 @@ const updateStoreHandler = async (req, res) => {
   // ------------------------
   // 👥 ROLES / USERS (demo)
   // ------------------------
-  router.get("/roles", safe("listRoles"));
-  router.get("/users", safe("listUsers"));
+  // router.get("/roles", safe("listRoles"));
+  // router.get("/users", safe("listUsers"));
 
   // ------------------------
   // Vendors (full CRUD + CSV upload)
@@ -2009,6 +2009,72 @@ router.delete("/api/grn/:id", async (req, res) => {
   // other endpoints can go here...
   // ------------------------
 
+ // =======================
+// 🔐 ROLES (FULL CRUD)
+// =======================
+
+// LIST ROLES
+router.get("/api/roles", async (req, res) => {
+  try {
+    const Role = mongoose.models.Role;
+    const roles = await Role.find().sort({ createdAt: 1 }).lean();
+    res.json(roles);
+  } catch (err) {
+    console.error("GET ROLES ERROR", err);
+    res.status(500).json({ message: "Failed to load roles" });
+  }
+});
+
+// CREATE ROLE
+router.post("/api/roles", async (req, res) => {
+  try {
+    const Role = mongoose.models.Role;
+    const { name, key } = req.body;
+
+    if (!name || !key) {
+      return res.status(400).json({ message: "name & key required" });
+    }
+
+    const exists = await Role.findOne({ key });
+    if (exists) {
+      return res.status(400).json({ message: "Role key already exists" });
+    }
+
+    const role = await Role.create(req.body);
+    res.status(201).json(role);
+  } catch (err) {
+    console.error("CREATE ROLE ERROR", err);
+    res.status(500).json({ message: "Failed to create role" });
+  }
+});
+
+// UPDATE ROLE
+router.put("/api/roles/:id", async (req, res) => {
+  try {
+    const Role = mongoose.models.Role;
+    const role = await Role.findById(req.params.id);
+
+    if (!role) {
+      return res.status(404).json({ message: "Role not found" });
+    }
+
+    if (role.type === "SYSTEM") {
+      return res.status(403).json({ message: "System role locked" });
+    }
+
+    Object.assign(role, req.body);
+    await role.save();
+
+    res.json(role);
+  } catch (err) {
+    console.error("UPDATE ROLE ERROR", err);
+    res.status(500).json({ message: "Failed to update role" });
+  }
+});
+
+
+
+
   return router;
 }
  
@@ -2087,63 +2153,64 @@ const roleSchema = new mongoose.Schema(
 
 const RoleModel =
   mongoose.models.Role || mongoose.model("Role", roleSchema);
-
-  // =======================
+// =======================
 // 🔐 ROLES (FULL CRUD)
 // =======================
-
-// LIST
 router.get("/api/roles", async (req, res) => {
-  const docs = await RoleModel.find().sort({ createdAt: 1 }).lean();
-  res.json(docs);
+  try {
+    const Role = mongoose.models.Role;
+    const docs = await Role.find().sort({ createdAt: 1 }).lean();
+    res.json(docs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load roles" });
+  }
 });
 
-// CREATE
 router.post("/api/roles", async (req, res) => {
-  const { name, key } = req.body;
-  if (!name || !key) {
-    return res.status(400).json({ message: "name & key required" });
-  }
+  try {
+    const Role = mongoose.models.Role;
+    const { name, key } = req.body;
 
-  const exists = await RoleModel.findOne({ key });
-  if (exists) {
-    return res.status(400).json({ message: "Role key already exists" });
-  }
-
-  const role = await RoleModel.create(req.body);
-  res.status(201).json(role);
-});
-
-// UPDATE
-router.put("/api/roles/:id", async (req, res) => {
-  const role = await RoleModel.findById(req.params.id);
-  if (!role) return res.status(404).json({ message: "Role not found" });
-
-  if (role.type === "SYSTEM") {
-    return res.status(403).json({ message: "System role locked" });
-  }
-
-  Object.assign(role, req.body);
-  await role.save();
-
-  res.json(role);
-});
-
-const checkPermission = (module, action) => {
-  return (req, res, next) => {
-    const perms = req.user?.permissions || [];
-
-    const allowed = perms.some(
-      (p) => p.module === module && p.actions.includes(action)
-    );
-
-    if (!allowed) {
-      return res.status(403).json({ message: "Access denied" });
+    if (!name || !key) {
+      return res.status(400).json({ message: "name & key required" });
     }
 
-    next();
-  };
-};
+    const exists = await Role.findOne({ key });
+    if (exists) {
+      return res.status(400).json({ message: "Role key already exists" });
+    }
+
+    const role = await Role.create(req.body);
+    res.status(201).json(role);
+  } catch (err) {
+    console.error("CREATE ROLE ERROR", err);
+    res.status(500).json({ message: "Failed to create role" });
+  }
+});
+
+router.put("/api/roles/:id", async (req, res) => {
+  try {
+    const Role = mongoose.models.Role;
+    const role = await Role.findById(req.params.id);
+
+    if (!role) {
+      return res.status(404).json({ message: "Role not found" });
+    }
+
+    if (role.type === "SYSTEM") {
+      return res.status(403).json({ message: "System role locked" });
+    }
+
+    Object.assign(role, req.body);
+    await role.save();
+
+    res.json(role);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update role" });
+  }
+});
 
 
 module.exports = { createRouter };
