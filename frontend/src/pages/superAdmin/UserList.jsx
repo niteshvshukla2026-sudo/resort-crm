@@ -12,9 +12,8 @@ const emptyForm = {
   email: "",
   password: "",
   role: "",
-  resorts: [],
+  resort: "",          // 🔑 SINGLE RESORT
   stores: [],
-  defaultResort: "",
   status: "ACTIVE",
 };
 
@@ -48,7 +47,6 @@ const UserCreate = () => {
       setRoles(Array.isArray(roleRes.data) ? roleRes.data : []);
       setResorts(Array.isArray(resortRes.data) ? resortRes.data : []);
     } catch (err) {
-      console.error(err);
       setError("Failed to load roles or resorts");
     }
   };
@@ -57,17 +55,15 @@ const UserCreate = () => {
      LOAD STORES (RESORT WISE)
   ================================ */
   useEffect(() => {
-    if (!form.resorts.length) {
+    if (!form.resort) {
       setStores([]);
       setForm((p) => ({ ...p, stores: [] }));
       return;
     }
 
-    const primaryResortId = form.resorts[0];
-
     axios
       .get(`${API_BASE}/stores`, {
-        params: { resort: primaryResortId },
+        params: { resort: form.resort },
       })
       .then((res) => {
         setStores(Array.isArray(res.data) ? res.data : []);
@@ -75,48 +71,13 @@ const UserCreate = () => {
       .catch(() => {
         setStores([]);
       });
-  }, [form.resorts]);
+  }, [form.resort]);
 
   /* ===============================
      HELPERS
   ================================ */
   const selectedRole = roles.find((r) => r.key === form.role);
   const isSingleStore = selectedRole?.storeMode === "SINGLE";
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setForm((prev) => {
-      let next = { ...prev, [name]: value };
-
-      // Role change → reset scope
-      if (name === "role") {
-        next.resorts = [];
-        next.stores = [];
-        next.defaultResort = "";
-      }
-
-      return next;
-    });
-  };
-
-  const toggleResort = (id) => {
-    setForm((prev) => {
-      const exists = prev.resorts.includes(id);
-      const resorts = exists
-        ? prev.resorts.filter((r) => r !== id)
-        : [...prev.resorts, id];
-
-      return {
-        ...prev,
-        resorts,
-        defaultResort:
-          prev.defaultResort && !resorts.includes(prev.defaultResort)
-            ? ""
-            : prev.defaultResort,
-      };
-    });
-  };
 
   const toggleStore = (id) => {
     setForm((prev) => {
@@ -137,8 +98,12 @@ const UserCreate = () => {
       return setError("Name, Email, Password & Role are required");
     }
 
-    if (!form.resorts.length) {
-      return setError("At least one resort must be selected");
+    if (!form.resort) {
+      return setError("Resort selection is required");
+    }
+
+    if (!form.stores.length) {
+      return setError("At least one store must be selected");
     }
 
     try {
@@ -149,10 +114,10 @@ const UserCreate = () => {
         name: form.name,
         email: form.email,
         password: form.password,
-        role: form.role, // ROLE KEY
-        resorts: form.resorts,
+        role: form.role,
+        resorts: [form.resort],     // 🔥 BACKEND COMPATIBLE
+        defaultResort: form.resort,
         stores: form.stores,
-        defaultResort: form.defaultResort || form.resorts[0],
         status: form.status,
       };
 
@@ -161,7 +126,6 @@ const UserCreate = () => {
       alert("User created successfully");
       setForm(emptyForm);
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Failed to create user");
     } finally {
       setSaving(false);
@@ -175,7 +139,7 @@ const UserCreate = () => {
     <div className="sa-page">
       <div className="sa-page-header">
         <h2>Create User</h2>
-        <p>Assign role, resort & store access</p>
+        <p>Resort-wise user & store assignment</p>
       </div>
 
       {error && <div className="sa-error">{error}</div>}
@@ -217,70 +181,52 @@ const UserCreate = () => {
         {/* ROLE */}
         <label>
           Role *
-          <select name="role" value={form.role} onChange={handleChange}>
+          <select
+            value={form.role}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                role: e.target.value,
+                resort: "",
+                stores: [],
+              }))
+            }
+          >
             <option value="">Select role</option>
-            {Array.isArray(roles) &&
-              roles.map((r) => (
-                <option key={r._id} value={r.key}>
-                  {r.name}
-                </option>
-              ))}
+            {roles.map((r) => (
+              <option key={r._id} value={r.key}>
+                {r.name}
+              </option>
+            ))}
           </select>
         </label>
 
-        {selectedRole && (
-          <div style={{ fontSize: 12, color: "#777" }}>
-            Store access:{" "}
-            {isSingleStore ? "Single Store" : "Multiple Stores"}
-          </div>
-        )}
-
-        {/* RESORTS */}
+        {/* RESORT */}
         {form.role && (
-          <>
-            <div style={{ marginTop: 16, fontWeight: 600 }}>
-              Resort Access
-            </div>
-
-            {isSingleStore ? (
-              <select
-                value={form.resorts[0] || ""}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    resorts: e.target.value ? [e.target.value] : [],
-                    defaultResort: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Select resort</option>
-                {Array.isArray(resorts) &&
-                  resorts.map((r) => (
-                    <option key={r._id} value={r._id}>
-                      {r.name}
-                    </option>
-                  ))}
-              </select>
-            ) : (
-              <div className="sa-checkbox-list">
-                {Array.isArray(resorts) &&
-                  resorts.map((r) => (
-                    <label key={r._id}>
-                      <input
-                        type="checkbox"
-                        checked={form.resorts.includes(r._id)}
-                        onChange={() => toggleResort(r._id)}
-                      />
-                      {r.name}
-                    </label>
-                  ))}
-              </div>
-            )}
-          </>
+          <label>
+            Resort *
+            <select
+              value={form.resort}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  resort: e.target.value,
+                  stores: [],
+                }))
+              }
+            >
+              <option value="">Select resort</option>
+              {resorts.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {/* STORES */}
-        {form.resorts.length > 0 && (
+        {form.resort && (
           <>
             <div style={{ marginTop: 16, fontWeight: 600 }}>
               Store Access
@@ -297,26 +243,24 @@ const UserCreate = () => {
                 }
               >
                 <option value="">Select store</option>
-                {Array.isArray(stores) &&
-                  stores.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  ))}
+                {stores.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
             ) : (
               <div className="sa-checkbox-list">
-                {Array.isArray(stores) &&
-                  stores.map((s) => (
-                    <label key={s._id}>
-                      <input
-                        type="checkbox"
-                        checked={form.stores.includes(s._id)}
-                        onChange={() => toggleStore(s._id)}
-                      />
-                      {s.name}
-                    </label>
-                  ))}
+                {stores.map((s) => (
+                  <label key={s._id}>
+                    <input
+                      type="checkbox"
+                      checked={form.stores.includes(s._id)}
+                      onChange={() => toggleStore(s._id)}
+                    />
+                    {s.name}
+                  </label>
+                ))}
               </div>
             )}
           </>
