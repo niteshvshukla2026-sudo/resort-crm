@@ -14,9 +14,25 @@ function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   let UserModel = null;
 
-  const controllers = createControllers({ useMongo, mongoose });
+ const controllers = createControllers({ useMongo, mongoose });
+
+// 🔥 ENSURE USER MODEL IS REALLY READY
+if (useMongo && mongoose) {
+  if (!mongoose.models.User) {
+    throw new Error("User model not registered yet");
+  }
+  global.User = mongoose.models.User;
+}
+
+
+
 const { login, forceResetPassword } =
   require("./src/controllers/auth.controller.cjs");
+// --------------------
+// 🔐 AUTH
+// --------------------
+router.post("/api/auth/login", login);
+router.get("/api/auth/force-reset", forceResetPassword);
 
 
   // ------------------------
@@ -505,12 +521,7 @@ mongoose.models.Consumption ||
     next();
   });
 
-  // ------------------------
-  // 🔐 AUTH
-  // ------------------------
- 
-router.post("/api/auth/login", login);
-router.get("/api/auth/force-reset", forceResetPassword);
+  
   // ------------------------
   // 📊 Dashboard
   // ------------------------
