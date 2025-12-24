@@ -4,24 +4,37 @@ const bcrypt = require("bcryptjs");
 /**
  * IMPORTANT:
  * User model server_router.cjs me bana hua hai
- * aur global.User me attach hai
+ * aur global.mongoose me attach hai
  */
+
+// -------------------------
+// GET USER MODEL SAFELY
+// -------------------------
 const getUserModel = () => {
-  if (!global.mongoose || !global.mongoose.models.User) {
-    throw new Error("User model not ready yet");
+  if (!global.mongoose) {
+    throw new Error("Mongoose not initialized");
   }
+
+  if (!global.mongoose.models || !global.mongoose.models.User) {
+    throw new Error("User model not registered");
+  }
+
   return global.mongoose.models.User;
 };
-
 
 // -------------------------
 // JWT TOKEN
 // -------------------------
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || "7d" }
+    {
+      id: user._id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET || "dev_secret_key", // 🔥 crash-safe
+    {
+      expiresIn: process.env.JWT_EXPIRE || "7d",
+    }
   );
 };
 
@@ -33,27 +46,37 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email & password required" });
+      return res.status(400).json({
+        success: false,
+        message: "Email & password required",
+      });
     }
 
-const User = getUserModel();
-
-    if (!User) {
-      return res.status(500).json({ message: "User model not initialized" });
-    }
+    const User = getUserModel();
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
+    // status check (optional)
     if (user.status && user.status !== "ACTIVE") {
-      return res.status(403).json({ message: "User inactive" });
+      return res.status(403).json({
+        success: false,
+        message: "User inactive",
+      });
     }
 
+    // password check
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
     const token = generateToken(user);
@@ -71,8 +94,11 @@ const User = getUserModel();
       },
     });
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    return res.status(500).json({ message: "Login failed" });
+    console.error("LOGIN ERROR ❌", err);
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+    });
   }
 };
 
@@ -82,22 +108,31 @@ const User = getUserModel();
 const forceResetPassword = async (req, res) => {
   try {
     const User = getUserModel();
-    if (!User) {
-      return res.status(500).json({ message: "User model not initialized" });
-    }
 
-    const user = await User.findOne({ email: "nitesh@example.com" });
+    const user = await User.findOne({
+      email: req.body.email || "nitesh@example.com",
+    });
+
     if (!user) {
-      return res.json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
-    user.password = "090909"; // plain password
-    await user.save();        // 🔥 pre-save hook chalega
+    user.password = req.body.password || "090909"; // plain text
+    await user.save(); // 🔥 pre-save bcrypt hook chalega
 
-    return res.json({ message: "Password reset done" });
+    return res.json({
+      success: true,
+      message: "Password reset done",
+    });
   } catch (err) {
-    console.error("FORCE RESET ERROR:", err);
-    return res.status(500).json({ message: "Reset failed" });
+    console.error("FORCE RESET ERROR ❌", err);
+    return res.status(500).json({
+      success: false,
+      message: "Reset failed",
+    });
   }
 };
 
