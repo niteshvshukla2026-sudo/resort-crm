@@ -2310,10 +2310,55 @@ router.post("/api/consumption", async (req, res) => {
     const data = req.body;
 
     const Consumption = mongoose.models.Consumption;
-    const StoreStock = mongoose.models.StoreStock;
+  
 
     // 1️⃣ SAVE CONSUMPTION
     const doc = await Consumption.create(data);
+// ===============================
+// 2️⃣ STOCK MINUS LOGIC
+// ===============================
+const StoreStock = mongoose.models.StoreStock;
+const Recipe = mongoose.models.Recipe;
+
+// 👉 ITEM BASED CONSUMPTION
+if (data.type === "LUMPSUM") {
+  for (const line of data.lines || []) {
+    const qty = Number(line.qty || 0);
+    if (!line.item || qty <= 0) continue;
+
+    await StoreStock.findOneAndUpdate(
+      { store: data.storeFrom, item: line.item },
+      { $inc: { qty: -qty } },
+      { upsert: true, new: true }
+    );
+  }
+}
+
+// 👉 RECIPE BASED CONSUMPTION
+if (data.type !== "LUMPSUM") {
+  for (const line of data.lines || []) {
+    if (!line.recipe || !line.qty) continue;
+
+    const recipe = await Recipe.findById(line.recipe).lean();
+    if (!recipe || !Array.isArray(recipe.lines)) continue;
+
+    const multiplier =
+      recipe.yieldQty && recipe.yieldQty > 0
+        ? Number(line.qty) / recipe.yieldQty
+        : Number(line.qty);
+
+    for (const ing of recipe.lines) {
+      const deductQty = multiplier * Number(ing.qty || 0);
+      if (!ing.itemId || deductQty <= 0) continue;
+
+      await StoreStock.findOneAndUpdate(
+        { store: data.storeFrom, item: ing.itemId },
+        { $inc: { qty: -deductQty } },
+        { upsert: true, new: true }
+      );
+    }
+  }
+}
 
     // 2️⃣ MINUS STOCK
     for (const line of data.lines || []) {
