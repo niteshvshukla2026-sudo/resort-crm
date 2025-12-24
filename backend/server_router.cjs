@@ -4,7 +4,7 @@
 
 const express = require("express");
 const { createControllers } = require("./controllers.cjs");
-require("./models/User");
+require("./src/models/User");
 // --- added imports for vendors CSV upload
 const multer = require("multer");
 const csvToJson = require("csvtojson");
