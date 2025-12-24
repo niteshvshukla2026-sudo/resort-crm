@@ -670,24 +670,16 @@ const StoreReplacement = () => {
                       <td>{r.vendorId ? getVendorName(r.vendorId) : "-"}</td>
                       <td>{r.status || "OPEN"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <button
-                          type="button"
-                          className="sa-secondary-button"
-                          style={{ padding: "4px 8px", marginRight: 6 }}
-                          onClick={() => openIssueToVendor(r)}
-                        >
-                          Issue to Vendor
-                        </button>
-                        {/* create GRN shortcut from same table */}
-                        <button
-                          type="button"
-                          className="sa-secondary-button"
-                          style={{ padding: "4px 8px" }}
-                          onClick={() => openGrnModal(r)}
-                        >
-                          Create GRN
-                        </button>
-                      </td>
+  <button
+    type="button"
+    className="sa-secondary-button"
+    style={{ padding: "4px 8px" }}
+    onClick={() => openIssueToVendor(r)}
+  >
+    Issue to Vendor
+  </button>
+</td>
+
                     </tr>
                   ))}
                 </tbody>
