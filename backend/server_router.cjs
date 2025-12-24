@@ -91,6 +91,43 @@ const generateReqNo = () => {
       },
       { timestamps: true }
     );
+// ===============================
+// 🔁 STORE REPLACEMENT MODEL
+// ===============================
+const storeReplacementLineSchema = new mongoose.Schema(
+  {
+    itemId: String,
+    qty: Number,
+    issuedQty: { type: Number, default: 0 },
+    remark: String,
+  },
+  { _id: false }
+);
+
+const storeReplacementSchema = new mongoose.Schema(
+  {
+    replNo: { type: String, required: true },
+
+    resort: { type: String, required: true }, // 🔥 IMPORTANT
+
+    storeId: { type: String, required: true },
+    vendorId: { type: String },
+
+    status: {
+      type: String,
+      enum: ["OPEN", "SENT_TO_VENDOR", "CLOSED"],
+      default: "OPEN",
+    },
+
+    lines: [storeReplacementLineSchema],
+  },
+  { timestamps: true }
+);
+
+mongoose.models.StoreReplacement ||
+  mongoose.model("StoreReplacement", storeReplacementSchema);
+
+console.log("StoreReplacement model initialised");
 
 // ================================
 // 🏬 STORE STOCK MODEL  ✅ REQUIRED
@@ -709,6 +746,119 @@ const updateStoreHandler = async (req, res) => {
   router.put("/api/stores/:id", updateStoreHandler);
   router.delete("/api/stores/:id", deleteStoreHandler);
 
+router.get("/api/store-replacements", async (req, res) => {
+  try {
+    const { resort } = req.query;
+    if (!resort) {
+      return res.status(400).json({ message: "resort required" });
+    }
+
+    const StoreReplacement = mongoose.models.StoreReplacement;
+
+    const data = await StoreReplacement.find({ resort })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(data);
+  } catch (err) {
+    console.error("STORE REPLACEMENT LIST ERROR", err);
+    res.status(500).json({ message: "Failed to load replacements" });
+  }
+});
+router.post("/api/store-replacements", async (req, res) => {
+  try {
+    const { replNo, resort, storeId, lines } = req.body;
+
+    if (!replNo || !resort || !storeId || !lines?.length) {
+      return res.status(400).json({ message: "Invalid payload" });
+    }
+
+    const StoreReplacement = mongoose.models.StoreReplacement;
+
+    const doc = await StoreReplacement.create({
+      replNo,
+      resort,
+      storeId,
+      lines,
+      status: "OPEN",
+    });
+
+    res.json(doc);
+  } catch (err) {
+    console.error("CREATE REPLACEMENT ERROR", err);
+    res.status(500).json({ message: "Failed to create replacement" });
+  }
+});
+router.patch(
+  "/api/store-replacements/:id/issue-vendor",
+  async (req, res) => {
+    try {
+      const { vendorId, lines } = req.body;
+
+      const StoreReplacement = mongoose.models.StoreReplacement;
+      const repl = await StoreReplacement.findById(req.params.id);
+
+      if (!repl) {
+        return res.status(404).json({ message: "Replacement not found" });
+      }
+
+      repl.vendorId = vendorId;
+      repl.status = "SENT_TO_VENDOR";
+
+      repl.lines = repl.lines.map((ln) => {
+        const m = lines.find((x) => x.lineId === ln.lineId);
+        return m
+          ? { ...ln.toObject(), issuedQty: Number(m.issueQty || 0) }
+          : ln;
+      });
+
+      await repl.save();
+      res.json(repl);
+    } catch (err) {
+      console.error("ISSUE VENDOR ERROR", err);
+      res.status(500).json({ message: "Failed to issue to vendor" });
+    }
+  }
+);
+router.post(
+  "/api/store-replacements/:id/create-grn",
+  async (req, res) => {
+    try {
+      const { storeId, lines } = req.body;
+
+      const StoreReplacement = mongoose.models.StoreReplacement;
+      const StoreStock = mongoose.models.StoreStock;
+
+      const repl = await StoreReplacement.findById(req.params.id);
+      if (!repl) {
+        return res.status(404).json({ message: "Replacement not found" });
+      }
+
+      // 🔥 STOCK ADD
+      for (const ln of lines) {
+        const qty = Number(ln.receivedQty || 0);
+        if (!ln.itemId || qty <= 0) continue;
+
+        await StoreStock.findOneAndUpdate(
+          {
+            store: storeId,
+            item: ln.itemId,
+          },
+          { $inc: { qty } },
+          { upsert: true, new: true }
+        );
+      }
+
+      repl.status = "CLOSED";
+      await repl.save();
+
+      res.json(repl);
+    } catch (err) {
+      console.error("REPLACEMENT GRN ERROR", err);
+      res.status(500).json({ message: "Failed to create replacement GRN" });
+    }
+  }
+);
 
   // ==================================================
 // 🏨 GET ALL RESORTS
