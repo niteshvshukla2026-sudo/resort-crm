@@ -1,39 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useResort } from "../../context/ResortContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-/* Dev fallback data */
-const DEV_STORES = [
-  { _id: "store_main", name: "Main Store" },
-  { _id: "store_cold", name: "Cold Store" },
-];
 
-const DEV_ITEMS = [
-  { _id: "item_1", name: "Milk 1L" },
-  { _id: "item_2", name: "Bread Loaf" },
-  { _id: "item_3", name: "Egg Tray" },
-];
-
-const DEV_VENDORS = [
-  { _id: "vend_1", name: "Demo Vendor 1" },
-  { _id: "vend_2", name: "Demo Vendor 2" },
-];
-
-const DEV_REPLACEMENTS = [
-  {
-    _id: "rep_1",
-    replNo: "REP-2025-001",
-    storeId: "store_main",
-    date: new Date().toISOString(),
-    status: "OPEN", // OPEN / SENT_TO_VENDOR / CLOSED
-    vendorId: null,
-    lines: [
-      { lineId: "ln1", itemId: "item_1", qty: 2, issuedQty: 0, remark: "Damaged pack" },
-      { lineId: "ln2", itemId: "item_2", qty: 5, issuedQty: 0, remark: "" },
-    ],
-  },
-];
 
 const newLine = () => ({
   lineId: `ln_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -45,6 +16,8 @@ const newLine = () => ({
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const StoreReplacement = () => {
+  const { selectedResort } = useResort();
+
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -107,28 +80,25 @@ const StoreReplacement = () => {
       setLoading(true);
       setError("");
 
-      const [storeRes, itemRes, vendorRes, replRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/stores`).catch(() => ({ data: DEV_STORES })),
-        axios.get(`${API_BASE}/api/items`).catch(() => ({ data: DEV_ITEMS })),
-        axios.get(`${API_BASE}/api/vendors`).catch(() => ({ data: DEV_VENDORS })),
-        axios.get(`${API_BASE}/api/store-replacements`).catch(() => ({ data: DEV_REPLACEMENTS })),
-      ]);
+     const [storeRes, itemRes, vendorRes, replRes] = await Promise.all([
+  axios.get(`${API_BASE}/api/stores`, {
+    params: { resort: selectedResort },
+  }),
+  axios.get(`${API_BASE}/api/items`, {
+    params: { resort: selectedResort },
+  }),
+  axios.get(`${API_BASE}/api/vendors`, {
+    params: { resort: selectedResort },
+  }),
+  axios.get(`${API_BASE}/api/store-replacements`, {
+    params: { resort: selectedResort },
+  }),
+]);
 
-      setStores(
-        Array.isArray(storeRes.data) && storeRes.data.length
-          ? storeRes.data
-          : DEV_STORES
-      );
-      setItems(
-        Array.isArray(itemRes.data) && itemRes.data.length
-          ? itemRes.data
-          : DEV_ITEMS
-      );
-      setVendors(
-        Array.isArray(vendorRes.data) && vendorRes.data.length
-          ? vendorRes.data
-          : DEV_VENDORS
-      );
+setStores(Array.isArray(storeRes.data) ? storeRes.data : []);
+setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
+setVendors(Array.isArray(vendorRes.data) ? vendorRes.data : []);
+
 
       const serverRepl = Array.isArray(replRes.data) ? replRes.data : [];
       const normalized = serverRepl.map((r) => ({
@@ -148,23 +118,24 @@ const StoreReplacement = () => {
           })) || [],
       }));
 
-      setReplacements(normalized.length ? normalized : DEV_REPLACEMENTS);
+      setReplacements(normalized);
     } catch (err) {
       console.error("load store replacement error", err);
-      setError("Failed to load store replacement data, using demo data.");
-      setStores(DEV_STORES);
-      setItems(DEV_ITEMS);
-      setVendors(DEV_VENDORS);
-      setReplacements(DEV_REPLACEMENTS);
+      setError("Failed to load store replacement data.");
+      setStores([]);
+setItems([]);
+setVendors([]);
+setReplacements([]);
+
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+useEffect(() => {
+  loadData();
+}, [selectedResort]);
+
 
   // ------------ Add Replacement form handlers -------------
   const updateAddFormField = (name, value) =>
@@ -213,6 +184,7 @@ const StoreReplacement = () => {
 
     const replNo = generateReplNo();
     const payload = {
+       resort: selectedResort,   // ⬅️ ADD
       replNo,
       storeId: addForm.storeId,
       date: new Date().toISOString(),
@@ -292,14 +264,15 @@ const StoreReplacement = () => {
     }
 
     const payload = {
-      vendorId,
-      lines: lines.map((ln) => ({
-        lineId: ln.lineId,
-        itemId: ln.itemId,
-        issueQty: Number(ln.issueQty || 0),
-        remark: ln.remark || "",
-      })),
-    };
+  resort: selectedResort,   // ✅ REQUIRED
+  vendorId,
+  lines: lines.map((ln) => ({
+    lineId: ln.lineId,
+    itemId: ln.itemId,
+    issueQty: Number(ln.issueQty || 0),
+    remark: ln.remark || "",
+  })),
+};
 
     try {
       setSaving(true);
@@ -405,6 +378,7 @@ const StoreReplacement = () => {
     }
 
     const payload = {
+        resort: selectedResort,   // ⬅️ ADD
       storeId,
       grnDate: date,
       lines: lines.map((ln) => ({
@@ -468,6 +442,19 @@ const StoreReplacement = () => {
     background: activeTab === tab ? "#10b981" : "#111827",
     color: activeTab === tab ? "#0b1120" : "#e5e7eb",
   });
+
+  // ⛔ STOP PAGE IF RESORT NOT SELECTED
+  if (!selectedResort || selectedResort === "ALL") {
+    return (
+      <div className="sa-card">
+        <h3>Please select a resort first</h3>
+        <p>
+          Store Replacement works only with a selected resort.
+        </p>
+      </div>
+    );
+  }
+
 
   return (
     <div className="sa-page">
