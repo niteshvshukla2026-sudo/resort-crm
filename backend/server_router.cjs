@@ -104,16 +104,14 @@ const storeStockSchema = new Schema(
   { timestamps: true }
 );
 
-mongoose.models.StoreStock ||
-  mongoose.model("StoreStock", storeStockSchema);
-
-
-// ek store + ek item = ek row
 storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
 
 const StoreStock =
   mongoose.models.StoreStock ||
   mongoose.model("StoreStock", storeStockSchema);
+
+
+
 
 console.log("StoreStock model initialised (Mongo)");
 
@@ -461,11 +459,14 @@ mongoose.models.Role || mongoose.model("Role", roleSchema);
     );
   }
 
-
-  const consumptionLineSchema = new mongoose.Schema(
+const consumptionLineSchema = new mongoose.Schema(
   {
-    item: { type: String, required: true },
+    item: { type: String },      // item OR recipe
+    recipe: { type: String },    // 🔥 NEW
     qty: { type: Number, required: true },
+    category: String,
+    uom: String,
+    remarks: String,
   },
   { _id: false }
 );
@@ -2316,15 +2317,22 @@ router.post("/api/consumption", async (req, res) => {
 
     // 2️⃣ MINUS STOCK
     for (const line of data.lines || []) {
-      const qty = Number(line.qty || 0);
-      if (qty <= 0) continue;
+  const qty = Number(line.qty || 0);
+  if (qty <= 0) continue;
 
-      await StoreStock.findOneAndUpdate(
-        { store: data.storeFrom, item: line.item },
-        { $inc: { qty: -qty } },
-        { upsert: true, new: true }
-      );
-    }
+  // ITEM BASED
+  if (line.item) {
+    await StoreStock.findOneAndUpdate(
+      { store: data.storeFrom, item: line.item },
+      { $inc: { qty: -qty } },
+      { upsert: true, new: true }
+    );
+  }
+
+  // RECIPE BASED (NO STOCK DIRECT DEDUCTION HERE)
+  // 🔥 recipe ingredients deduction future logic
+}
+
 
     res.status(201).json(doc);
   } catch (err) {
