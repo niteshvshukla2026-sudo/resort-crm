@@ -21,6 +21,8 @@ const emptyLine = () => ({
   remarks: "",
 });
 
+const getId = (v) => (typeof v === "object" ? v?._id : v);
+
 const ConsumptionForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -44,7 +46,7 @@ const ConsumptionForm = () => {
   const isRecipeType =
     type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION";
 
-  // ================= LOAD MASTERS (RESORT-WISE) =================
+  // ================= LOAD MASTERS (STRICT RESORT-WISE) =================
   const loadMasters = async () => {
     if (!selectedResort || selectedResort === "ALL") {
       setStores([]);
@@ -55,19 +57,20 @@ const ConsumptionForm = () => {
     }
 
     try {
-      const [storeRes, itemRes, recipeRes, catRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/stores`, {
-            params: { resort: selectedResort },
-          }),
-          axios.get(`${API_BASE}/items`, {
-            params: { resort: selectedResort },
-          }),
-          axios.get(`${API_BASE}/recipes`, {
-            params: { resort: selectedResort },
-          }),
-          axios.get(`${API_BASE}/item-categories`),
-        ]);
+      const [storeRes, itemRes, recipeRes, catRes] = await Promise.all([
+        axios.get(`${API_BASE}/stores`, {
+          params: { resort: selectedResort },
+        }),
+        axios.get(`${API_BASE}/items`, {
+          params: { resort: selectedResort },
+        }),
+        axios.get(`${API_BASE}/recipes`, {
+          params: { resort: selectedResort },
+        }),
+        axios.get(`${API_BASE}/item-categories`, {
+          params: { resort: selectedResort },
+        }),
+      ]);
 
       setStores(storeRes.data || []);
       setItems(itemRes.data || []);
@@ -83,10 +86,41 @@ const ConsumptionForm = () => {
     // eslint-disable-next-line
   }, [selectedResort]);
 
+  // ================= LOAD CONSUMPTION (EDIT MODE) =================
+  useEffect(() => {
+    if (!id) return;
+
+    const loadConsumption = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/consumption/${id}`);
+        const c = res.data;
+
+        setType(c.type);
+        setStoreFrom(getId(c.storeFrom));
+        setNotes(c.notes || "");
+
+        setLines(
+          (c.lines || []).map((l) => ({
+            category: getId(l.category) || "",
+            item: getId(l.item) || "",
+            recipe: getId(l.recipe) || "",
+            qty: l.qty,
+            uom: l.uom || "",
+            remarks: l.remarks || "",
+          }))
+        );
+      } catch (err) {
+        console.error("Load consumption failed", err);
+      }
+    };
+
+    loadConsumption();
+  }, [id]);
+
   // ================= FILTER RECIPES BY TYPE =================
   const filteredRecipes = recipes.filter((r) => {
-    if (type === "RECIPE_LUMPSUM") return r.type === "RECIPE_LUMPSUM";
-    if (type === "RECIPE_PORTION") return r.type === "RECIPE_PORTION";
+    if (type === "RECIPE_LUMPSUM" && r.type !== "RECIPE_LUMPSUM") return false;
+    if (type === "RECIPE_PORTION" && r.type !== "RECIPE_PORTION") return false;
     return true;
   });
 
@@ -102,10 +136,10 @@ const ConsumptionForm = () => {
         row.uom = "";
       } else if (field === "item") {
         row.item = value;
-        const it = items.find((i) => i._id === value);
+        const it = items.find((i) => String(i._id) === String(value));
         if (it) {
           row.uom = it.uom || "";
-          row.category = it.itemCategory || row.category;
+          row.category = getId(it.itemCategory) || row.category;
         }
       } else {
         row[field] = value;
@@ -194,7 +228,13 @@ const ConsumptionForm = () => {
       </div>
 
       <form className="sa-card" onSubmit={handleSubmit}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+          }}
+        >
           <label>
             Type
             <select value={type} onChange={(e) => setType(e.target.value)}>
@@ -285,7 +325,7 @@ const ConsumptionForm = () => {
                         .filter(
                           (it) =>
                             !ln.category ||
-                            String(it.itemCategory) ===
+                            String(getId(it.itemCategory)) ===
                               String(ln.category)
                         )
                         .map((it) => (
