@@ -2513,21 +2513,38 @@ router.post("/api/consumption", async (req, res) => {
 const StoreStock = mongoose.models.StoreStock;
 const Recipe = mongoose.models.Recipe;
 
-// 👉 ITEM BASED CONSUMPTION
+// 🔹 ITEM BASED (LUMPSUM)
 if (data.type === "LUMPSUM") {
   for (const line of data.lines || []) {
     const qty = Number(line.qty || 0);
     if (!line.item || qty <= 0) continue;
 
-    await StoreStock.findOneAndUpdate(
-      { store: data.storeFrom, item: line.item },
-      { $inc: { qty: -qty } },
-      { upsert: true, new: true }
+    const stock = await StoreStock.findOne({
+      store: data.storeFrom,
+      item: line.item,
+    });
+
+    if (!stock) {
+      return res.status(400).json({
+        message: "Stock not available for item",
+      });
+    }
+
+    if (stock.qty < qty) {
+      return res.status(400).json({
+        message: `Insufficient stock. Available: ${stock.qty}`,
+      });
+    }
+
+    await StoreStock.updateOne(
+      { _id: stock._id },
+      { $inc: { qty: -qty } }
     );
   }
 }
 
-// 👉 RECIPE BASED CONSUMPTION
+
+// 🔹 RECIPE BASED
 if (data.type !== "LUMPSUM") {
   for (const line of data.lines || []) {
     if (!line.recipe || !line.qty) continue;
@@ -2544,16 +2561,24 @@ if (data.type !== "LUMPSUM") {
       const deductQty = multiplier * Number(ing.qty || 0);
       if (!ing.itemId || deductQty <= 0) continue;
 
-      await StoreStock.findOneAndUpdate(
-        { store: data.storeFrom, item: ing.itemId },
-        { $inc: { qty: -deductQty } },
-        { upsert: true, new: true }
+      const stock = await StoreStock.findOne({
+        store: data.storeFrom,
+        item: ing.itemId,
+      });
+
+      if (!stock || stock.qty < deductQty) {
+        return res.status(400).json({
+          message: "Insufficient stock for recipe ingredient",
+        });
+      }
+
+      await StoreStock.updateOne(
+        { _id: stock._id },
+        { $inc: { qty: -deductQty } }
       );
     }
   }
 }
-
-
 
 
     res.status(201).json(doc);
