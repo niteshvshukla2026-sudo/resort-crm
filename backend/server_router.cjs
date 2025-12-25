@@ -134,6 +134,7 @@ console.log("StoreReplacement model initialised");
 // ================================
 const storeStockSchema = new Schema(
   {
+      resort: { type: String, required: true }, 
     store: { type: String, required: true },
     item: { type: String, required: true },
     qty: { type: Number, default: 0 },
@@ -1717,7 +1718,7 @@ router.post("/api/grn/:id/close", async (req, res) => {
     // 🔁 ADD STOCK
     for (const line of grn.items || []) {
       const itemId = line.item;
-      const qty = Number(line.qtyReceived || 0);
+      const qty = Number(line.receivedQty || 0);
       const storeId = grn.store;
 
       if (!itemId || !storeId || qty <= 0) continue;
@@ -2455,6 +2456,48 @@ router.get("/api/consumption", async (req, res) => {
   }
 });
 
+
+router.get("/api/inventory/store-stock", async (req, res) => {
+  try {
+    const { resort } = req.query;
+
+    if (!resort) {
+      return res.status(400).json({ message: "resort required" });
+    }
+
+    const StoreStock = mongoose.models.StoreStock;
+    const Store = mongoose.models.Store;
+    const Item = mongoose.models.Item;
+
+    const stocks = await StoreStock.find({ resort }).lean();
+
+    // enrich data
+    const stores = await Store.find({ resort }).lean();
+    const items = await Item.find().lean();
+
+    const storeMap = Object.fromEntries(
+      stores.map((s) => [s._id.toString(), s.name])
+    );
+    const itemMap = Object.fromEntries(
+      items.map((i) => [i._id.toString(), i])
+    );
+
+    const result = stocks.map((s) => ({
+      store: storeMap[s.store] || "-",
+      item: itemMap[s.item]?.name || "-",
+      uom: itemMap[s.item]?.uom || "",
+      closingQty: s.qty,
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("INVENTORY ERROR ❌", err);
+    res.status(500).json({ message: "Failed to load inventory" });
+  }
+});
+
+
+
 router.post("/api/consumption", async (req, res) => {
   try {
     const data = req.body;
@@ -2510,23 +2553,7 @@ if (data.type !== "LUMPSUM") {
   }
 }
 
-    // 2️⃣ MINUS STOCK
-    for (const line of data.lines || []) {
-  const qty = Number(line.qty || 0);
-  if (qty <= 0) continue;
 
-  // ITEM BASED
-  if (line.item) {
-    await StoreStock.findOneAndUpdate(
-      { store: data.storeFrom, item: line.item },
-      { $inc: { qty: -qty } },
-      { upsert: true, new: true }
-    );
-  }
-
-  // RECIPE BASED (NO STOCK DIRECT DEDUCTION HERE)
-  // 🔥 recipe ingredients deduction future logic
-}
 
 
     res.status(201).json(doc);
