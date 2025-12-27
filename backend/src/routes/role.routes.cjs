@@ -1,5 +1,5 @@
-const auth = require("../middleware/auth.cjs");
-const requirePermission = require("../middleware/permission.cjs");
+const auth = require("../middlewares/auth.cjs");
+const requirePermission = require("../middlewares/auth.cjs");
 
 module.exports = function (router, mongoose) {
   const controller = require("../controllers/role.controller.cjs")(mongoose);
