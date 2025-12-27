@@ -1,145 +1,73 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const mongoose = require("mongoose");
 
-/**
- * IMPORTANT:
- * User model server_router.cjs me bana hua hai
- * aur global.mongoose me attach hai
- */
-
-// -------------------------
-// GET USER MODEL SAFELY
-// -------------------------
-const getUserModel = () => {
-  if (!global.mongoose) {
-    throw new Error("Mongoose not initialized");
-  }
-
-  if (!global.mongoose.models || !global.mongoose.models.User) {
-    throw new Error("User model not registered");
-  }
-
-  return global.mongoose.models.User;
-};
-
-// -------------------------
-// JWT TOKEN
-// -------------------------
-const generateToken = (user) => {
-  return jwt.sign(
-    {
-      id: user._id,
-      role: user.role,
-    },
-    process.env.JWT_SECRET || "dev_secret_key", // 🔥 crash-safe
-    {
-      expiresIn: process.env.JWT_EXPIRE || "7d",
-    }
+const genToken = (user) =>
+  jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET || "secret123",
+    { expiresIn: "7d" }
   );
-};
 
-// -------------------------
+// =======================
 // LOGIN
-// -------------------------
-const login = async (req, res) => {
+// =======================
+exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email & password required",
-      });
-    }
-
-    const User = getUserModel();
-
+    const User = mongoose.model("User");
     const user = await User.findOne({ email });
+
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
+      return res.status(400).json({ message: "User not found" });
     }
 
-    // status check (optional)
-    if (user.status && user.status !== "ACTIVE") {
-      return res.status(403).json({
-        success: false,
-        message: "User inactive",
-      });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return res.status(400).json({ message: "Invalid password" });
     }
 
-    // password check
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials",
-      });
+    if (user.status === "INACTIVE") {
+      return res.status(403).json({ message: "User inactive" });
     }
 
-    const token = generateToken(user);
+    const token = genToken(user);
 
-    return res.json({
-      success: true,
+    res.json({
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
+        permissions: user.permissions || [],
         resorts: user.resorts || [],
-        stores: user.stores || [],
+        defaultResort: user.defaultResort || null,
       },
     });
   } catch (err) {
-    console.error("LOGIN ERROR ❌", err);
-    return res.status(500).json({
-      success: false,
-      message: "Login failed",
-    });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Login failed" });
   }
 };
 
-// -------------------------
-// FORCE RESET PASSWORD (TEMP DEBUG)
-// -------------------------
-const forceResetPassword = async (req, res) => {
+// =======================
+// FORCE RESET (OPTIONAL)
+// =======================
+exports.forceResetPassword = async (req, res) => {
   try {
-    const User = getUserModel();
+    const { email, newPassword } = req.query;
+    if (!email || !newPassword)
+      return res.status(400).json({ message: "Missing params" });
 
-    const user = await User.findOne({
-      email: req.body.email || "nitesh@example.com",
-    });
+    const User = mongoose.model("User");
+    const hash = await bcrypt.hash(newPassword, 10);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    await User.updateOne({ email }, { $set: { password: hash } });
 
-    user.password = req.body.password || "090909"; // plain text
-    await user.save(); // 🔥 pre-save bcrypt hook chalega
-
-    return res.json({
-      success: true,
-      message: "Password reset done",
-    });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("FORCE RESET ERROR ❌", err);
-    return res.status(500).json({
-      success: false,
-      message: "Reset failed",
-    });
+    res.status(500).json({ message: "Reset failed" });
   }
-};
-
-// -------------------------
-// EXPORTS (CJS)
-// -------------------------
-module.exports = {
-  login,
-  forceResetPassword,
 };
