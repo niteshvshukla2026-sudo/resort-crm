@@ -1,23 +1,15 @@
-// backend/src/routes/consumption.routes.js
-import express from "express";
-import { protect } from "../middleware/auth.js";
-import {
-  getConsumptions,
-  getConsumptionById,
-  createConsumption,
-  updateConsumption,
-  deleteConsumption,
-} from "../controllers/consumptionController.js";
+module.exports = (router, mongoose) => {
+  const Consumption = mongoose.models.Consumption;
 
-const router = express.Router();
+  router.get("/api/consumption", async (req, res) => {
+    const filter = {};
+    if (req.query.resort && req.query.resort !== "ALL") {
+      filter.resort = req.query.resort;
+    }
+    res.json(await Consumption.find(filter).lean());
+  });
 
-// sab routes ke liye login required
-router.use(protect);
-
-router.get("/", getConsumptions);
-router.get("/:id", getConsumptionById);
-router.post("/", createConsumption);
-router.put("/:id", updateConsumption);
-router.delete("/:id", deleteConsumption);
-
-export default router;
+  router.post("/api/consumption", async (req, res) => {
+    res.status(201).json(await Consumption.create(req.body));
+  });
+};
