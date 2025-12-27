@@ -1,7 +1,8 @@
 const auth = require("../middlewares/auth.cjs");
-const requirePermission = require("../middlewares/auth.cjs");
+const requirePermission = require("../middlewares/permission.cjs"); // ✅ separate file
 
-module.exports = function (router, mongoose) {
+module.exports = function (router) {
+  const mongoose = require("mongoose"); // ✅ REAL mongoose
   const controller = require("../controllers/role.controller.cjs")(mongoose);
 
   // 👀 VIEW ROLES
@@ -28,7 +29,7 @@ module.exports = function (router, mongoose) {
     controller.updateRole
   );
 
-  // 🗑 DELETE ROLE (optional)
+  // 🗑 DELETE ROLE
   router.delete(
     "/api/roles/:id",
     auth,
