@@ -1,5 +1,5 @@
 module.exports = function createRoleController(mongoose) {
-  const Role = require("../models/role.model.cjs")(mongoose);
+  const Role = mongoose.model("Role");
 
   // ================= GET =================
   const listRoles = async (req, res) => {
@@ -52,7 +52,6 @@ module.exports = function createRoleController(mongoose) {
       const { id } = req.params;
       const payload = req.body;
 
-      // SYSTEM roles key should not change
       const existing = await Role.findById(id);
       if (!existing) {
         return res.status(404).json({ message: "Role not found" });
@@ -74,7 +73,7 @@ module.exports = function createRoleController(mongoose) {
     }
   };
 
-  // ================= DELETE (OPTIONAL) =================
+  // ================= DELETE =================
   const deleteRole = async (req, res) => {
     try {
       const { id } = req.params;
