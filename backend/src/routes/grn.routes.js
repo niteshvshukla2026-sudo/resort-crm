@@ -1,16 +1,12 @@
-module.exports = (router, mongoose) => {
-  const GRN = mongoose.models.GRN;
+// routes/grn.routes.js
+const express = require("express");
+const router = express.Router();
+const grnCtrl = require("../controllers/grn.controller");
 
-  router.get("/api/grn", async (_, res) => {
-    res.json(await GRN.find().lean());
-  });
+router.get("/", grnCtrl.list);
+router.get("/:id", grnCtrl.getOne);
+router.post("/", grnCtrl.create);
+router.put("/:id", grnCtrl.update);
+router.delete("/:id", grnCtrl.delete);
 
-  router.post("/api/grn", async (req, res) => {
-    res.status(201).json(await GRN.create(req.body));
-  });
-
-  router.delete("/api/grn/:id", async (req, res) => {
-    await GRN.findByIdAndDelete(req.params.id);
-    res.json({ ok: true });
-  });
-};
+module.exports = router;

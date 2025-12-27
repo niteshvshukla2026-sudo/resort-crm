@@ -1,0 +1,73 @@
+import express from "express";
+import { protect } from "../middleware/auth.js";
+
+const router = express.Router();
+
+router.use(protect);
+
+// Get resorts assigned to current user (stub)
+router.get("/assigned-resorts", async (req, res) => {
+  // In real implementation, read from user.resorts or DB
+  const userId = req.user?.id || "anon";
+  // return dummy assigned resorts
+  const resorts = [
+    { _id: "resort_1", name: "Beachside Resort" },
+    { _id: "resort_2", name: "Hillview Resort" }
+  ];
+  res.json({ userId, resorts });
+});
+
+// Create requisition (dept/store -> purchase)
+router.post("/requisitions", async (req, res) => {
+  const payload = req.body;
+  // For now, echo back with an auto requisition no
+  const requisition = Object.assign({}, payload, {
+    requisitionNo: `REQ-${Date.now()}`,
+    status: "Submitted",
+    _id: `req_${Date.now()}`
+  });
+  // In real app, save to DB
+  res.status(201).json({ message: "Requisition created (stub)", requisition });
+});
+
+// List requisitions for a resort (stub)
+router.get("/requisitions/:resortId", async (req, res) => {
+  const resortId = req.params.resortId;
+  const sample = [
+    { _id: "req_1", requisitionNo: "REQ-1001", resort: resortId, status: "Submitted", totalItems: 3 },
+    { _id: "req_2", requisitionNo: "REQ-1002", resort: resortId, status: "Draft", totalItems: 0 }
+  ];
+  res.json(sample);
+});
+
+// Approve / reject requisition line-wise (stub)
+router.post("/requisitions/:id/approve", async (req, res) => {
+  const { id } = req.params;
+  const { action, lines, reason } = req.body; // action: approve/partial/reject
+  res.json({ message: "Requisition approval (stub)", id, action, lines, reason });
+});
+
+// Create PO from approved requisitions (stub)
+router.post("/po", async (req, res) => {
+  const payload = req.body;
+  const po = Object.assign({}, payload, { poNo: `PO-${Date.now()}`, status: "Open", _id: `po_${Date.now()}` });
+  res.status(201).json({ message: "PO created (stub)", po });
+});
+
+// Create GRN (stub)
+router.post("/grn", async (req, res) => {
+  const payload = req.body;
+  const grn = Object.assign({}, payload, { grnNo: `GRN-${Date.now()}`, status: "Pending QC", _id: `grn_${Date.now()}` });
+  res.status(201).json({ message: "GRN created (stub)", grn });
+});
+
+// Reports endpoints (stubs)
+router.get("/reports/requisitions", async (req, res) => {
+  res.json({ report: "Requisition Register (stub)" });
+});
+
+router.get("/reports/po-register", async (req, res) => {
+  res.json({ report: "PO Register (stub)" });
+});
+
+export default router;

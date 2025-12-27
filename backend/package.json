@@ -1,7 +1,8 @@
 {
   "name": "resort-purchase-backend",
   "version": "1.0.0",
-  "main": "server.cjs",
+  "main": "src/server.cjs",
+  "type": "module",
   "scripts": {
     "start": "node server.cjs",
     "dev": "nodemon server.cjs"

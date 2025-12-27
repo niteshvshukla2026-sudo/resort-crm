@@ -1,11 +1,24 @@
-module.exports = (router, mongoose) => {
-  const Role = mongoose.models.Role;
+// backend/src/routes/role.routes.js
+import express from "express";
+import { protect } from "../middleware/auth.js";   // ✅ sirf protect
 
-  router.get("/api/roles", async (_, res) => {
-    res.json(await Role.find().lean());
-  });
+import {
+  getMetadata,
+  getRoles,
+  createRole,
+  updateRole,
+  deleteRole,
+} from "../controllers/roleController.js";
 
-  router.post("/api/roles", async (req, res) => {
-    res.status(201).json(await Role.create(req.body));
-  });
-};
+const router = express.Router();
+
+// yeh sirf logged-in users ke liye roles APIs allow karega
+router.use(protect);
+
+router.get("/meta", getMetadata);   // GET /api/roles/meta
+router.get("/", getRoles);          // GET /api/roles
+router.post("/", createRole);       // POST /api/roles
+router.put("/:id", updateRole);     // PUT /api/roles/:id
+router.delete("/:id", deleteRole);  // DELETE /api/roles/:id
+
+export default router;

@@ -1,70 +1,66 @@
-const mongoose = require("mongoose");
-const GRN = mongoose.models.GRN;
-const PO = mongoose.models.PO;
-const Requisition = mongoose.models.Requisition;
-const StoreStock = mongoose.models.StoreStock;
+exports.createGRN = async (req, res) => {
+  try {
+    const {
+      grnNo,
+      poId,              // OPTIONAL
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      store,
+      items,
+    } = req.body;
 
-const makeGrnNo = () => {
-  const d = new Date();
-  return `GRN-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${Math.floor(100+Math.random()*900)}`;
-};
+    // 🔒 BASIC VALIDATION
+    if (!grnNo || !store || !receivedDate || !challanNo) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-exports.list = async (_, res) => {
-  res.json(await GRN.find().lean());
-};
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "GRN must have at least one item" });
+    }
 
-exports.createFromRequisition = async (req, res) => {
-  const reqDoc = await Requisition.findById(req.params.id);
-  if (!reqDoc) return res.status(404).json({ message: "Requisition not found" });
+    // 🔍 Fetch requisition to get RESORT
+    const requisition = await Requisition.findById(req.params.id);
 
-  const grn = await GRN.create({
-    grnNo: makeGrnNo(),
-    requisitionId: reqDoc._id,
-    vendor: reqDoc.vendor,
-    resort: reqDoc.resort,
-    store: req.body.store || reqDoc.store,
-    items: req.body.items || [],
-  });
+    if (!requisition) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
 
-  await Requisition.findByIdAndUpdate(reqDoc._id, { status: "GRN_CREATED" });
-  res.status(201).json(grn);
-};
+    if (!requisition.resort) {
+      return res.status(400).json({ message: "Requisition has no resort" });
+    }
 
-exports.createFromPO = async (req, res) => {
-  const po = await PO.findById(req.params.id).lean();
-  if (!po) return res.status(404).json({ message: "PO not found" });
+    // ✅ CREATE GRN (MATCHES SCHEMA)
+    const grn = await GRN.create({
+      grnNo,
+      requisition: requisition._id,
+      resort: requisition.resort,      // ✅ REQUIRED BY SCHEMA
+      store,
+      poId: poId || null,              // ✅ CORRECT FIELD NAME
+      receivedBy,
+      receivedDate,
+      challanNo,
+      billNo,
+      items,
+      status: "CREATED",
+    });
 
-  const grn = await GRN.create({
-    grnNo: makeGrnNo(),
-    poId: po._id,
-    requisitionId: po.requisitionId,
-    vendor: po.vendor,
-    resort: po.resort,
-    store: po.deliverTo,
-    items: po.items.map(i => ({ item: i.item, receivedQty: i.qty })),
-  });
+    // 🔗 UPDATE REQUISITION
+    await Requisition.findByIdAndUpdate(requisition._id, {
+      status: "GRN_CREATED",
+      grn: {
+        _id: grn._id,
+        code: grn.grnNo,
+      },
+    });
 
-  await PO.findByIdAndUpdate(po._id, { status: "CLOSED" });
-  if (po.requisitionId) {
-    await Requisition.findByIdAndUpdate(po.requisitionId, { status: "GRN_CREATED" });
+    res.status(201).json(grn);
+  } catch (err) {
+    console.error("Create GRN error ❌", err);
+    res.status(500).json({
+      message: "Failed to create GRN",
+      error: err.message,
+    });
   }
-
-  res.status(201).json(grn);
-};
-
-exports.close = async (req, res) => {
-  const grn = await GRN.findById(req.params.id);
-  if (!grn) return res.status(404).json({ message: "GRN not found" });
-
-  for (const l of grn.items) {
-    await StoreStock.findOneAndUpdate(
-      { store: grn.store, item: l.item },
-      { $inc: { qty: Number(l.receivedQty || 0) } },
-      { upsert: true }
-    );
-  }
-
-  grn.status = "CLOSED";
-  await grn.save();
-  res.json(grn);
 };
