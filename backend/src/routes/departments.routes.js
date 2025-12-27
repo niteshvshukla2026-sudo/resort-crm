@@ -1,28 +1,13 @@
-module.exports = (router, mongoose) => {
-  const Department = mongoose.models.Department;
+// backend/src/routes/department.routes.js
+import express from "express";
+import * as ctrl from "../controllers/department.controller.js";
 
-  router.get("/api/departments", async (req, res) => {
-    const data = await Department.find().sort({ name: 1 }).lean();
-    res.json(data);
-  });
+const router = express.Router();
 
-  router.post("/api/departments", async (req, res) => {
-    const { name, code } = req.body;
-    const doc = await Department.create({ name, code });
-    res.status(201).json(doc);
-  });
+router.get("/", ctrl.listDepartments);
+router.get("/:id", ctrl.getDepartment);
+router.post("/", ctrl.createDepartment);
+router.put("/:id", ctrl.updateDepartment);
+router.delete("/:id", ctrl.deleteDepartment);
 
-  router.put("/api/departments/:id", async (req, res) => {
-    const doc = await Department.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    res.json(doc);
-  });
-
-  router.delete("/api/departments/:id", async (req, res) => {
-    await Department.findByIdAndDelete(req.params.id);
-    res.json({ ok: true });
-  });
-};
+export default router;

@@ -1,70 +1,67 @@
-module.exports = (router, mongoose) => {
-  const Resort = mongoose.models.Resort;
+// backend/src/routes/resorts.routes.js
+import express from "express";
+import Resort from "../models/Resort.js";
 
-  // =========================
-  // GET ALL RESORTS
-  // =========================
-  router.get("/api/resorts", async (req, res) => {
-    try {
-      const resorts = await Resort.find().sort({ name: 1 }).lean();
-      res.json(resorts);
-    } catch (err) {
-      console.error("GET /resorts error", err);
-      res.status(500).json({ message: "Failed to load resorts" });
-    }
-  });
+const router = express.Router();
 
-  // =========================
-  // CREATE RESORT
-  // =========================
-  router.post("/api/resorts", async (req, res) => {
-    try {
-      const { name, code } = req.body;
-      if (!name) {
-        return res.status(400).json({ message: "Resort name is required" });
-      }
+// GENERATE CODE
+function generateCode(name = "") {
+  if (!name) return "R" + Math.floor(Math.random() * 999);
+  const clean = name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+  return clean || "R" + Math.floor(Math.random() * 999);
+}
 
-      const resort = await Resort.create({
-        name,
-        code,
-      });
+// GET ALL RESORTS  ->  GET /api/resorts
+router.get("/", async (req, res) => {
+  try {
+    const resorts = await Resort.find().sort({ createdAt: -1 });
+    return res.json({ ok: true, resorts });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
 
-      res.status(201).json(resort);
-    } catch (err) {
-      console.error("POST /resorts error", err);
-      res.status(500).json({ message: "Failed to create resort" });
-    }
-  });
+// CREATE RESORT  ->  POST /api/resorts
+router.post("/", async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.code) data.code = generateCode(data.name);
 
-  // =========================
-  // UPDATE RESORT
-  // =========================
-  router.put("/api/resorts/:id", async (req, res) => {
-    try {
-      const resort = await Resort.findById(req.params.id);
-      if (!resort) return res.status(404).json({ message: "Resort not found" });
+    const created = await Resort.create(data);
+    return res.json({ ok: true, resort: created });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
 
-      resort.name = req.body.name ?? resort.name;
-      resort.code = req.body.code ?? resort.code;
+// UPDATE RESORT  ->  PUT /api/resorts/:id
+router.put("/:id", async (req, res) => {
+  try {
+    const updated = await Resort.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    return res.json({ ok: true, resort: updated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
 
-      await resort.save();
-      res.json(resort);
-    } catch (err) {
-      console.error("PUT /resorts error", err);
-      res.status(500).json({ message: "Failed to update resort" });
-    }
-  });
+// DELETE RESORT  ->  DELETE /api/resorts/:id
+router.delete("/:id", async (req, res) => {
+  try {
+    await Resort.findByIdAndDelete(req.params.id);
+    return res.json({ ok: true, message: "Resort deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
 
-  // =========================
-  // DELETE RESORT
-  // =========================
-  router.delete("/api/resorts/:id", async (req, res) => {
-    try {
-      await Resort.findByIdAndDelete(req.params.id);
-      res.json({ ok: true });
-    } catch (err) {
-      console.error("DELETE /resorts error", err);
-      res.status(500).json({ message: "Failed to delete resort" });
-    }
-  });
-};
+export default router;

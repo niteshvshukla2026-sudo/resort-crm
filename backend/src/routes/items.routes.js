@@ -1,22 +1,16 @@
-module.exports = (router, mongoose) => {
-  const Item = mongoose.models.Item;
+import express from "express";
+import {
+  getItems,
+  createItem,
+  updateItem,
+  deleteItem,
+} from "../controllers/items.controller.js";
 
-  router.get("/api/items", async (req, res) => {
-    res.json(await Item.find().lean());
-  });
+const router = express.Router();
 
-  router.post("/api/items", async (req, res) => {
-    res.status(201).json(await Item.create(req.body));
-  });
+router.get("/", getItems);
+router.post("/", createItem);
+router.put("/:id", updateItem);
+router.delete("/:id", deleteItem);
 
-  router.put("/api/items/:id", async (req, res) => {
-    res.json(
-      await Item.findByIdAndUpdate(req.params.id, req.body, { new: true })
-    );
-  });
-
-  router.delete("/api/items/:id", async (req, res) => {
-    await Item.findByIdAndDelete(req.params.id);
-    res.json({ ok: true });
-  });
-};
+export default router;

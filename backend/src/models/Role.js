@@ -1,25 +1,29 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.Role) return;
+// backend/src/models/Role.js
+import mongoose from "mongoose";
 
-  const permissionSchema = new mongoose.Schema(
-    {
-      module: String,
-      actions: [String],
+const permissionSchema = new mongoose.Schema(
+  {
+    module: { type: String, required: true },   // e.g. "REQUISITIONS"
+    actions: [{ type: String }],               // e.g. ["VIEW","CREATE"]
+  },
+  { _id: false }
+);
+
+const roleSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },           // "Resort Admin"
+    key: { type: String, required: true, unique: true }, // "RESORT_ADMIN"
+    type: {
+      type: String,
+      enum: ["SYSTEM", "CUSTOM"],
+      default: "CUSTOM",
     },
-    { _id: false }
-  );
+    description: String,
+    permissions: [permissionSchema],
+    isDefault: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
 
-  const roleSchema = new mongoose.Schema(
-    {
-      name: { type: String, required: true },
-      key: { type: String, required: true, unique: true },
-      description: String,
-      type: { type: String, enum: ["SYSTEM", "CUSTOM"], default: "CUSTOM" },
-      storeMode: { type: String, enum: ["SINGLE", "MULTI"], default: "MULTI" },
-      permissions: [permissionSchema],
-    },
-    { timestamps: true }
-  );
-
-  mongoose.model("Role", roleSchema);
-};
+const Role = mongoose.model("Role", roleSchema);
+export default Role;

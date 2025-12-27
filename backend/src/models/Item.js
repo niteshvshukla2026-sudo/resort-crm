@@ -1,18 +1,41 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.Item) return;
+import mongoose from "mongoose";
 
-  const schema = new mongoose.Schema(
-    {
-      name: { type: String, required: true },
-      code: { type: String, required: true },
-      itemCategory: { type: String },
-      uom: String,
-      brand: String,
-      indicativePrice: Number,
-      stockByStore: { type: Map, of: Number, default: {} },
+const itemSchema = new mongoose.Schema(
+  {
+    code: {
+      type: String,
+      required: true,
+      trim: true,
+      unique: true,
     },
-    { timestamps: true }
-  );
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    // link to ItemCategory master
+    itemCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ItemCategory",
+    },
+    uom: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    brand: {
+      type: String,
+      trim: true,
+    },
+    indicativePrice: {
+      type: Number,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  { timestamps: true }
+);
 
-  mongoose.model("Item", schema);
-};
+export default mongoose.model("Item", itemSchema);

@@ -1,25 +1,12 @@
-module.exports = (mongoose) => {
-  // prevent overwrite on hot-reload / multiple requires
-  if (mongoose.models.Department) return;
+// backend/src/models/department.model.js
+import mongoose from "mongoose";
 
-  const departmentSchema = new mongoose.Schema(
-    {
-      name: {
-        type: String,
-        required: true,
-        trim: true,
-      },
+const DepartmentSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  code: { type: String, required: true, trim: true, index: true, unique: true },
+}, { timestamps: true });
 
-      code: {
-        type: String,
-        required: true,
-        trim: true,
-        unique: true,
-        uppercase: true,
-      },
-    },
-    { timestamps: true }
-  );
+// ensure unique code lowercase index as well (optional)
+// DepartmentSchema.index({ code: 1 }, { unique: true });
 
-  mongoose.model("Department", departmentSchema);
-};
+export default mongoose.model("Department", DepartmentSchema);

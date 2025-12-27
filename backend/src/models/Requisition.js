@@ -1,39 +1,50 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.Requisition) return;
+const mongoose = require("mongoose");
 
-  const lineSchema = new mongoose.Schema(
-    {
-      item: String,
-      qty: Number,
-      remark: String,
-    },
-    { _id: false }
-  );
+const lineSchema = new mongoose.Schema({
+  itemCategory: { type: mongoose.Schema.Types.ObjectId, ref: "ItemCategory" },
+  item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
+  qty: { type: Number, required: true },
+  remark: String,
+});
 
-  const schema = new mongoose.Schema(
-    {
-      requisitionNo: { type: String, unique: true },
+const requisitionSchema = new mongoose.Schema(
+  {
+    requisitionNo: String,
+    type: { type: String, enum: ["INTERNAL", "VENDOR"], required: true },
+
+    // INTERNAL
+    fromStore: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
+    toStore: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
+
+    // VENDOR
+    vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
+    store: { type: mongoose.Schema.Types.ObjectId, ref: "Store" },
+
+    resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort" },
+    department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
+
+    requiredBy: Date,
+    status: {
       type: String,
-      resort: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Resort",
-      },
-      department: String,
-      fromStore: String,
-      toStore: String,
-      vendor: String,
-      store: String,
-      requiredBy: Date,
-      status: String,
-      lines: [lineSchema],
-      createdBy: String,
-      approvedBy: String,
-      approvedAt: Date,
-      rejectedBy: String,
-      rejectionReason: String,
+      enum: [
+        "PENDING",
+        "APPROVED",
+        "ON_HOLD",
+        "REJECTED",
+        "PO_CREATED",
+        "GRN_CREATED",
+      ],
+      default: "PENDING",
     },
-    { timestamps: true }
-  );
 
-  mongoose.model("Requisition", schema);
-};
+    lines: [lineSchema],
+
+    po: { type: mongoose.Schema.Types.ObjectId, ref: "PO" },
+    grn: { type: mongoose.Schema.Types.ObjectId, ref: "GRN" },
+
+    createdAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("Requisition", requisitionSchema);

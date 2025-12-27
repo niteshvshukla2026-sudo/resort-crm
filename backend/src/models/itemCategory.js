@@ -1,14 +1,24 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.ItemCategory) return;
+import mongoose from "mongoose";
 
-  const schema = new mongoose.Schema(
-    {
-      name: { type: String, required: true },
-      code: { type: String, required: true },
-      departmentCategory: { type: String, default: "" },
+const itemCategorySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    { timestamps: true }
-  );
+    code: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
 
-  mongoose.model("ItemCategory", schema);
-};
+export default mongoose.model("ItemCategory", itemCategorySchema);

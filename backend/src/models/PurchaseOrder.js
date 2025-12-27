@@ -1,34 +1,53 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.PO) return;
+const mongoose = require("mongoose");
 
-  const lineSchema = new mongoose.Schema(
-    {
-      item: String,
-      qty: Number,
-      rate: Number,
-      amount: Number,
-      remark: String,
+const poItemSchema = new mongoose.Schema({
+  item: { type: mongoose.Schema.Types.ObjectId, ref: "Item", required: true },
+  qty: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  amount: { type: Number, required: true },
+  remark: { type: String, default: "" },
+});
+
+const poSchema = new mongoose.Schema(
+  {
+    poNo: { type: String, required: true, unique: true },
+
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
     },
-    { _id: false }
-  );
 
-  const schema = new mongoose.Schema(
-    {
-      poNo: { type: String, unique: true },
-      requisitionId: String,
-      vendor: String,
-      resort: String,
-      deliverTo: String,
-      poDate: Date,
-      items: [lineSchema],
-      subTotal: Number,
-      taxPercent: Number,
-      taxAmount: Number,
-      total: Number,
-      status: String,
+    resort: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
+      required: true,
     },
-    { timestamps: true }
-  );
 
-  mongoose.model("PO", schema);
-};
+    deliverTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Store",
+      required: true,
+    },
+
+    poDate: { type: Date, default: Date.now },
+
+    items: [poItemSchema],
+
+    subTotal: { type: Number, default: 0 },
+    taxPercent: { type: Number, default: 0 },
+    taxAmount: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+
+    status: {
+      type: String,
+      enum: ["CREATED", "PARTIAL_GRN", "FULLY_RECEIVED", "CANCELLED"],
+      default: "CREATED",
+    },
+
+    createdAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("PO", poSchema);

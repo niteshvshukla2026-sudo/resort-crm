@@ -1,9 +1,9 @@
-const {
-  login,
-  forceResetPassword,
-} = require("../src/controllers/auth.controller.cjs");
+import express from "express";
+import { login, forceResetPassword } from "../controllers/auth.controller.js";
 
-module.exports = (router) => {
-  router.post("/api/auth/login", login);
-  router.get("/api/auth/force-reset", forceResetPassword);
-};
+const router = express.Router();
+
+router.post("/login", login);
+router.get("/force-reset", forceResetPassword);
+
+export default router;
