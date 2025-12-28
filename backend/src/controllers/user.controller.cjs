@@ -1,5 +1,6 @@
 module.exports = function createUserController(mongoose) {
-  const User = require("../models/user.model.cjs")(mongoose);
+  const User = mongoose.model("User");
+
 
   // ================= GET USERS =================
   const listUsers = async (req, res) => {

@@ -1,5 +1,5 @@
 module.exports = function createItemCategoryController(mongoose) {
-  const ItemCategory = require("../models/itemCategory.model.cjs")(mongoose);
+  const ItemCategory = mongoose.model("ItemCategory");
 
   // ================= GET ALL =================
   const listItemCategories = async (req, res) => {

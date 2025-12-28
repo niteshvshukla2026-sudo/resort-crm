@@ -1,5 +1,5 @@
 module.exports = function createItemController(mongoose) {
-  const Item = require("../models/item.model.cjs")(mongoose);
+  const Vendor = mongoose.model("Vendor");
 
   // ================= GET ALL =================
   const listItems = async (req, res) => {

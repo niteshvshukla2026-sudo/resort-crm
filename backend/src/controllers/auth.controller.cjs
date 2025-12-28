@@ -1,4 +1,4 @@
-const jwt = require("jsonwebtoken");
+const User = mongoose.model("User");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 

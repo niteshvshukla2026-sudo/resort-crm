@@ -1,5 +1,5 @@
 module.exports = function createResortController(mongoose) {
-  const Resort = require("../models/resort.model.cjs")(mongoose);
+   const Resort = mongoose.model("Resort");
 
   // ================= GET ALL =================
   const listResorts = async (req, res) => {

@@ -1,5 +1,5 @@
 module.exports = function createDepartmentController(mongoose) {
-  const Department = require("../models/department.model.cjs")(mongoose);
+  const Department = mongoose.model("Department");
 
   // ================= GET ALL =================
   const listDepartments = async (req, res) => {

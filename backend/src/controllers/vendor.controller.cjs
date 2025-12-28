@@ -1,5 +1,5 @@
 module.exports = function createVendorController(mongoose) {
-  const Vendor = require("../models/vendor.model.cjs")(mongoose);
+  const Vendor = mongoose.model("Vendor");
 
   // ================= GET =================
   const listVendors = async (req, res) => {

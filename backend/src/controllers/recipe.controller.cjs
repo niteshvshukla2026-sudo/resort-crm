@@ -1,5 +1,5 @@
 module.exports = function createRecipeController(mongoose) {
-  const Recipe = require("../models/recipe.model.cjs")(mongoose);
+  const Recipe = mongoose.model("Recipe");
 
   // ================= GET =================
   const listRecipes = async (req, res) => {

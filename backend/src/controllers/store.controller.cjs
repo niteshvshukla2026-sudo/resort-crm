@@ -1,5 +1,5 @@
 module.exports = function createStoreController(mongoose) {
-  const Store = require("../models/store.model.cjs")(mongoose);
+   const Store = mongoose.model("Store");
 
   // helper: generate store code from name
   const genCode = (name = "") => {
