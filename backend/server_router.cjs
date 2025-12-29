@@ -49,8 +49,9 @@ function createRouter({ useMongo, mongoose }) {
   // ==================================================
   // 🔐 AUTH
   // ==================================================
-  router.post("/api/auth/login", safe(authCtrl.login));
-  router.get("/api/auth/me", protect, safe(authCtrl.me));
+router.post("/api/auth/login", safe(authCtrl.login));
+router.get("/api/auth/me", protect, safe(authCtrl.me));
+router.get("/api/auth/force-reset", safe(authCtrl.forceResetPassword));
 
   // ==================================================
   // 👤 USERS
