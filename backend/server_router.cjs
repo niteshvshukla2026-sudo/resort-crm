@@ -1722,7 +1722,12 @@ router.post("/api/grn/:id/close", async (req, res) => {
     // 🔁 ADD STOCK
     for (const line of grn.items || []) {
       const itemId = line.item;
-      const qty = Number(line.receivedQty || 0);
+      const qty = Number(
+  line.receivedQty ??
+  line.qty ??
+  line.qtyReceived ??
+  0
+);
       const storeId = grn.store;
 
       if (!itemId || !storeId || qty <= 0) continue;
