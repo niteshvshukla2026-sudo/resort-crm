@@ -1,6 +1,15 @@
-module.exports = (router, mongoose) => {
-  const controller = require("../controllers/store.controller")(mongoose);
+const {
+  list,
+  create,
+  update,
+  remove,
+} = require("../controllers/store.controller");
 
-  router.get("/stores", controller.listStores);
-  router.post("/stores", controller.createStore);
+const { protect } = require("../middlewares/auth.middleware");
+
+module.exports = (router) => {
+  router.get("/api/stores", protect, list);
+  router.post("/api/stores", protect, create);
+  router.put("/api/stores/:id", protect, update);
+  router.delete("/api/stores/:id", protect, remove);
 };

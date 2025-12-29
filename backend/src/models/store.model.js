@@ -1,15 +1,24 @@
-module.exports = (mongoose) => {
-  if (mongoose.models.Store) return mongoose.models.Store;
+const mongoose = require("mongoose");
 
-  const StoreSchema = new mongoose.Schema(
-    {
-      name: { type: String, required: true },
-      code: { type: String },
-      resort: { type: mongoose.Schema.Types.ObjectId, ref: "Resort" },
-      isActive: { type: Boolean, default: true },
+const StoreSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    code: { type: String },
+
+    resort: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resort",
+      required: true,
     },
-    { timestamps: true }
-  );
 
-  return mongoose.model("Store", StoreSchema);
-};
+    description: { type: String },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+// ✅ SAME PATTERN AS RESORT
+module.exports =
+  mongoose.models.Store ||
+  mongoose.model("Store", StoreSchema);
