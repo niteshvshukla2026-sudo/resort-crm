@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../styles/auth.css";
-import { useAuth } from "../../context/AuthContext";
+import api from "../../api/axios";   // ✅ IMPORTANT
 
 const Login = () => {
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("admin@example.com");
@@ -18,7 +17,16 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const res = await api.post("/auth/login", {
+        email,
+        password,
+      });
+
+      // ✅ TOKEN STORE (MOST IMPORTANT)
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+
+      // ✅ redirect
       navigate("/super-admin/dashboard");
     } catch (err) {
       setError(
