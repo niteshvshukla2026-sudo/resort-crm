@@ -1,4 +1,7 @@
-import mongoose from "mongoose";
+// backend/src/controllers/consumption.controller.js
+// ✅ PURE COMMONJS CONTROLLER
+
+const mongoose = require("mongoose");
 
 const Consumption = mongoose.models.Consumption;
 const StoreStock = mongoose.models.StoreStock;
@@ -7,7 +10,7 @@ const Recipe = mongoose.models.Recipe;
 /* =================================
    LIST
 ================================= */
-export const listConsumption = async (req, res) => {
+const listConsumptions = async (req, res) => {
   try {
     const { resort } = req.query;
     const filter = {};
@@ -23,16 +26,17 @@ export const listConsumption = async (req, res) => {
 /* =================================
    GET SINGLE
 ================================= */
-export const getConsumption = async (req, res) => {
+const getConsumptionById = async (req, res) => {
   const doc = await Consumption.findById(req.params.id).lean();
-  if (!doc) return res.status(404).json({ message: "Consumption not found" });
+  if (!doc)
+    return res.status(404).json({ message: "Consumption not found" });
   res.json(doc);
 };
 
 /* =================================
    CREATE + STOCK MINUS
 ================================= */
-export const createConsumption = async (req, res) => {
+const createConsumption = async (req, res) => {
   try {
     const data = req.body;
 
@@ -51,22 +55,24 @@ export const createConsumption = async (req, res) => {
 /* =================================
    UPDATE (NO STOCK ROLLBACK)
 ================================= */
-export const updateConsumption = async (req, res) => {
+const updateConsumption = async (req, res) => {
   const doc = await Consumption.findByIdAndUpdate(
     req.params.id,
     { $set: req.body },
     { new: true }
   );
-  if (!doc) return res.status(404).json({ message: "Consumption not found" });
+  if (!doc)
+    return res.status(404).json({ message: "Consumption not found" });
   res.json(doc);
 };
 
 /* =================================
    DELETE (NO ROLLBACK)
 ================================= */
-export const deleteConsumption = async (req, res) => {
+const deleteConsumption = async (req, res) => {
   const deleted = await Consumption.findByIdAndDelete(req.params.id);
-  if (!deleted) return res.status(404).json({ message: "Consumption not found" });
+  if (!deleted)
+    return res.status(404).json({ message: "Consumption not found" });
   res.json({ ok: true });
 };
 
@@ -78,7 +84,7 @@ async function applyConsumptionStockMinus(consumption) {
 
   // 1️⃣ DIRECT ITEM CONSUMPTION
   if (consumption.type === "LUMPSUM") {
-    for (const ln of consumption.lines) {
+    for (const ln of consumption.lines || []) {
       if (!ln.item || ln.qty <= 0) continue;
 
       await StoreStock.findOneAndUpdate(
@@ -94,7 +100,7 @@ async function applyConsumptionStockMinus(consumption) {
     consumption.type === "RECIPE_LUMPSUM" ||
     consumption.type === "RECIPE_PORTION"
   ) {
-    for (const ln of consumption.lines) {
+    for (const ln of consumption.lines || []) {
       if (!ln.recipe || ln.qty <= 0) continue;
 
       const recipe = await Recipe.findById(ln.recipe).lean();
@@ -115,3 +121,14 @@ async function applyConsumptionStockMinus(consumption) {
     }
   }
 }
+
+/* =================================
+   EXPORTS (VERY IMPORTANT)
+================================= */
+module.exports = {
+  listConsumptions,
+  getConsumptionById,
+  createConsumption,
+  updateConsumption,
+  deleteConsumption,
+};
