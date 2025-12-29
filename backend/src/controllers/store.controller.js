@@ -1,6 +1,6 @@
 // backend/src/controllers/store.controller.js
 const mongoose = require("mongoose");
-const Store = mongoose.model("Store");
+const Store = mongoose.model("store");
 
 // ===============================
 // GET /api/stores?resort=ID
