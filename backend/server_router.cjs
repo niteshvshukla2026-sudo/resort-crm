@@ -2150,12 +2150,13 @@ router.post("/api/grn", async (req, res) => {
       resort: data.resort || null,
       store: data.store || null,
       grnDate: data.grnDate || new Date(),
-      items: data.items.map((it) => ({
-        item: it.item,
-        qtyReceived: Number(it.qtyReceived || 0), // ✅ FIXED NAME
-        pendingQty: 0,
-        remark: it.remark || "",
-      })),
+     items: data.items.map((it) => ({
+  item: it.item,
+  receivedQty: Number(it.receivedQty || 0), // ✅ FIXED
+  pendingQty: 0,
+  remark: it.remark || "",
+}))
+
     };
 
     // --------------------------
