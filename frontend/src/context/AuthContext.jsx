@@ -4,7 +4,9 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import api from "../api/axios.js"; // ✅ frontend/src/api/axios.js
+import api from "@/api/axios";
+
+
 
 const AuthContext = createContext(null);
 
