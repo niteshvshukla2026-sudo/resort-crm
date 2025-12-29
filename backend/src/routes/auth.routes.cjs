@@ -1,7 +1,5 @@
-module.exports = function (router) {
-  const mongoose = require("mongoose");
-  const controller = require("../controllers/auth.controller.js")(mongoose);
+const { login } = require("../controllers/auth.controller");
 
-  router.post("/api/auth/login", controller.login);
-//   router.get("/api/auth/force-reset", controller.forceResetPassword);
+module.exports = (router) => {
+  router.post("/api/auth/login", login);
 };
