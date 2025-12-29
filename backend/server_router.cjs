@@ -57,6 +57,11 @@ function createRouter({ useMongo, mongoose }) {
   const recipeCtrl =
     require("./src/controllers/recipe.controller.js");
 
+
+
+
+
+
   // ==================================================
   // 🔐 AUTH
   // ==================================================
@@ -123,6 +128,8 @@ router.delete(
   requirePermission("DEPARTMENTS", "DELETE"),
   safe(departmentCtrl.deleteDepartment)
 );
+
+
   // ==================================================
   // 🏬 STORES
   // ==================================================
@@ -154,23 +161,36 @@ router.delete(
     safe(storeCtrl.remove)
   );
 
-  // ==================================================
-  // 📦 ITEMS
-  // ==================================================
-  router.get(
-    "/api/items",
-    protect,
-    requirePermission("ITEMS", "READ"),
-    safe(itemCtrl.list)
-  );
+ // ==================================================
+// 📦 ITEMS
+// ==================================================
+router.get(
+  "/api/items",
+  protect,
+  requirePermission("ITEMS", "READ"),
+  safe(itemCtrl.list)
+);
 
-  router.post(
-    "/api/items",
-    protect,
-    requirePermission("ITEMS", "CREATE"),
-    safe(itemCtrl.create)
-  );
+router.post(
+  "/api/items",
+  protect,
+  requirePermission("ITEMS", "CREATE"),
+  safe(itemCtrl.create)
+);
 
+router.put(
+  "/api/items/:id",
+  protect,
+  requirePermission("ITEMS", "UPDATE"),
+  safe(itemCtrl.update)
+);
+
+router.delete(
+  "/api/items/:id",
+  protect,
+  requirePermission("ITEMS", "DELETE"),
+  safe(itemCtrl.remove)
+);
   // ==================================================
   // 🚚 VENDORS
   // ==================================================
