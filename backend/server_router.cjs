@@ -93,16 +93,36 @@ function createRouter({ useMongo, mongoose }) {
     safe(resortCtrl.deleteResort)
   );
 
-  // ==================================================
-  // 🏢 DEPARTMENTS
-  // ==================================================
-  router.get(
-    "/api/departments",
-    protect,
-    requirePermission("DEPARTMENTS", "READ"),
-    safe(departmentCtrl.list)
-  );
+ // ==================================================
+// 🏢 DEPARTMENTS
+// ==================================================
+router.get(
+  "/api/departments",
+  protect,
+  requirePermission("DEPARTMENTS", "READ"),
+  safe(departmentCtrl.listDepartments)
+);
 
+router.post(
+  "/api/departments",
+  protect,
+  requirePermission("DEPARTMENTS", "CREATE"),
+  safe(departmentCtrl.createDepartment)
+);
+
+router.put(
+  "/api/departments/:id",
+  protect,
+  requirePermission("DEPARTMENTS", "UPDATE"),
+  safe(departmentCtrl.updateDepartment)
+);
+
+router.delete(
+  "/api/departments/:id",
+  protect,
+  requirePermission("DEPARTMENTS", "DELETE"),
+  safe(departmentCtrl.deleteDepartment)
+);
   // ==================================================
   // 🏬 STORES
   // ==================================================
