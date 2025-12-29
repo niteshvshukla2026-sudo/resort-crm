@@ -42,5 +42,5 @@ module.exports = (mongoose) => {
     next();
   });
 
-  mongoose.models.Store || mongoose.model("Store", schema);
+  mongoose.models.Store || mongoose.model("store", schema);
 };
