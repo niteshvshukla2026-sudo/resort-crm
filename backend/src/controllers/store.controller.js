@@ -1,6 +1,7 @@
 // backend/src/controllers/store.controller.js
 const mongoose = require("mongoose");
-const Store = mongoose.model("store");
+
+const Store = mongoose.model("Store"); // ✅ EXACT SAME NAME
 
 // ===============================
 // GET /api/stores?resort=ID
