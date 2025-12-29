@@ -1,34 +1,47 @@
-const mongoose = require("mongoose");
+// backend/src/controllers/resort.controller.js
+// ✅ PURE CJS | PRODUCTION SAFE
 
+const Resort = require("../models/resort.model");
+
+/**
+ * GET /api/resorts
+ * SUPER_ADMIN → all resorts
+ */
 exports.listResorts = async (req, res) => {
   try {
-    const Resort = mongoose.models.Resort;
+    const resorts = await Resort.find()
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const resorts = await Resort.find().sort({ createdAt: -1 }).lean();
-
-    res.json(resorts);
+    return res.json(resorts);
   } catch (err) {
-    console.error("LIST RESORTS ERROR", err);
-    res.status(500).json({ message: "Failed to load resorts" });
+    console.error("LIST RESORTS ERROR ❌", err);
+    return res.status(500).json({
+      message: "Failed to load resorts",
+    });
   }
 };
 
+/**
+ * POST /api/resorts
+ */
 exports.createResort = async (req, res) => {
   try {
-    const Resort = mongoose.models.Resort;
-
     const doc = await Resort.create(req.body);
-    res.status(201).json(doc);
+    return res.status(201).json(doc);
   } catch (err) {
-    console.error("CREATE RESORT ERROR", err);
-    res.status(500).json({ message: "Failed to create resort" });
+    console.error("CREATE RESORT ERROR ❌", err);
+    return res.status(500).json({
+      message: "Failed to create resort",
+    });
   }
 };
 
+/**
+ * PUT /api/resorts/:id
+ */
 exports.updateResort = async (req, res) => {
   try {
-    const Resort = mongoose.models.Resort;
-
     const updated = await Resort.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
@@ -36,28 +49,38 @@ exports.updateResort = async (req, res) => {
     );
 
     if (!updated) {
-      return res.status(404).json({ message: "Resort not found" });
+      return res.status(404).json({
+        message: "Resort not found",
+      });
     }
 
-    res.json(updated);
+    return res.json(updated);
   } catch (err) {
-    console.error("UPDATE RESORT ERROR", err);
-    res.status(500).json({ message: "Failed to update resort" });
+    console.error("UPDATE RESORT ERROR ❌", err);
+    return res.status(500).json({
+      message: "Failed to update resort",
+    });
   }
 };
 
+/**
+ * DELETE /api/resorts/:id
+ */
 exports.deleteResort = async (req, res) => {
   try {
-    const Resort = mongoose.models.Resort;
-
     const deleted = await Resort.findByIdAndDelete(req.params.id);
+
     if (!deleted) {
-      return res.status(404).json({ message: "Resort not found" });
+      return res.status(404).json({
+        message: "Resort not found",
+      });
     }
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("DELETE RESORT ERROR", err);
-    res.status(500).json({ message: "Failed to delete resort" });
+    console.error("DELETE RESORT ERROR ❌", err);
+    return res.status(500).json({
+      message: "Failed to delete resort",
+    });
   }
 };
