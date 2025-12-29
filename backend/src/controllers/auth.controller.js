@@ -21,10 +21,11 @@ const login = async (req, res) => {
     }
 
     // 1️⃣ Find user
-    const user = await User.findOne({
-      email: String(email).toLowerCase(),
-      isActive: true,
-    });
+   const user = await User.findOne({
+  email: String(email).toLowerCase(),
+  status: "ACTIVE",
+});
+
 
     if (!user) {
       return res.status(401).json({
