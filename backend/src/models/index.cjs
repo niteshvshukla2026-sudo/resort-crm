@@ -7,7 +7,7 @@ module.exports = {
   Resort: require("./resort.model"),
   Store: require("./store.model"),
   Item: require("./item.model"),
-  ItemCategory: require("./itemcategory.model"),
+  ItemCategory: require("./itemCategory.model"),
   Vendor: require("./vendor.model"),
   Requisition: require("./requisition.model"),
   PO: require("./po.model"),
