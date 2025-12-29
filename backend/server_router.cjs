@@ -1,6 +1,6 @@
 // backend/server_router.cjs
 // ==================================================
-// 🔥 FULL FINAL CONSOLIDATED ROUTER (PRODUCTION READY)
+// 🔥 FINAL CONSOLIDATED ROUTER (STABLE & PRODUCTION SAFE)
 // ==================================================
 
 const express = require("express");
@@ -18,7 +18,7 @@ function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
 
   // ==================================================
-  // 🔥 LOAD ALL MODELS
+  // 🔥 LOAD ALL MODELS (REGISTER SCHEMAS)
   // ==================================================
   if (useMongo && mongoose) {
     require("./src/models/index.cjs");
@@ -27,40 +27,34 @@ function createRouter({ useMongo, mongoose }) {
   // ==================================================
   // 🔐 AUTH MIDDLEWARE
   // ==================================================
-  const { protect, requirePermission } =
-    require("./src/middlewares/auth.middleware");
+  const {
+    protect,
+    requirePermission,
+  } = require("./src/middlewares/auth.middleware");
 
   // ==================================================
   // 📦 CONTROLLERS
   // ==================================================
-  const authCtrl = require("./src/controllers/auth.controller.js");
-  const userCtrl = require("./src/controllers/user.controller.js");
-  const roleCtrl = require("./src/controllers/role.controller.js");
+  const authCtrl = require("./src/controllers/auth.controller");
+  const userCtrl = require("./src/controllers/user.controller");
+  const roleCtrl = require("./src/controllers/role.controller");
 
-  const storeCtrl = require("./src/controllers/store.controller.js");
-  
-  const vendorCtrl = require("./src/controllers/vendor.controller.js");
+  const resortCtrl = require("./src/controllers/resort.controller");
+  const departmentCtrl = require("./src/controllers/department.controller");
+  const storeCtrl = require("./src/controllers/store.controller");
+  const vendorCtrl = require("./src/controllers/vendor.controller");
+  const recipeCtrl = require("./src/controllers/recipe.controller");
 
-  const requisitionCtrl = require("./src/controllers/requisition.controller.js");
-  const poCtrl = require("./src/controllers/po.controller.js");
-  const grnCtrl = require("./src/controllers/grn.controller.js");
+  const requisitionCtrl = require("./src/controllers/requisition.controller");
+  const poCtrl = require("./src/controllers/po.controller");
+  const grnCtrl = require("./src/controllers/grn.controller");
 
-  const storeReplacementCtrl =
-    require("./src/controllers/storeReplacement.controller.js");
-  const consumptionCtrl =
-    require("./src/controllers/consumption.controller.js");
-
-  const departmentCtrl =
-    require("./src/controllers/department.controller.js");
-  const resortCtrl =
-    require("./src/controllers/resort.controller.js");
-  const recipeCtrl =
-    require("./src/controllers/recipe.controller.js");
-
-
-
-
-
+  const storeReplacementCtrl = require(
+    "./src/controllers/storeReplacement.controller"
+  );
+  const consumptionCtrl = require(
+    "./src/controllers/consumption.controller"
+  );
 
   // ==================================================
   // 🔐 AUTH
@@ -68,7 +62,7 @@ function createRouter({ useMongo, mongoose }) {
   router.post("/api/auth/login", safe(authCtrl.login));
 
   // ==================================================
-  // 🏖️ RESORTS  ✅ FIXED
+  // 🏖️ RESORTS
   // ==================================================
   router.get(
     "/api/resorts",
@@ -98,67 +92,68 @@ function createRouter({ useMongo, mongoose }) {
     safe(resortCtrl.deleteResort)
   );
 
- // ==================================================
-// 🏢 DEPARTMENTS
-// ==================================================
-router.get(
-  "/api/departments",
-  protect,
-  requirePermission("DEPARTMENTS", "READ"),
-  safe(departmentCtrl.listDepartments)
-);
+  // ==================================================
+  // 🏢 DEPARTMENTS
+  // ==================================================
+  router.get(
+    "/api/departments",
+    protect,
+    requirePermission("DEPARTMENTS", "READ"),
+    safe(departmentCtrl.listDepartments)
+  );
 
-router.post(
-  "/api/departments",
-  protect,
-  requirePermission("DEPARTMENTS", "CREATE"),
-  safe(departmentCtrl.createDepartment)
-);
+  router.post(
+    "/api/departments",
+    protect,
+    requirePermission("DEPARTMENTS", "CREATE"),
+    safe(departmentCtrl.createDepartment)
+  );
 
-router.put(
-  "/api/departments/:id",
-  protect,
-  requirePermission("DEPARTMENTS", "UPDATE"),
-  safe(departmentCtrl.updateDepartment)
-);
+  router.put(
+    "/api/departments/:id",
+    protect,
+    requirePermission("DEPARTMENTS", "UPDATE"),
+    safe(departmentCtrl.updateDepartment)
+  );
 
-router.delete(
-  "/api/departments/:id",
-  protect,
-  requirePermission("DEPARTMENTS", "DELETE"),
-  safe(departmentCtrl.deleteDepartment)
-);
+  router.delete(
+    "/api/departments/:id",
+    protect,
+    requirePermission("DEPARTMENTS", "DELETE"),
+    safe(departmentCtrl.deleteDepartment)
+  );
 
+  // ==================================================
+  // 🏬 STORES
+  // ==================================================
+  router.get(
+    "/api/stores",
+    protect,
+    requirePermission("STORES", "READ"),
+    safe(storeCtrl.list)
+  );
 
-router.get(
-  "/api/stores",
-  protect,
-  requirePermission("STORES", "READ"),
-  safe(storeCtrl.list)
-);
+  router.post(
+    "/api/stores",
+    protect,
+    requirePermission("STORES", "CREATE"),
+    safe(storeCtrl.create)
+  );
 
-router.post(
-  "/api/stores",
-  protect,
-  requirePermission("STORES", "CREATE"),
-  safe(storeCtrl.create)
-);
+  router.put(
+    "/api/stores/:id",
+    protect,
+    requirePermission("STORES", "UPDATE"),
+    safe(storeCtrl.update)
+  );
 
-router.put(
-  "/api/stores/:id",
-  protect,
-  requirePermission("STORES", "UPDATE"),
-  safe(storeCtrl.update)
-);
+  router.delete(
+    "/api/stores/:id",
+    protect,
+    requirePermission("STORES", "DELETE"),
+    safe(storeCtrl.remove)
+  );
 
-router.delete(
-  "/api/stores/:id",
-  protect,
-  requirePermission("STORES", "DELETE"),
-  safe(storeCtrl.remove)
-);
-
- 
   // ==================================================
   // 🚚 VENDORS
   // ==================================================

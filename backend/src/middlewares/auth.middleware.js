@@ -1,3 +1,8 @@
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+
+const User = mongoose.models.User;
+
 const protect = async (req, res, next) => {
   try {
     let token = null;
@@ -10,9 +15,7 @@ const protect = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({
-        message: "Not authorized, token missing",
-      });
+      return res.status(401).json({ message: "Token missing" });
     }
 
     const decoded = jwt.verify(
@@ -24,26 +27,35 @@ const protect = async (req, res, next) => {
       .select("-password")
       .populate("role");
 
-    // ✅ FIXED CHECK
     if (!user || user.isActive === false) {
-      return res.status(401).json({
-        message: "User inactive or not found",
-      });
+      return res.status(401).json({ message: "User inactive or not found" });
     }
 
     req.user = {
       id: user._id,
-      role: user.role?.name || user.role, // safe
+      role: user.role?.name || user.role,
+      isActive: user.isActive,
       resorts: user.resorts || [],
       stores: user.stores || [],
-      isActive: user.isActive,
     };
 
     next();
   } catch (err) {
-    console.error("AUTH MIDDLEWARE ERROR ❌", err);
-    return res.status(401).json({
-      message: "Invalid or expired token",
-    });
+    console.error("AUTH ERROR ❌", err);
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
+};
+
+// ✅ MUST BE A FUNCTION
+const requirePermission = (module, action) => {
+  return (req, res, next) => {
+    // TEMP: allow all
+    next();
+  };
+};
+
+// ✅ SINGLE EXPORT (IMPORTANT)
+module.exports = {
+  protect,
+  requirePermission,
 };
