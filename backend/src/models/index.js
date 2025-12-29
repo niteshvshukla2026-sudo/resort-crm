@@ -1,30 +1,34 @@
-// backend/src/models/index.js
-// =======================================
-// 🔥 MODEL LOADER (SINGLE SOURCE OF TRUTH)
-// =======================================
+// src/models/index.js
+// ✅ PURE ESM FILE — NO CommonJS, NO module.exports
 
-module.exports = () => {
-  // CORE
-  require("./user.model");
-  require("./role.model");
+import User from "./user.model.js";
+import Role from "./role.model.js";
+import Resort from "./resort.model.js";
+import Store from "./store.model.js";
+import Item from "./item.model.js";
+import ItemCategory from "./itemCategory.model.js";
+import Vendor from "./vendor.model.js";
+import Requisition from "./requisition.model.js";
+import PO from "./po.model.js";
+import GRN from "./grn.model.js";
+import StoreStock from "./storeStock.model.js";
+import Consumption from "./consumption.model.js";
+import Recipe from "./recipe.model.js";
+import StoreReplacement from "./storeReplacement.model.js";
 
-  // MASTER
-  require("./resort.model");
-  require("./store.model");
-  require("./item.model");
-  require("./vendor.model");
-
-  // TRANSACTIONS
-  require("./requisition.model");
-  require("./po.model");
-  require("./grn.model");
-
-  // STOCK
-  require("./storeStock.model");
-
-  // OPTIONAL (if present)
-  try { require("./consumption.model"); } catch {}
-  try { require("./storeReplacement.model"); } catch {}
-
-  console.log("✅ All MongoDB models loaded");
+export {
+  User,
+  Role,
+  Resort,
+  Store,
+  Item,
+  ItemCategory,
+  Vendor,
+  Requisition,
+  PO,
+  GRN,
+  StoreStock,
+  Consumption,
+  Recipe,
+  StoreReplacement,
 };
