@@ -1871,13 +1871,16 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       grnDate: req.body.grnDate || new Date(),
 
       items: Array.isArray(req.body.items)
-        ? req.body.items.map((it) => ({
-            item: it.item,
-            receivedQty: Number(it.receivedQty || 0),
-            pendingQty: 0,
-            remark: it.remark || "",
-          }))
-        : [],
+  ? req.body.items
+      .filter(it => it.item && Number(it.receivedQty) > 0)
+      .map((it) => ({
+        item: String(it.item),
+        receivedQty: Number(it.receivedQty),
+        pendingQty: 0,
+        remark: it.remark || "",
+      }))
+  : [],
+
     };
 
     // 4️⃣ Save GRN
@@ -2155,12 +2158,14 @@ router.post("/api/grn", async (req, res) => {
       resort: data.resort || null,
       store: data.store || null,
       grnDate: data.grnDate || new Date(),
-     items: data.items.map((it) => ({
-  item: it.item,
-  receivedQty: Number(it.receivedQty || 0), // ✅ FIXED
-  pendingQty: 0,
-  remark: it.remark || "",
-}))
+    items: data.items
+  .filter(it => it.item && Number(it.receivedQty) > 0)
+  .map((it) => ({
+    item: String(it.item),
+    receivedQty: Number(it.receivedQty),
+    pendingQty: 0,
+    remark: it.remark || "",
+  })),
 
     };
 
