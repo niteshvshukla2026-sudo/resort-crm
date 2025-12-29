@@ -38,7 +38,7 @@ function createRouter({ useMongo, mongoose }) {
   const roleCtrl = require("./src/controllers/role.controller.js");
 
   const storeCtrl = require("./src/controllers/store.controller.js");
-  const itemCtrl = require("./src/controllers/item.controller.js");
+  
   const vendorCtrl = require("./src/controllers/vendor.controller.js");
 
   const requisitionCtrl = require("./src/controllers/requisition.controller.js");
@@ -161,36 +161,7 @@ router.delete(
     safe(storeCtrl.remove)
   );
 
- // ==================================================
-// 📦 ITEMS
-// ==================================================
-router.get(
-  "/api/items",
-  protect,
-  requirePermission("ITEMS", "READ"),
-  safe(itemCtrl.list)
-);
-
-router.post(
-  "/api/items",
-  protect,
-  requirePermission("ITEMS", "CREATE"),
-  safe(itemCtrl.create)
-);
-
-router.put(
-  "/api/items/:id",
-  protect,
-  requirePermission("ITEMS", "UPDATE"),
-  safe(itemCtrl.update)
-);
-
-router.delete(
-  "/api/items/:id",
-  protect,
-  requirePermission("ITEMS", "DELETE"),
-  safe(itemCtrl.remove)
-);
+ 
   // ==================================================
   // 🚚 VENDORS
   // ==================================================
