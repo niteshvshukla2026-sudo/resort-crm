@@ -56,8 +56,7 @@ function createRouter({ useMongo, mongoose }) {
     require("./src/controllers/resort.controller.js");
   const recipeCtrl =
     require("./src/controllers/recipe.controller.js");
-  const itemCategoryCtrl =
-    require("./src/controllers/itemCategory.controller.js");
+
 
   // ==================================================
   // 🔐 AUTH
@@ -138,13 +137,6 @@ function createRouter({ useMongo, mongoose }) {
     safe(storeCtrl.remove)
   );
 
-  // ==================================================
-  // 📦 ITEM CATEGORIES
-  // ==================================================
-  router.get("/api/item-categories", protect,
-    requirePermission("ITEMS", "READ"),
-    safe(itemCategoryCtrl.list)
-  );
 
   // ==================================================
   // 📦 ITEMS
