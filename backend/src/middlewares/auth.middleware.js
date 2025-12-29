@@ -1,12 +1,17 @@
-import jwt from "jsonwebtoken";
-import User from "../models/user.model.js";
+// backend/src/middlewares/auth.middleware.js
+// ✅ PURE COMMONJS (CJS) — SERVER SAFE
+
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+
+const User = mongoose.models.User;
 
 /**
  * 🔐 AUTH MIDDLEWARE
  * - Verifies JWT
  * - Attaches req.user
  */
-export const protect = async (req, res, next) => {
+const protect = async (req, res, next) => {
   try {
     let token = null;
 
@@ -56,4 +61,19 @@ export const protect = async (req, res, next) => {
       message: "Invalid or expired token",
     });
   }
+};
+
+/**
+ * 🔐 PERMISSION MIDDLEWARE
+ */
+const requirePermission = (module, action) => {
+  return (req, res, next) => {
+    // TEMP: allow all (logic baad me tighten karenge)
+    next();
+  };
+};
+
+module.exports = {
+  protect,
+  requirePermission,
 };
