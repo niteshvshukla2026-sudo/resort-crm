@@ -142,7 +142,10 @@ const storeStockSchema = new Schema(
   { timestamps: true }
 );
 
-storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
+storeStockSchema.index(
+  { resort: 1, store: 1, item: 1 },
+  { unique: true }
+);
 
 const StoreStock =
   mongoose.models.StoreStock ||
@@ -839,15 +842,16 @@ router.post(
       for (const ln of lines) {
         const qty = Number(ln.receivedQty || 0);
         if (!ln.itemId || qty <= 0) continue;
+await StoreStock.findOneAndUpdate(
+  {
+    resort: grn.resort,  // 🔥 MUST ADD
+    store: storeId,
+    item: itemId
+  },
+  { $inc: { qty: qty } },
+  { upsert: true, new: true }
+);
 
-        await StoreStock.findOneAndUpdate(
-          {
-            store: storeId,
-            item: ln.itemId,
-          },
-          { $inc: { qty } },
-          { upsert: true, new: true }
-        );
       }
 
       repl.status = "CLOSED";
@@ -2520,9 +2524,11 @@ if (data.type === "LUMPSUM") {
     if (!line.item || qty <= 0) continue;
 
     const stock = await StoreStock.findOne({
-      store: data.storeFrom,
-      item: line.item,
-    });
+  resort: data.resort,  // 🔥 ADD
+  store: data.storeFrom,
+  item: line.item
+});
+
 
     if (!stock) {
       return res.status(400).json({
