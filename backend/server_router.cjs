@@ -319,21 +319,21 @@ function createRouter({ useMongo, mongoose }) {
     storeReplacementCtrl.createGrnAndAddStock
   );
 
-  // ==================================================
-  // 🍽️ CONSUMPTION (STOCK -)
-  // ==================================================
-  router.get(
-    "/api/consumption",
-    protect,
-    requirePermission("REPORTS", "READ"),
-    consumptionCtrl.list
-  );
-  router.post(
-    "/api/consumption",
-    protect,
-    requirePermission("REPORTS", "CREATE"),
-    consumptionCtrl.createAndReduceStock
-  );
+ // 🍽️ CONSUMPTION (STOCK -)
+// ==================================================
+router.get(
+  "/api/consumption",
+  protect,
+  requirePermission("REPORTS", "READ"),
+  consumptionCtrl.listConsumptions
+);
+
+router.post(
+  "/api/consumption",
+  protect,
+  requirePermission("REPORTS", "CREATE"),
+  consumptionCtrl.createConsumption
+);
 
   // ==================================================
   // ❤️ HEALTH
