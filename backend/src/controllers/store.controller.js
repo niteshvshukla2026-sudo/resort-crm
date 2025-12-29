@@ -1,89 +1,96 @@
+// backend/src/controllers/store.controller.js
 const mongoose = require("mongoose");
+const Store = mongoose.model("Store");
 
-// helper: simple store code generator (same behaviour as earlier)
-const generateStoreCode = (name = "") =>
-  name
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 6) || "STORE";
-
-exports.listStores = async (req, res) => {
+// ===============================
+// GET /api/stores?resort=ID
+// ===============================
+exports.list = async (req, res) => {
   try {
-    const Store = mongoose.models.Store;
+    const { resort } = req.query;
 
     const filter = {};
-    if (req.query.resort && req.query.resort !== "ALL") {
-      filter.resort = req.query.resort;
+    if (resort) {
+      filter.resort = resort;
     }
 
     const stores = await Store.find(filter)
+      .populate("resort", "name code")
       .sort({ createdAt: -1 })
       .lean();
 
     res.json(stores);
   } catch (err) {
-    console.error("LIST STORES ERROR", err);
+    console.error("LIST STORES ERROR ❌", err);
     res.status(500).json({ message: "Failed to load stores" });
   }
 };
 
-exports.createStore = async (req, res) => {
+// ===============================
+// POST /api/stores
+// ===============================
+exports.create = async (req, res) => {
   try {
-    const Store = mongoose.models.Store;
+    const { name, resort } = req.body;
 
-    const payload = {
-      name: req.body.name,
-      resort: req.body.resort,
-      code: generateStoreCode(req.body.name),
-    };
+    if (!name || !resort) {
+      return res
+        .status(400)
+        .json({ message: "Store name and resort required" });
+    }
 
-    const doc = await Store.create(payload);
-    res.status(201).json(doc);
+    const store = await Store.create({
+      name,
+      resort,
+    });
+
+    res.status(201).json(store);
   } catch (err) {
-    console.error("CREATE STORE ERROR", err);
+    console.error("CREATE STORE ERROR ❌", err);
     res.status(500).json({ message: "Failed to create store" });
   }
 };
 
-exports.updateStore = async (req, res) => {
+// ===============================
+// PUT /api/stores/:id
+// ===============================
+exports.update = async (req, res) => {
   try {
-    const Store = mongoose.models.Store;
+    const { id } = req.params;
+    const { name, resort } = req.body;
 
-    const payload = {
-      name: req.body.name,
-      resort: req.body.resort,
-    };
-
-    const updated = await Store.findByIdAndUpdate(
-      req.params.id,
-      { $set: payload },
+    const store = await Store.findByIdAndUpdate(
+      id,
+      { name, resort },
       { new: true }
     );
 
-    if (!updated) {
+    if (!store) {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    res.json(updated);
+    res.json(store);
   } catch (err) {
-    console.error("UPDATE STORE ERROR", err);
+    console.error("UPDATE STORE ERROR ❌", err);
     res.status(500).json({ message: "Failed to update store" });
   }
 };
 
-exports.deleteStore = async (req, res) => {
+// ===============================
+// DELETE /api/stores/:id
+// ===============================
+exports.remove = async (req, res) => {
   try {
-    const Store = mongoose.models.Store;
+    const { id } = req.params;
 
-    const deleted = await Store.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    const store = await Store.findByIdAndDelete(id);
+    if (!store) {
       return res.status(404).json({ message: "Store not found" });
     }
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("DELETE STORE ERROR", err);
+    console.error("DELETE STORE ERROR ❌", err);
     res.status(500).json({ message: "Failed to delete store" });
   }
 };

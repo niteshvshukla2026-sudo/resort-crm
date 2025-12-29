@@ -130,36 +130,33 @@ router.delete(
 );
 
 
-  // ==================================================
-  // 🏬 STORES
-  // ==================================================
-  router.get(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "READ"),
-    safe(storeCtrl.list)
-  );
+router.get(
+  "/api/stores",
+  protect,
+  requirePermission("STORES", "READ"),
+  safe(storeCtrl.list)
+);
 
-  router.post(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "CREATE"),
-    safe(storeCtrl.create)
-  );
+router.post(
+  "/api/stores",
+  protect,
+  requirePermission("STORES", "CREATE"),
+  safe(storeCtrl.create)
+);
 
-  router.put(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "UPDATE"),
-    safe(storeCtrl.update)
-  );
+router.put(
+  "/api/stores/:id",
+  protect,
+  requirePermission("STORES", "UPDATE"),
+  safe(storeCtrl.update)
+);
 
-  router.delete(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "DELETE"),
-    safe(storeCtrl.remove)
-  );
+router.delete(
+  "/api/stores/:id",
+  protect,
+  requirePermission("STORES", "DELETE"),
+  safe(storeCtrl.remove)
+);
 
  
   // ==================================================
