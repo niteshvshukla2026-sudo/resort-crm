@@ -4,7 +4,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import api from "@/api/axios";
+import api from "@/api/axios.js";
 
 
 

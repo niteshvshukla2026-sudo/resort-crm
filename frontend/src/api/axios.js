@@ -4,7 +4,8 @@ const API_BASE =
   import.meta.env.VITE_API_BASE || "https://resort-crm.onrender.com";
 
 const api = axios.create({
-  baseURL: API_BASE + "/api",
+  baseURL: API_BASE.replace(/\/+$/, "") + "/api",
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
