@@ -1,8 +1,25 @@
-const ctrl = require("../controllers/resort.controller");
+const express = require("express");
+const router = express.Router();
 
-module.exports = (router) => {
-  router.get("/api/resorts", ctrl.listResorts);
-  router.post("/api/resorts", ctrl.createResort);
-  router.put("/api/resorts/:id", ctrl.updateResort);
-  router.delete("/api/resorts/:id", ctrl.deleteResort);
-};
+const {
+  listResorts,
+  createResort,
+  updateResort,
+  deleteResort,
+} = require("../controllers/resort.controller");
+
+const { protect } = require("../middlewares/auth.middleware");
+
+// 🔥 LIST RESORTS
+router.get("/resorts", protect, listResorts);
+
+// 🔥 CREATE RESORT
+router.post("/resorts", protect, createResort);
+
+// 🔥 UPDATE RESORT
+router.put("/resorts/:id", protect, updateResort);
+
+// 🔥 DELETE RESORT
+router.delete("/resorts/:id", protect, deleteResort);
+
+module.exports = router;
