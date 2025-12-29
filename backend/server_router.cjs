@@ -55,32 +55,36 @@ function createRouter({ useMongo, mongoose }) {
   router.get("/api/auth/me", protect, authCtrl.me);
 
   // ==================================================
-  // 👤 USERS
-  // ==================================================
-  router.get(
-    "/api/users",
-    protect,
-    requirePermission("USERS", "READ"),
-    userCtrl.list
-  );
-  router.post(
-    "/api/users",
-    protect,
-    requirePermission("USERS", "CREATE"),
-    userCtrl.create
-  );
-  router.put(
-    "/api/users/:id",
-    protect,
-    requirePermission("USERS", "UPDATE"),
-    userCtrl.update
-  );
-  router.delete(
-    "/api/users/:id",
-    protect,
-    requirePermission("USERS", "DELETE"),
-    userCtrl.remove
-  );
+// 👤 USERS
+// ==================================================
+router.get(
+  "/api/users",
+  protect,
+  requirePermission("USERS", "READ"),
+  userCtrl.listUsers
+);
+
+router.post(
+  "/api/users",
+  protect,
+  requirePermission("USERS", "CREATE"),
+  userCtrl.createUser
+);
+
+router.put(
+  "/api/users/:id",
+  protect,
+  requirePermission("USERS", "UPDATE"),
+  userCtrl.updateUser
+);
+
+router.delete(
+  "/api/users/:id",
+  protect,
+  requirePermission("USERS", "DELETE"),
+  userCtrl.deleteUser
+);
+
 
   // ==================================================
   // 🧑‍⚖️ ROLES
