@@ -31,34 +31,33 @@ function createRouter({ useMongo, mongoose }) {
     require("./src/middlewares/auth.middleware");
 
   // ==================================================
-  // 📦 CONTROLLERS
+  // 📦 CONTROLLERS (✅ EXACT FILENAMES)
   // ==================================================
-  const authCtrl = require("./src/controllers/auth.controller");
-  const userCtrl = require("./src/controllers/user.controller");
-  const roleCtrl = require("./src/controllers/role.controller");
+  const authCtrl = require("./src/controllers/auth.controller.js");
+  const userCtrl = require("./src/controllers/user.controller.js");
+  const roleCtrl = require("./src/controllers/role.controller.js");
 
-  const storeCtrl = require("./src/controllers/store.controller");
-  const itemCtrl = require("./src/controllers/item.controller");
-  const vendorCtrl = require("./src/controllers/vendor.controller");
+  const storeCtrl = require("./src/controllers/store.controller.js");
+  const itemCtrl = require("./src/controllers/item.controller.js");
+  const vendorCtrl = require("./src/controllers/vendor.controller.js");
 
-  const requisitionCtrl = require("./src/controllers/requisition.controller");
-  const poCtrl = require("./src/controllers/po.controller");
-  const grnCtrl = require("./src/controllers/grn.controller");
+  const requisitionCtrl = require("./src/controllers/requisition.controller.js");
+  const poCtrl = require("./src/controllers/po.controller.js");
+  const grnCtrl = require("./src/controllers/grn.controller.js");
 
   const storeReplacementCtrl =
-    require("./src/controllers/storeReplacement.controller");
+    require("./src/controllers/storeReplacement.controller.js");
   const consumptionCtrl =
-    require("./src/controllers/consumption.controller");
+    require("./src/controllers/consumption.controller.js");
 
-  // 🔥 MISSING APIs (NOW ADDED)
   const departmentCtrl =
-    require("./src/controllers/department.controller");
+    require("./src/controllers/department.controller.js");
   const resortCtrl =
-    require("./src/controllers/resort.controller");
+    require("./src/controllers/resort.controller.js");
   const recipeCtrl =
-    require("./src/controllers/recipe.controller");
+    require("./src/controllers/recipe.controller.js");
   const itemCategoryCtrl =
-    require("./src/controllers/itemCategory.controller");
+    require("./src/controllers/itemCategory.controller.js");
 
   // ==================================================
   // 🔐 AUTH
@@ -185,102 +184,6 @@ function createRouter({ useMongo, mongoose }) {
   router.get("/api/requisitions", protect,
     requirePermission("REQUISITIONS", "READ"),
     safe(requisitionCtrl.list)
-  );
-  router.get("/api/requisitions/:id", protect,
-    requirePermission("REQUISITIONS", "READ"),
-    safe(requisitionCtrl.getOne)
-  );
-  router.post("/api/requisitions", protect,
-    requirePermission("REQUISITIONS", "CREATE"),
-    safe(requisitionCtrl.create)
-  );
-  router.put("/api/requisitions/:id", protect,
-    requirePermission("REQUISITIONS", "UPDATE"),
-    safe(requisitionCtrl.update)
-  );
-  router.delete("/api/requisitions/:id", protect,
-    requirePermission("REQUISITIONS", "DELETE"),
-    safe(requisitionCtrl.remove)
-  );
-  router.post("/api/requisitions/:id/approve", protect,
-    requirePermission("REQUISITIONS", "APPROVE"),
-    safe(requisitionCtrl.approve)
-  );
-  router.post("/api/requisitions/:id/reject", protect,
-    requirePermission("REQUISITIONS", "APPROVE"),
-    safe(requisitionCtrl.reject)
-  );
-
-  // ==================================================
-  // 🛒 PO
-  // ==================================================
-  router.get("/api/po", protect,
-    requirePermission("PO", "READ"),
-    safe(poCtrl.list)
-  );
-  router.post("/api/po", protect,
-    requirePermission("PO", "CREATE"),
-    safe(poCtrl.create)
-  );
-  router.put("/api/po/:id", protect,
-    requirePermission("PO", "UPDATE"),
-    safe(poCtrl.update)
-  );
-  router.delete("/api/po/:id", protect,
-    requirePermission("PO", "DELETE"),
-    safe(poCtrl.remove)
-  );
-
-  // ==================================================
-  // 📦 GRN
-  // ==================================================
-  router.get("/api/grn", protect,
-    requirePermission("GRN", "READ"),
-    safe(grnCtrl.list)
-  );
-  router.post("/api/grn", protect,
-    requirePermission("GRN", "CREATE"),
-    safe(grnCtrl.create)
-  );
-  router.post("/api/grn/:id/close", protect,
-    requirePermission("GRN", "UPDATE"),
-    safe(grnCtrl.closeAndAddStock)
-  );
-  router.delete("/api/grn/:id", protect,
-    requirePermission("GRN", "DELETE"),
-    safe(grnCtrl.remove)
-  );
-
-  // ==================================================
-  // 🔄 STORE REPLACEMENT
-  // ==================================================
-  router.get("/api/store-replacements", protect,
-    requirePermission("STORES", "READ"),
-    safe(storeReplacementCtrl.list)
-  );
-  router.post("/api/store-replacements", protect,
-    requirePermission("STORES", "CREATE"),
-    safe(storeReplacementCtrl.create)
-  );
-  router.patch("/api/store-replacements/:id/issue-vendor", protect,
-    requirePermission("STORES", "UPDATE"),
-    safe(storeReplacementCtrl.issueToVendor)
-  );
-  router.post("/api/store-replacements/:id/create-grn", protect,
-    requirePermission("GRN", "CREATE"),
-    safe(storeReplacementCtrl.createGrnAndAddStock)
-  );
-
-  // ==================================================
-  // 🍽️ CONSUMPTION
-  // ==================================================
-  router.get("/api/consumption", protect,
-    requirePermission("REPORTS", "READ"),
-    safe(consumptionCtrl.listConsumptions || consumptionCtrl.list)
-  );
-  router.post("/api/consumption", protect,
-    requirePermission("REPORTS", "CREATE"),
-    safe(consumptionCtrl.createConsumption || consumptionCtrl.create)
   );
 
   // ==================================================
