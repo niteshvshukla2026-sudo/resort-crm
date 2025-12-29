@@ -1,13 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import "../../styles/auth.css";
-
-const API_BASE =
-  import.meta.env.VITE_API_BASE || "https://resort-crm.onrender.com";
+import { useAuth } from "../../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth(); // 🔥 IMPORTANT
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,25 +22,17 @@ const Login = () => {
         throw new Error("Email and password required");
       }
 
-      const res = await axios.post(
-        `${API_BASE}/api/auth/login`,
-        { email, password },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      // ✅ ONLY ONE LOGIN CALL (AuthContext handles token)
+      const result = await login(email, password);
 
-      // 🔥 IMPORTANT: token SAME NAME me store karo
-      if (res.data?.token) {
-        localStorage.setItem("token", res.data.token);
-      } else {
-        throw new Error("Token not received from server");
+      if (!result?.success) {
+        throw new Error(result?.error || "Login failed");
       }
 
       navigate("/super-admin/dashboard");
     } catch (err) {
       console.error("LOGIN ERROR ❌", err);
-      setError(err.response?.data?.message || err.message || "Login failed");
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
