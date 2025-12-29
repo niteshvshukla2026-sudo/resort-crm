@@ -1,28 +1,31 @@
 // backend/server_router.cjs
 // ==================================================
-// 🔥 FINAL CONSOLIDATED ROUTER (SAFE & CRASH-PROOF)
+// 🔥 FINAL CONSOLIDATED ROUTER (CRASH-PROOF)
 // ==================================================
 
 const express = require("express");
 
-/**
- * createRouter
- * @param {Object} opts
- * @param {boolean} opts.useMongo
- * @param {import("mongoose")} opts.mongoose
- */
+// 🔒 SAFE HANDLER — undefined callback se server crash nahi hoga
+const safe = (fn) => {
+  if (typeof fn !== "function") {
+    return (req, res) =>
+      res.status(500).json({ message: "Route handler not implemented" });
+  }
+  return fn;
+};
+
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
 
   // ==================================================
-  // 🔥 LOAD ALL MODELS
+  // 🔥 LOAD MODELS
   // ==================================================
   if (useMongo && mongoose) {
     require("./src/models/index.cjs");
   }
 
   // ==================================================
-  // 🔐 AUTH & PERMISSION MIDDLEWARE
+  // 🔐 AUTH MIDDLEWARE
   // ==================================================
   const authMw = require("./src/middlewares/auth.middleware");
   const protect = authMw.protect;
@@ -46,269 +49,123 @@ function createRouter({ useMongo, mongoose }) {
   // ==================================================
   // 🔐 AUTH
   // ==================================================
-  router.post("/api/auth/login", authCtrl.login);
-  router.get("/api/auth/me", protect, authCtrl.me);
+  router.post("/api/auth/login", safe(authCtrl.login));
+  router.get("/api/auth/me", protect, safe(authCtrl.me));
 
   // ==================================================
   // 👤 USERS
   // ==================================================
-  router.get(
-    "/api/users",
-    protect,
-    requirePermission("USERS", "READ"),
-    userCtrl.listUsers || userCtrl.list
-  );
-
-  router.post(
-    "/api/users",
-    protect,
-    requirePermission("USERS", "CREATE"),
-    userCtrl.createUser || userCtrl.create
-  );
-
-  router.put(
-    "/api/users/:id",
-    protect,
-    requirePermission("USERS", "UPDATE"),
-    userCtrl.updateUser || userCtrl.update
-  );
-
-  router.delete(
-    "/api/users/:id",
-    protect,
-    requirePermission("USERS", "DELETE"),
-    userCtrl.deleteUser || userCtrl.remove
-  );
+  router.get("/api/users", protect, requirePermission("USERS","READ"),
+    safe(userCtrl.listUsers || userCtrl.list));
+  router.post("/api/users", protect, requirePermission("USERS","CREATE"),
+    safe(userCtrl.createUser || userCtrl.create));
+  router.put("/api/users/:id", protect, requirePermission("USERS","UPDATE"),
+    safe(userCtrl.updateUser || userCtrl.update));
+  router.delete("/api/users/:id", protect, requirePermission("USERS","DELETE"),
+    safe(userCtrl.deleteUser || userCtrl.remove));
 
   // ==================================================
   // 🧑‍⚖️ ROLES
   // ==================================================
-  router.get(
-    "/api/roles",
-    protect,
-    requirePermission("ROLES", "READ"),
-    roleCtrl.list
-  );
-  router.post(
-    "/api/roles",
-    protect,
-    requirePermission("ROLES", "CREATE"),
-    roleCtrl.create
-  );
-  router.put(
-    "/api/roles/:id",
-    protect,
-    requirePermission("ROLES", "UPDATE"),
-    roleCtrl.update
-  );
+  router.get("/api/roles", protect, requirePermission("ROLES","READ"),
+    safe(roleCtrl.list));
+  router.post("/api/roles", protect, requirePermission("ROLES","CREATE"),
+    safe(roleCtrl.create));
+  router.put("/api/roles/:id", protect, requirePermission("ROLES","UPDATE"),
+    safe(roleCtrl.update));
 
   // ==================================================
   // 🏬 STORES
   // ==================================================
-  router.get(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "READ"),
-    storeCtrl.list
-  );
-  router.post(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "CREATE"),
-    storeCtrl.create
-  );
-  router.put(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "UPDATE"),
-    storeCtrl.update
-  );
-  router.delete(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "DELETE"),
-    storeCtrl.remove
-  );
+  router.get("/api/stores", protect, requirePermission("STORES","READ"),
+    safe(storeCtrl.list));
+  router.post("/api/stores", protect, requirePermission("STORES","CREATE"),
+    safe(storeCtrl.create));
+  router.put("/api/stores/:id", protect, requirePermission("STORES","UPDATE"),
+    safe(storeCtrl.update));
+  router.delete("/api/stores/:id", protect, requirePermission("STORES","DELETE"),
+    safe(storeCtrl.remove));
 
   // ==================================================
   // 📦 ITEMS
   // ==================================================
-  router.get(
-    "/api/items",
-    protect,
-    requirePermission("ITEMS", "READ"),
-    itemCtrl.list
-  );
-  router.post(
-    "/api/items",
-    protect,
-    requirePermission("ITEMS", "CREATE"),
-    itemCtrl.create
-  );
+  router.get("/api/items", protect, requirePermission("ITEMS","READ"),
+    safe(itemCtrl.list));
+  router.post("/api/items", protect, requirePermission("ITEMS","CREATE"),
+    safe(itemCtrl.create));
 
   // ==================================================
   // 🚚 VENDORS
   // ==================================================
-  router.get(
-    "/api/vendors",
-    protect,
-    requirePermission("VENDORS", "READ"),
-    vendorCtrl.list
-  );
-  router.post(
-    "/api/vendors",
-    protect,
-    requirePermission("VENDORS", "CREATE"),
-    vendorCtrl.create
-  );
+  router.get("/api/vendors", protect, requirePermission("VENDORS","READ"),
+    safe(vendorCtrl.list));
+  router.post("/api/vendors", protect, requirePermission("VENDORS","CREATE"),
+    safe(vendorCtrl.create));
 
   // ==================================================
   // 🧾 REQUISITIONS
   // ==================================================
-  router.get(
-    "/api/requisitions",
-    protect,
-    requirePermission("REQUISITIONS", "READ"),
-    requisitionCtrl.list
-  );
-  router.get(
-    "/api/requisitions/:id",
-    protect,
-    requirePermission("REQUISITIONS", "READ"),
-    requisitionCtrl.getOne
-  );
-  router.post(
-    "/api/requisitions",
-    protect,
-    requirePermission("REQUISITIONS", "CREATE"),
-    requisitionCtrl.create
-  );
-  router.put(
-    "/api/requisitions/:id",
-    protect,
-    requirePermission("REQUISITIONS", "UPDATE"),
-    requisitionCtrl.update
-  );
-  router.delete(
-    "/api/requisitions/:id",
-    protect,
-    requirePermission("REQUISITIONS", "DELETE"),
-    requisitionCtrl.remove
-  );
+  router.get("/api/requisitions", protect, requirePermission("REQUISITIONS","READ"),
+    safe(requisitionCtrl.list));
+  router.get("/api/requisitions/:id", protect, requirePermission("REQUISITIONS","READ"),
+    safe(requisitionCtrl.getOne));
+  router.post("/api/requisitions", protect, requirePermission("REQUISITIONS","CREATE"),
+    safe(requisitionCtrl.create));
+  router.put("/api/requisitions/:id", protect, requirePermission("REQUISITIONS","UPDATE"),
+    safe(requisitionCtrl.update));
+  router.delete("/api/requisitions/:id", protect, requirePermission("REQUISITIONS","DELETE"),
+    safe(requisitionCtrl.remove));
 
-  router.post(
-    "/api/requisitions/:id/approve",
-    protect,
-    requirePermission("REQUISITIONS", "APPROVE"),
-    requisitionCtrl.approve
-  );
-  router.post(
-    "/api/requisitions/:id/reject",
-    protect,
-    requirePermission("REQUISITIONS", "APPROVE"),
-    requisitionCtrl.reject
-  );
+  router.post("/api/requisitions/:id/approve", protect,
+    requirePermission("REQUISITIONS","APPROVE"), safe(requisitionCtrl.approve));
+  router.post("/api/requisitions/:id/reject", protect,
+    requirePermission("REQUISITIONS","APPROVE"), safe(requisitionCtrl.reject));
 
   // ==================================================
   // 🛒 PO
   // ==================================================
-  router.get(
-    "/api/po",
-    protect,
-    requirePermission("PO", "READ"),
-    poCtrl.list
-  );
-  router.post(
-    "/api/po",
-    protect,
-    requirePermission("PO", "CREATE"),
-    poCtrl.create
-  );
-  router.put(
-    "/api/po/:id",
-    protect,
-    requirePermission("PO", "UPDATE"),
-    poCtrl.update
-  );
-  router.delete(
-    "/api/po/:id",
-    protect,
-    requirePermission("PO", "DELETE"),
-    poCtrl.remove
-  );
+  router.get("/api/po", protect, requirePermission("PO","READ"),
+    safe(poCtrl.list));
+  router.post("/api/po", protect, requirePermission("PO","CREATE"),
+    safe(poCtrl.create));
+  router.put("/api/po/:id", protect, requirePermission("PO","UPDATE"),
+    safe(poCtrl.update));
+  router.delete("/api/po/:id", protect, requirePermission("PO","DELETE"),
+    safe(poCtrl.remove));
 
   // ==================================================
   // 📦 GRN
   // ==================================================
-  router.get(
-    "/api/grn",
-    protect,
-    requirePermission("GRN", "READ"),
-    grnCtrl.list
-  );
-  router.post(
-    "/api/grn",
-    protect,
-    requirePermission("GRN", "CREATE"),
-    grnCtrl.create
-  );
-  router.post(
-    "/api/grn/:id/close",
-    protect,
-    requirePermission("GRN", "UPDATE"),
-    grnCtrl.closeAndAddStock
-  );
-  router.delete(
-    "/api/grn/:id",
-    protect,
-    requirePermission("GRN", "DELETE"),
-    grnCtrl.remove
-  );
+  router.get("/api/grn", protect, requirePermission("GRN","READ"),
+    safe(grnCtrl.list));
+  router.post("/api/grn", protect, requirePermission("GRN","CREATE"),
+    safe(grnCtrl.create));
+  router.post("/api/grn/:id/close", protect, requirePermission("GRN","UPDATE"),
+    safe(grnCtrl.closeAndAddStock));
+  router.delete("/api/grn/:id", protect, requirePermission("GRN","DELETE"),
+    safe(grnCtrl.remove));
 
   // ==================================================
   // 🔄 STORE REPLACEMENT
   // ==================================================
-  router.get(
-    "/api/store-replacements",
-    protect,
-    requirePermission("STORES", "READ"),
-    storeReplacementCtrl.list
-  );
-  router.post(
-    "/api/store-replacements",
-    protect,
-    requirePermission("STORES", "CREATE"),
-    storeReplacementCtrl.create
-  );
-  router.patch(
-    "/api/store-replacements/:id/issue-vendor",
-    protect,
-    requirePermission("STORES", "UPDATE"),
-    storeReplacementCtrl.issueToVendor
-  );
-  router.post(
-    "/api/store-replacements/:id/create-grn",
-    protect,
-    requirePermission("GRN", "CREATE"),
-    storeReplacementCtrl.createGrnAndAddStock
-  );
+  router.get("/api/store-replacements", protect, requirePermission("STORES","READ"),
+    safe(storeReplacementCtrl.list));
+  router.post("/api/store-replacements", protect, requirePermission("STORES","CREATE"),
+    safe(storeReplacementCtrl.create));
+  router.patch("/api/store-replacements/:id/issue-vendor", protect,
+    requirePermission("STORES","UPDATE"),
+    safe(storeReplacementCtrl.issueToVendor));
+  router.post("/api/store-replacements/:id/create-grn", protect,
+    requirePermission("GRN","CREATE"),
+    safe(storeReplacementCtrl.createGrnAndAddStock));
 
   // ==================================================
   // 🍽️ CONSUMPTION
   // ==================================================
-  router.get(
-    "/api/consumption",
-    protect,
-    requirePermission("REPORTS", "READ"),
-    consumptionCtrl.listConsumptions || consumptionCtrl.list
-  );
-
-  router.post(
-    "/api/consumption",
-    protect,
-    requirePermission("REPORTS", "CREATE"),
-    consumptionCtrl.createConsumption || consumptionCtrl.create
-  );
+  router.get("/api/consumption", protect, requirePermission("REPORTS","READ"),
+    safe(consumptionCtrl.listConsumptions || consumptionCtrl.list));
+  router.post("/api/consumption", protect, requirePermission("REPORTS","CREATE"),
+    safe(consumptionCtrl.createConsumption || consumptionCtrl.create));
 
   // ==================================================
   // ❤️ HEALTH
