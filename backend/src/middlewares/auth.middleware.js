@@ -35,12 +35,13 @@ const protect = async (req, res, next) => {
       process.env.JWT_SECRET || "dev_secret_key"
     );
 
-    // ✅ Fetch user
+    // ⚠️ IMPORTANT: decoded.id MUST match login token payload
     const user = await User.findById(decoded.id)
       .select("-password")
       .populate("role");
 
-    if (!user || !user.isActive) {
+    // 🔥 FIX HERE (status check)
+    if (!user || user.status !== "ACTIVE") {
       return res.status(401).json({
         message: "User not active or not found",
       });
@@ -51,7 +52,8 @@ const protect = async (req, res, next) => {
       id: user._id,
       role: user.role,
       resorts: user.resorts || [],
-      isActive: user.isActive,
+      stores: user.stores || [],
+      status: user.status,
     };
 
     next();
@@ -65,10 +67,10 @@ const protect = async (req, res, next) => {
 
 /**
  * 🔐 PERMISSION MIDDLEWARE
+ * (abhi allow all, baad me tighten karenge)
  */
 const requirePermission = (module, action) => {
   return (req, res, next) => {
-    // TEMP: allow all (logic baad me tighten karenge)
     next();
   };
 };
