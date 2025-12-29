@@ -1,6 +1,6 @@
 // backend/server_router.cjs
 // ==================================================
-// 🔥 FINAL CONSOLIDATED ROUTER (STABLE & PRODUCTION SAFE)
+// 🔥 FINAL SERVER ROUTER — NO PERMISSION SYSTEM
 // ==================================================
 
 const express = require("express");
@@ -25,12 +25,9 @@ function createRouter({ useMongo, mongoose }) {
   }
 
   // ==================================================
-  // 🔐 AUTH MIDDLEWARE
+  // 🔐 AUTH MIDDLEWARE (ONLY PROTECT)
   // ==================================================
-  const {
-    protect,
-    requirePermission,
-  } = require("./src/middlewares/auth.middleware");
+  const { protect } = require("./src/middlewares/auth.middleware");
 
   // ==================================================
   // 📦 CONTROLLERS
@@ -64,33 +61,10 @@ function createRouter({ useMongo, mongoose }) {
   // ==================================================
   // 🏖️ RESORTS
   // ==================================================
-  router.get(
-    "/api/resorts",
-    protect,
-    requirePermission("RESORTS", "READ"),
-    safe(resortCtrl.listResorts)
-  );
-
-  router.post(
-    "/api/resorts",
-    protect,
-    requirePermission("RESORTS", "CREATE"),
-    safe(resortCtrl.createResort)
-  );
-
-  router.put(
-    "/api/resorts/:id",
-    protect,
-    requirePermission("RESORTS", "UPDATE"),
-    safe(resortCtrl.updateResort)
-  );
-
-  router.delete(
-    "/api/resorts/:id",
-    protect,
-    requirePermission("RESORTS", "DELETE"),
-    safe(resortCtrl.deleteResort)
-  );
+  router.get("/api/resorts", protect, safe(resortCtrl.listResorts));
+  router.post("/api/resorts", protect, safe(resortCtrl.createResort));
+  router.put("/api/resorts/:id", protect, safe(resortCtrl.updateResort));
+  router.delete("/api/resorts/:id", protect, safe(resortCtrl.deleteResort));
 
   // ==================================================
   // 🏢 DEPARTMENTS
@@ -98,98 +72,47 @@ function createRouter({ useMongo, mongoose }) {
   router.get(
     "/api/departments",
     protect,
-    requirePermission("DEPARTMENTS", "READ"),
     safe(departmentCtrl.listDepartments)
   );
-
   router.post(
     "/api/departments",
     protect,
-    requirePermission("DEPARTMENTS", "CREATE"),
     safe(departmentCtrl.createDepartment)
   );
-
   router.put(
     "/api/departments/:id",
     protect,
-    requirePermission("DEPARTMENTS", "UPDATE"),
     safe(departmentCtrl.updateDepartment)
   );
-
   router.delete(
     "/api/departments/:id",
     protect,
-    requirePermission("DEPARTMENTS", "DELETE"),
     safe(departmentCtrl.deleteDepartment)
   );
 
   // ==================================================
   // 🏬 STORES
   // ==================================================
-  router.get(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "READ"),
-    safe(storeCtrl.list)
-  );
-
-  router.post(
-    "/api/stores",
-    protect,
-    requirePermission("STORES", "CREATE"),
-    safe(storeCtrl.create)
-  );
-
-  router.put(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "UPDATE"),
-    safe(storeCtrl.update)
-  );
-
-  router.delete(
-    "/api/stores/:id",
-    protect,
-    requirePermission("STORES", "DELETE"),
-    safe(storeCtrl.remove)
-  );
+  router.get("/api/stores", protect, safe(storeCtrl.list));
+  router.post("/api/stores", protect, safe(storeCtrl.create));
+  router.put("/api/stores/:id", protect, safe(storeCtrl.update));
+  router.delete("/api/stores/:id", protect, safe(storeCtrl.remove));
 
   // ==================================================
   // 🚚 VENDORS
   // ==================================================
-  router.get(
-    "/api/vendors",
-    protect,
-    requirePermission("VENDORS", "READ"),
-    safe(vendorCtrl.list)
-  );
-
-  router.post(
-    "/api/vendors",
-    protect,
-    requirePermission("VENDORS", "CREATE"),
-    safe(vendorCtrl.create)
-  );
+  router.get("/api/vendors", protect, safe(vendorCtrl.list));
+  router.post("/api/vendors", protect, safe(vendorCtrl.create));
 
   // ==================================================
   // 🍳 RECIPES
   // ==================================================
-  router.get(
-    "/api/recipes",
-    protect,
-    requirePermission("RECIPES", "READ"),
-    safe(recipeCtrl.list)
-  );
+  router.get("/api/recipes", protect, safe(recipeCtrl.list));
 
   // ==================================================
   // 🧾 REQUISITIONS
   // ==================================================
-  router.get(
-    "/api/requisitions",
-    protect,
-    requirePermission("REQUISITIONS", "READ"),
-    safe(requisitionCtrl.list)
-  );
+  router.get("/api/requisitions", protect, safe(requisitionCtrl.list));
 
   // ==================================================
   // ❤️ HEALTH

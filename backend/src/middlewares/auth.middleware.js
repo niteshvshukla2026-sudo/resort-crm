@@ -1,3 +1,5 @@
+// ✅ PURE CJS — SIMPLE AUTH ONLY (NO PERMISSIONS)
+
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
@@ -23,20 +25,19 @@ const protect = async (req, res, next) => {
       process.env.JWT_SECRET || "dev_secret_key"
     );
 
-    const user = await User.findById(decoded.id)
-      .select("-password")
-      .populate("role");
+    const user = await User.findById(decoded.id).select("-password");
 
     if (!user || user.isActive === false) {
       return res.status(401).json({ message: "User inactive or not found" });
     }
 
+    // 🔥 ONLY ATTACH USER — NO PERMISSION LOGIC
     req.user = {
       id: user._id,
-      role: user.role?.name || user.role,
-      isActive: user.isActive,
+      role: user.role,
       resorts: user.resorts || [],
       stores: user.stores || [],
+      isActive: user.isActive,
     };
 
     next();
@@ -46,16 +47,4 @@ const protect = async (req, res, next) => {
   }
 };
 
-// ✅ MUST BE A FUNCTION
-const requirePermission = (module, action) => {
-  return (req, res, next) => {
-    // TEMP: allow all
-    next();
-  };
-};
-
-// ✅ SINGLE EXPORT (IMPORTANT)
-module.exports = {
-  protect,
-  requirePermission,
-};
+module.exports = { protect };
