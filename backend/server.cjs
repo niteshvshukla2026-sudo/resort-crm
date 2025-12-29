@@ -9,7 +9,7 @@ const cors = require("cors");
 async function start() {
   const app = express();
 
-  // ---------------- CORS ----------------
+  // ================= CORS =================
   const frontend = (process.env.FRONTEND_URL || "").replace(/\/+$/, "");
   app.use(
     cors({
@@ -20,29 +20,28 @@ async function start() {
 
   app.use(express.json());
 
-  app.get("/_health", (req, res) => res.json({ ok: true }));
+  app.get("/_health", (req, res) => {
+    res.json({ ok: true });
+  });
 
-  // ---------------- DB ----------------
+  // ================= DB =================
   let mongoose = null;
   let useMongo = false;
 
   if (process.env.MONGO_URI) {
     mongoose = require("mongoose");
     await mongoose.connect(process.env.MONGO_URI);
-
-    // 🔥🔥🔥 THIS WAS MISSING (ROOT FIX)
-    global.mongoose = mongoose;
-
     useMongo = true;
-    console.log("✅ Mongo connected & global.mongoose set");
+    console.log("✅ MongoDB connected");
   } else {
-    console.log("⚠️ MONGO_URI not found, running without DB");
+    console.warn("⚠️ Running without MongoDB (memory mode)");
   }
 
-  // ---------------- ROUTER ----------------
-  const { createRouter } = require("./server_router.cjs");
-  app.use(createRouter({ useMongo, mongoose }));
+  // ================= ROUTER =================
+  const { createRouter } = require("./server_route.cjs");
+  app.use(createRouter({ mongoose, useMongo }));
 
+  // ================= START =================
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () =>
     console.log(`🚀 Server running on port ${PORT}`)
@@ -50,6 +49,5 @@ async function start() {
 }
 
 start().catch((err) => {
-  console.error("SERVER START ERROR ❌", err);
-  process.exit(1);
+  console.error("❌ Server failed to start", err);
 });

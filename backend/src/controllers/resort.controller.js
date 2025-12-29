@@ -1,72 +1,63 @@
-// backend/src/controllers/resort.controller.js
-import Resort from "../models/resort.model.js";
+const mongoose = require("mongoose");
 
-export const listResorts = async (req, res) => {
+exports.listResorts = async (req, res) => {
   try {
-    // simple filters: name, locationZone, status etc via query params
-    const filter = {};
-    if (req.query.name) filter.name = { $regex: req.query.name, $options: "i" };
-    if (req.query.locationZone) filter.locationZone = { $regex: req.query.locationZone, $options: "i" };
-    if (req.query.status) filter.isActive = req.query.status === "active";
+    const Resort = mongoose.models.Resort;
 
-    const resorts = await Resort.find(filter).sort({ createdAt: -1 }).lean();
-    return res.json(resorts);
+    const resorts = await Resort.find().sort({ createdAt: -1 }).lean();
+
+    res.json(resorts);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("LIST RESORTS ERROR", err);
+    res.status(500).json({ message: "Failed to load resorts" });
   }
 };
 
-export const getResort = async (req, res) => {
+exports.createResort = async (req, res) => {
   try {
-    const r = await Resort.findById(req.params.id).lean();
-    if (!r) return res.status(404).json({ message: "Not found" });
-    res.json(r);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+    const Resort = mongoose.models.Resort;
 
-export const createResort = async (req, res) => {
-  try {
-    const payload = req.body;
-    // basic validation server-side too
-    if (!payload.name || !payload.address || !payload.locationZone || !payload.ownerName || !payload.ownerContact) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-    // ensure phone digits only
-    payload.ownerContact = (payload.ownerContact || "").replace(/\D/g, "");
-    if (payload.renewalDate) payload.renewalDate = new Date(payload.renewalDate);
-    const created = await Resort.create(payload);
-    res.status(201).json(created);
+    const doc = await Resort.create(req.body);
+    res.status(201).json(doc);
   } catch (err) {
-    console.error(err);
+    console.error("CREATE RESORT ERROR", err);
     res.status(500).json({ message: "Failed to create resort" });
   }
 };
 
-export const updateResort = async (req, res) => {
+exports.updateResort = async (req, res) => {
   try {
-    const payload = req.body;
-    if (payload.ownerContact) payload.ownerContact = payload.ownerContact.replace(/\D/g, "");
-    if (payload.renewalDate) payload.renewalDate = new Date(payload.renewalDate);
-    const updated = await Resort.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true }).lean();
-    if (!updated) return res.status(404).json({ message: "Not found" });
+    const Resort = mongoose.models.Resort;
+
+    const updated = await Resort.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Resort not found" });
+    }
+
     res.json(updated);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to update" });
+    console.error("UPDATE RESORT ERROR", err);
+    res.status(500).json({ message: "Failed to update resort" });
   }
 };
 
-export const deleteResort = async (req, res) => {
+exports.deleteResort = async (req, res) => {
   try {
-    const removed = await Resort.findByIdAndDelete(req.params.id);
-    if (!removed) return res.status(404).json({ message: "Not found" });
-    res.json({ success: true });
+    const Resort = mongoose.models.Resort;
+
+    const deleted = await Resort.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Resort not found" });
+    }
+
+    res.json({ ok: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to delete" });
+    console.error("DELETE RESORT ERROR", err);
+    res.status(500).json({ message: "Failed to delete resort" });
   }
 };

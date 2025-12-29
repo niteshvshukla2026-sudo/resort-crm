@@ -1,66 +1,83 @@
-import ItemCategory from "../models/itemCategory.js";
-import Department from "../models/Department.js";
+const mongoose = require("mongoose");
 
-// GET all categories
-export const getItemCategories = async (req, res) => {
+exports.listItemCategories = async (req, res) => {
   try {
-    const categories = await ItemCategory.find().populate("department", "name");
-    res.json(categories);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const ItemCategory = mongoose.models.ItemCategory;
+
+    const docs = await ItemCategory.find()
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(docs);
+  } catch (err) {
+    console.error("LIST ITEM CATEGORY ERROR", err);
+    res.status(500).json({ message: "Failed to load item categories" });
   }
 };
 
-// CREATE category
-export const createItemCategory = async (req, res) => {
+exports.createItemCategory = async (req, res) => {
   try {
-    const { name, code, department } = req.body;
+    const ItemCategory = mongoose.models.ItemCategory;
 
-    if (!name || !department) {
-      return res.status(400).json({ message: "Name & Department required" });
-    }
+    const payload = {
+      name: req.body.name,
+      code: req.body.code,
+      departmentCategory:
+        req.body.departmentCategory ||
+        req.body.department ||
+        req.body.dept,
+    };
 
-    const newCat = new ItemCategory({
-      name,
-      code,
-      department,
-    });
-
-    await newCat.save();
-
-    const populated = await newCat.populate("department", "name");
-
-    res.json(populated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const doc = await ItemCategory.create(payload);
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error("CREATE ITEM CATEGORY ERROR", err);
+    res.status(500).json({ message: "Failed to create item category" });
   }
 };
 
-// UPDATE category
-export const updateItemCategory = async (req, res) => {
+exports.updateItemCategory = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, code, department } = req.body;
+    const ItemCategory = mongoose.models.ItemCategory;
+
+    const payload = {
+      name: req.body.name,
+      code: req.body.code,
+      departmentCategory:
+        req.body.departmentCategory ||
+        req.body.department ||
+        req.body.dept,
+    };
 
     const updated = await ItemCategory.findByIdAndUpdate(
-      id,
-      { name, code, department },
+      req.params.id,
+      { $set: payload },
       { new: true }
-    ).populate("department", "name");
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Item category not found" });
+    }
 
     res.json(updated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("UPDATE ITEM CATEGORY ERROR", err);
+    res.status(500).json({ message: "Failed to update item category" });
   }
 };
 
-// DELETE category
-export const deleteItemCategory = async (req, res) => {
+exports.deleteItemCategory = async (req, res) => {
   try {
-    const { id } = req.params;
-    await ItemCategory.findByIdAndDelete(id);
+    const ItemCategory = mongoose.models.ItemCategory;
+
+    const deleted = await ItemCategory.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Item category not found" });
+    }
+
     res.json({ ok: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("DELETE ITEM CATEGORY ERROR", err);
+    res.status(500).json({ message: "Failed to delete item category" });
   }
 };

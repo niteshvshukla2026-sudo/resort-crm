@@ -1,122 +1,84 @@
-// backend/controllers/vendorController.js
 const mongoose = require("mongoose");
-const Vendor = require("../models/vendorModel");
 
-const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
-
-// GET /api/vendors  -> array
-exports.getVendors = async (req, res) => {
+exports.listVendors = async (req, res) => {
   try {
-    const vendors = await Vendor.find().sort({ createdAt: -1 });
-    return res.json(vendors);
+    const Vendor = mongoose.models.Vendor;
+
+    const vendors = await Vendor.find()
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(vendors);
   } catch (err) {
-    console.error("getVendors error", err);
-    return res.status(500).json({ message: "Failed to fetch vendors" });
+    console.error("LIST VENDORS ERROR", err);
+    res.status(500).json({ message: "Failed to load vendors" });
   }
 };
 
-// GET /api/vendors/:idOrCode
-exports.getVendorByIdOrCode = async (req, res) => {
-  const { id } = req.params;
-  try {
-    let vendor;
-    if (isObjectId(id)) {
-      vendor = await Vendor.findById(id);
-    } else {
-      vendor = await Vendor.findOne({ code: id.toUpperCase() });
-    }
-
-    if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
-
-    return res.json(vendor);
-  } catch (err) {
-    console.error("getVendorByIdOrCode error", err);
-    return res.status(500).json({ message: "Failed to fetch vendor" });
-  }
-};
-
-// POST /api/vendors
 exports.createVendor = async (req, res) => {
   try {
-    const data = { ...req.body };
+    const Vendor = mongoose.models.Vendor;
 
-    // normalize fields like frontend
-    if (data.code) data.code = String(data.code).toUpperCase();
-    if (!Array.isArray(data.categories)) data.categories = data.categories ? [data.categories] : [];
-    if (!Array.isArray(data.resorts)) data.resorts = data.resorts ? [data.resorts] : [];
+    const payload = { ...req.body };
 
-    const vendor = await Vendor.create(data);
-    return res.status(201).json(vendor);
-  } catch (err) {
-    console.error("createVendor error", err);
-    if (err.code === 11000 && err.keyPattern && err.keyPattern.code) {
-      return res.status(400).json({ message: "Vendor code already exists" });
+    // backward compatibility
+    if (!payload.categories && payload.category) {
+      payload.categories = [payload.category];
     }
-    return res.status(500).json({ message: "Failed to create vendor" });
+    if (!payload.resorts && payload.resort) {
+      payload.resorts = [payload.resort];
+    }
+
+    const doc = await Vendor.create(payload);
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error("CREATE VENDOR ERROR", err);
+    res.status(500).json({ message: "Failed to create vendor" });
   }
 };
 
-// PUT /api/vendors/:idOrCode
 exports.updateVendor = async (req, res) => {
-  const { id } = req.params;
   try {
-    const data = { ...req.body };
+    const Vendor = mongoose.models.Vendor;
 
-    if (data.code) data.code = String(data.code).toUpperCase();
-    if (data.categories && !Array.isArray(data.categories)) {
-      data.categories = [data.categories];
-    }
-    if (data.resorts && !Array.isArray(data.resorts)) {
-      data.resorts = [data.resorts];
-    }
+    const payload = { ...req.body };
 
-    let query;
-    if (isObjectId(id)) {
-      query = { _id: id };
-    } else {
-      query = { code: id.toUpperCase() };
+    if (!payload.categories && payload.category) {
+      payload.categories = [payload.category];
+    }
+    if (!payload.resorts && payload.resort) {
+      payload.resorts = [payload.resort];
     }
 
-    const vendor = await Vendor.findOneAndUpdate(query, data, {
-      new: true,
-      runValidators: true,
-    });
+    const updated = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      { new: true }
+    );
 
-    if (!vendor) {
+    if (!updated) {
       return res.status(404).json({ message: "Vendor not found" });
     }
 
-    return res.json(vendor);
+    res.json(updated);
   } catch (err) {
-    console.error("updateVendor error", err);
-    if (err.code === 11000 && err.keyPattern && err.keyPattern.code) {
-      return res.status(400).json({ message: "Vendor code already exists" });
-    }
-    return res.status(500).json({ message: "Failed to update vendor" });
+    console.error("UPDATE VENDOR ERROR", err);
+    res.status(500).json({ message: "Failed to update vendor" });
   }
 };
 
-// DELETE /api/vendors/:idOrCode
 exports.deleteVendor = async (req, res) => {
-  const { id } = req.params;
   try {
-    let query;
-    if (isObjectId(id)) {
-      query = { _id: id };
-    } else {
-      query = { code: id.toUpperCase() };
-    }
+    const Vendor = mongoose.models.Vendor;
 
-    const vendor = await Vendor.findOneAndDelete(query);
-    if (!vendor) {
+    const deleted = await Vendor.findByIdAndDelete(req.params.id);
+    if (!deleted) {
       return res.status(404).json({ message: "Vendor not found" });
     }
 
-    return res.json({ message: "Vendor deleted", id: vendor._id, code: vendor.code });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("deleteVendor error", err);
-    return res.status(500).json({ message: "Failed to delete vendor" });
+    console.error("DELETE VENDOR ERROR", err);
+    res.status(500).json({ message: "Failed to delete vendor" });
   }
 };

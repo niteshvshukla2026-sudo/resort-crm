@@ -1,83 +1,83 @@
-import Item from "../models/Item.js";
+const mongoose = require("mongoose");
 
-export const getItems = async (req, res) => {
+exports.listItems = async (req, res) => {
   try {
-    const items = await Item.find().populate("itemCategory", "name");
+    const Item = mongoose.models.Item;
+
+    const items = await Item.find()
+      .sort({ createdAt: -1 })
+      .lean();
+
     res.json(items);
-  } catch (error) {
-    console.error("getItems error", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("LIST ITEMS ERROR", err);
+    res.status(500).json({ message: "Failed to load items" });
   }
 };
 
-export const createItem = async (req, res) => {
+exports.createItem = async (req, res) => {
   try {
-    const { code, name, itemCategory, uom, brand, indicativePrice } = req.body;
-
-    if (!code || !name || !uom) {
-      return res
-        .status(400)
-        .json({ message: "Code, Name & UOM are required" });
-    }
+    const Item = mongoose.models.Item;
 
     const payload = {
-      code: code.trim(),
-      name: name.trim(),
-      uom: uom.trim(),
+      name: req.body.name,
+      code: req.body.code,
+      itemCategory: req.body.itemCategory,
+      uom: req.body.uom,
+      brand: req.body.brand,
+      indicativePrice: req.body.indicativePrice,
     };
 
-    if (itemCategory) payload.itemCategory = itemCategory;
-    if (brand) payload.brand = brand;
-    if (indicativePrice !== undefined && indicativePrice !== null) {
-      payload.indicativePrice = Number(indicativePrice);
-    }
-
-    const created = await Item.create(payload);
-    const populated = await created.populate("itemCategory", "name");
-    res.status(201).json(populated);
-  } catch (error) {
-    console.error("createItem error", error);
-    res.status(500).json({ message: error.message });
+    const doc = await Item.create(payload);
+    res.status(201).json(doc);
+  } catch (err) {
+    console.error("CREATE ITEM ERROR", err);
+    res.status(500).json({ message: "Failed to create item" });
   }
 };
 
-export const updateItem = async (req, res) => {
+exports.updateItem = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { code, name, itemCategory, uom, brand, indicativePrice, isActive } =
-      req.body;
+    const Item = mongoose.models.Item;
 
-    const item = await Item.findById(id);
-    if (!item) {
+    const payload = {
+      name: req.body.name,
+      code: req.body.code,
+      itemCategory: req.body.itemCategory,
+      uom: req.body.uom,
+      brand: req.body.brand,
+      indicativePrice: req.body.indicativePrice,
+    };
+
+    const updated = await Item.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      { new: true }
+    );
+
+    if (!updated) {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    if (code) item.code = code.trim();
-    if (name) item.name = name.trim();
-    if (uom) item.uom = uom.trim();
-    if (itemCategory) item.itemCategory = itemCategory;
-    if (brand !== undefined) item.brand = brand;
-    if (indicativePrice !== undefined && indicativePrice !== null) {
-      item.indicativePrice = Number(indicativePrice);
-    }
-    if (typeof isActive === "boolean") item.isActive = isActive;
-
-    await item.save();
-    const populated = await item.populate("itemCategory", "name");
-    res.json(populated);
-  } catch (error) {
-    console.error("updateItem error", error);
-    res.status(500).json({ message: error.message });
+    res.json(updated);
+  } catch (err) {
+    console.error("UPDATE ITEM ERROR", err);
+    res.status(500).json({ message: "Failed to update item" });
   }
 };
 
-export const deleteItem = async (req, res) => {
+exports.deleteItem = async (req, res) => {
   try {
-    const { id } = req.params;
-    await Item.findByIdAndDelete(id);
+    const Item = mongoose.models.Item;
+
+    const deleted = await Item.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
     res.json({ ok: true });
-  } catch (error) {
-    console.error("deleteItem error", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("DELETE ITEM ERROR", err);
+    res.status(500).json({ message: "Failed to delete item" });
   }
 };

@@ -1,298 +1,151 @@
-// src/controllers/requisition.controller.js
-const mongoose = require('mongoose');
-const Requisition = require('../models/requisition.model');
-const Store = require('../models/store.model');
-const GRN = require('../models/Grn'); // ✅ Correct GRN model (poId OPTIONAL)
+const mongoose = require("mongoose");
 
-function generateRequisitionNo() {
-  return `REQ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+const Requisition = () => mongoose.models.Requisition;
+
+/* ===============================
+   Helpers
+================================ */
+function makeReqNo() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const rand = Math.floor(100 + Math.random() * 900);
+  return `REQ-${y}${m}${day}-${rand}`;
 }
 
-const isValidId = (id) => mongoose.Types.ObjectId.isValid(String(id));
-
-/**
- * GET /api/requisitions
- */
-exports.getAll = async (req, res) => {
+/* ===============================
+   LIST
+================================ */
+exports.listRequisitions = async (req, res) => {
   try {
-    const list = await Requisition.find()
-      .populate('vendor')
-      .populate('fromStore')
-      .populate('toStore')
-      .populate('store')
-      .populate('resort')
-      .populate('department')
-      .populate('lines.item')
-      .populate('po')
-      .populate('grn')
-      .sort({ createdAt: -1 });
+    const { resort } = req.query;
+    const filter = {};
 
-    res.json(list);
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
+    }
+
+    const docs = await Requisition().find(filter).lean();
+    res.json(docs);
   } catch (err) {
-    console.error('getAll requisitions error:', err);
-    res.status(500).json({ message: 'Failed to fetch requisitions', error: err.message });
+    console.error("LIST REQUISITIONS", err);
+    res.status(500).json({ message: "Failed to fetch requisitions" });
   }
 };
 
-/**
- * GET /api/requisitions/:id
- */
-exports.getOne = async (req, res) => {
+/* ===============================
+   GET ONE
+================================ */
+exports.getRequisition = async (req, res) => {
   try {
-    const rec = await Requisition.findById(req.params.id)
-      .populate('vendor')
-      .populate('fromStore')
-      .populate('toStore')
-      .populate('store')
-      .populate('resort')
-      .populate('department')
-      .populate('lines.item')
-      .populate('grn');
-
-    if (!rec) return res.status(404).json({ message: 'Requisition not found' });
-    res.json(rec);
+    const doc = await Requisition().findById(req.params.id).lean();
+    if (!doc) return res.status(404).json({ message: "Requisition not found" });
+    res.json(doc);
   } catch (err) {
-    console.error('getOne requisition error:', err);
-    res.status(500).json({ message: 'Failed to fetch requisition', error: err.message });
+    res.status(500).json({ message: "Failed to fetch requisition" });
   }
 };
 
-/**
- * POST /api/requisitions
- */
-exports.create = async (req, res) => {
+/* ===============================
+   CREATE
+================================ */
+exports.createRequisition = async (req, res) => {
   try {
-    const body = req.body || {};
-    const {
-      type,
-      resort,
-      vendor,
-      store,
-      fromStore,
-      toStore,
-      department,
-      requiredBy,
-      lines,
-      requisitionNo,
-    } = body;
-
-    if (!type || !['INTERNAL', 'VENDOR'].includes(type)) {
-      return res.status(400).json({ message: 'Invalid or missing type' });
-    }
-
-    if (type === 'VENDOR') {
-      if (!vendor || !isValidId(vendor)) {
-        return res.status(400).json({ message: 'Missing/invalid vendor' });
-      }
-      if (!store || !isValidId(store)) {
-        return res.status(400).json({ message: 'Missing/invalid store' });
-      }
-    }
-
-    if (type === 'INTERNAL') {
-      if (!fromStore || !toStore) {
-        return res.status(400).json({ message: 'Missing fromStore / toStore' });
-      }
-    }
-
-    let parsedRequiredBy;
-    if (requiredBy) {
-      const dt = new Date(requiredBy);
-      if (isNaN(dt.getTime())) {
-        return res.status(400).json({ message: 'Invalid requiredBy date' });
-      }
-      parsedRequiredBy = dt;
-    }
-
-    if (!Array.isArray(lines) || lines.length === 0) {
-      return res.status(400).json({ message: 'Lines required' });
-    }
-
-    const normalizedLines = lines.map((ln, i) => {
-      if (!ln.item || !isValidId(ln.item)) {
-        throw new Error(`Line ${i}: invalid item`);
-      }
-      if (!ln.qty || Number(ln.qty) <= 0) {
-        throw new Error(`Line ${i}: invalid qty`);
-      }
-      return {
-        itemCategory: ln.itemCategory || undefined,
-        item: ln.item,
-        qty: Number(ln.qty),
-        remark: ln.remark || '',
-      };
+    const doc = await Requisition().create({
+      requisitionNo: makeReqNo(),
+      type: req.body.type,
+      resort: new mongoose.Types.ObjectId(req.body.resort),
+      department: req.body.department,
+      fromStore: req.body.fromStore,
+      toStore: req.body.toStore,
+      store: req.body.store,
+      vendor: req.body.vendor,
+      requiredBy: req.body.requiredBy,
+      status: "PENDING",
+      lines: req.body.lines || [],
+      createdBy: "SYSTEM",
     });
 
-    const doc = {
-      requisitionNo: requisitionNo || generateRequisitionNo(),
-      type,
-      resort: resort || undefined,
-      department: department || undefined,
-      requiredBy: parsedRequiredBy,
-      lines: normalizedLines,
-    };
-
-    if (type === 'VENDOR') {
-      doc.vendor = vendor;
-      doc.store = store;
-    } else {
-      doc.fromStore = fromStore;
-      doc.toStore = toStore;
-    }
-
-    const newReq = await Requisition.create(doc);
-
-    const full = await Requisition.findById(newReq._id)
-      .populate('vendor')
-      .populate('fromStore')
-      .populate('toStore')
-      .populate('store')
-      .populate('resort')
-      .populate('department')
-      .populate('lines.item');
-
-    res.status(201).json(full);
+    res.status(201).json(doc);
   } catch (err) {
-    console.error('create requisition error:', err);
-    res.status(500).json({ message: 'Failed to create requisition', error: err.message });
+    console.error("CREATE REQUISITION", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-/**
- * PUT /api/requisitions/:id
- */
-exports.update = async (req, res) => {
+/* ===============================
+   UPDATE
+================================ */
+exports.updateRequisition = async (req, res) => {
   try {
-    await Requisition.findByIdAndUpdate(req.params.id, req.body, { runValidators: true });
-    const full = await Requisition.findById(req.params.id)
-      .populate('vendor')
-      .populate('fromStore')
-      .populate('toStore')
-      .populate('store')
-      .populate('resort')
-      .populate('department')
-      .populate('lines.item')
-      .populate('grn');
+    const updated = await Requisition().findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...req.body, updatedAt: new Date() } },
+      { new: true }
+    );
 
-    res.json(full);
-  } catch (err) {
-    console.error('update requisition error:', err);
-    res.status(500).json({ message: 'Failed to update requisition', error: err.message });
-  }
-};
+    if (!updated)
+      return res.status(404).json({ message: "Requisition not found" });
 
-/**
- * DELETE /api/requisitions/:id
- */
-exports.delete = async (req, res) => {
-  try {
-    await Requisition.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('delete requisition error:', err);
-    res.status(500).json({ message: 'Failed to delete requisition', error: err.message });
-  }
-};
-
-/**
- * POST /api/requisitions/:id/approve
- */
-exports.approve = async (req, res) => {
-  try {
-    await Requisition.findByIdAndUpdate(req.params.id, { status: 'APPROVED' });
-    const updated = await Requisition.findById(req.params.id);
     res.json(updated);
   } catch (err) {
-    console.error('approve requisition error:', err);
-    res.status(500).json({ message: 'Failed to approve requisition', error: err.message });
+    res.status(500).json({ message: "Failed to update requisition" });
   }
 };
 
-/**
- * POST /api/requisitions/:id/hold
- */
-exports.hold = async (req, res) => {
+/* ===============================
+   DELETE
+================================ */
+exports.deleteRequisition = async (req, res) => {
   try {
-    await Requisition.findByIdAndUpdate(req.params.id, { status: 'ON_HOLD' });
-    const updated = await Requisition.findById(req.params.id);
-    res.json(updated);
-  } catch (err) {
-    console.error('hold requisition error:', err);
-    res.status(500).json({ message: 'Failed to hold requisition', error: err.message });
+    const deleted = await Requisition().findByIdAndDelete(req.params.id);
+    if (!deleted)
+      return res.status(404).json({ message: "Requisition not found" });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ message: "Failed to delete requisition" });
   }
 };
 
-/**
- * POST /api/requisitions/:id/reject
- */
-exports.reject = async (req, res) => {
-  try {
-    await Requisition.findByIdAndUpdate(req.params.id, {
-      status: 'REJECTED',
-      rejectionReason: req.body.reason || '',
-    });
-    const updated = await Requisition.findById(req.params.id);
-    res.json(updated);
-  } catch (err) {
-    console.error('reject requisition error:', err);
-    res.status(500).json({ message: 'Failed to reject requisition', error: err.message });
-  }
+/* ===============================
+   APPROVE / HOLD / REJECT
+================================ */
+exports.approveRequisition = async (req, res) => {
+  const doc = await Requisition().findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        status: "APPROVED",
+        approvedBy: req.user?.id || "SYSTEM",
+        approvedAt: new Date(),
+      },
+    },
+    { new: true }
+  );
+  res.json(doc);
 };
 
-/**
- * POST /api/requisitions/:id/create-grn
- * Create GRN directly from requisition (NO poId required)
- */
-exports.createGRN = async (req, res) => {
-  try {
-    const {
-      grnNo,
-      receivedBy,
-      receivedDate,
-      challanNo,
-      billNo,
-      store,
-      items,
-    } = req.body || {};
+exports.holdRequisition = async (req, res) => {
+  const doc = await Requisition().findByIdAndUpdate(
+    req.params.id,
+    { $set: { status: "ON_HOLD" } },
+    { new: true }
+  );
+  res.json(doc);
+};
 
-    if (!grnNo || !receivedDate || !challanNo || !store) {
-      return res.status(400).json({ message: 'Missing required GRN fields' });
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'GRN items required' });
-    }
-
-    const requisition = await Requisition.findById(req.params.id);
-    if (!requisition) {
-      return res.status(404).json({ message: 'Requisition not found' });
-    }
-
-    const grn = await GRN.create({
-      grnNo,
-      requisition: requisition._id,
-      resort: requisition.resort || null,
-      store,
-      receivedBy,
-      receivedDate,
-      challanNo,
-      billNo,
-      items: items.map((it) => ({
-        item: it.item,
-        qtyRequested: it.qtyRequested || 0,
-        qtyReceived: it.qtyReceived || 0,
-        remark: it.remark || '',
-      })),
-      status: 'CREATED',
-    });
-
-    requisition.status = 'GRN_CREATED';
-    requisition.grn = grn._id;
-    await requisition.save();
-
-    res.status(201).json(grn);
-  } catch (err) {
-    console.error('create GRN error:', err);
-    res.status(500).json({ message: 'Failed to create GRN', error: err.message });
-  }
+exports.rejectRequisition = async (req, res) => {
+  const doc = await Requisition().findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        status: "REJECTED",
+        rejectedBy: req.user?.id || "SYSTEM",
+        rejectionReason: req.body.reason || "",
+      },
+    },
+    { new: true }
+  );
+  res.json(doc);
 };
