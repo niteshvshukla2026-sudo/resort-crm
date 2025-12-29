@@ -1,9 +1,6 @@
-// backend/src/routes/store.routes.cjs
-module.exports = (router) => {
-  const storeCtrl = require("../controllers/store.controller.js");
+module.exports = (router, mongoose) => {
+  const controller = require("../controllers/store.controller")(mongoose);
 
-  router.get("/api/stores", storeCtrl.list);
-  router.post("/api/stores", storeCtrl.create);
-  router.put("/api/stores/:id", storeCtrl.update);
-  router.delete("/api/stores/:id", storeCtrl.remove);
+  router.get("/stores", controller.listStores);
+  router.post("/stores", controller.createStore);
 };
