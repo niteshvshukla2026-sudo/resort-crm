@@ -18,7 +18,7 @@ function createRouter({ useMongo, mongoose }) {
   // 🔥 LOAD ALL MODELS (FROM src/models)
   // ==================================================
   if (useMongo && mongoose) {
-    require("./src/models")(); // index.js loader
+    require("./src/models/index.cjs")(); // index.js loader
   }
 
   // ==================================================
