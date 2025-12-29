@@ -1,11 +1,16 @@
-import jwt from "jsonwebtoken";
-import User from "../models/user.model.js";
+// backend/src/controllers/auth.controller.js
+// ✅ PURE COMMONJS — ROUTER COMPATIBLE
+
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+
+const User = mongoose.models.User;
 
 /**
  * 🔐 LOGIN CONTROLLER
  * Route: POST /api/auth/login
  */
-export const login = async (req, res) => {
+const login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
@@ -19,7 +24,7 @@ export const login = async (req, res) => {
     const user = await User.findOne({
       email: String(email).toLowerCase(),
       isActive: true,
-    }).lean(false); // lean false → methods available
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -68,10 +73,23 @@ export const login = async (req, res) => {
 };
 
 /**
- * 🔁 FORCE RESET PASSWORD (ADMIN / FIRST LOGIN)
- * Route: GET /api/auth/force-reset?email=&password=
+ * 👤 ME CONTROLLER
+ * Route: GET /api/auth/me
  */
-export const forceResetPassword = async (req, res) => {
+const me = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({
+      message: "Not authenticated",
+    });
+  }
+  res.json(req.user);
+};
+
+/**
+ * 🔁 FORCE RESET PASSWORD
+ * Route: GET /api/auth/force-reset
+ */
+const forceResetPassword = async (req, res) => {
   try {
     const { email, password } = req.query || {};
 
@@ -91,7 +109,7 @@ export const forceResetPassword = async (req, res) => {
       });
     }
 
-    user.password = password; // 🔥 pre-save hook will hash
+    user.password = password; // pre-save hook will hash
     await user.save();
 
     return res.json({
@@ -103,4 +121,13 @@ export const forceResetPassword = async (req, res) => {
       message: "Failed to reset password",
     });
   }
+};
+
+/**
+ * ✅ EXPORTS (MATCH ROUTER)
+ */
+module.exports = {
+  login,
+  me,
+  forceResetPassword,
 };
