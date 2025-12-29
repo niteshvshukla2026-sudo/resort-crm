@@ -1,6 +1,6 @@
 // backend/server_router.cjs
 // ==================================================
-// 🔥 FINAL CONSOLIDATED ROUTER (PRODUCTION READY)
+// 🔥 FINAL CONSOLIDATED ROUTER (SAFE & CRASH-PROOF)
 // ==================================================
 
 const express = require("express");
@@ -15,20 +15,18 @@ function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
 
   // ==================================================
-  // 🔥 LOAD ALL MODELS (FROM src/models)
+  // 🔥 LOAD ALL MODELS
   // ==================================================
   if (useMongo && mongoose) {
-   require("./src/models/index.cjs");
-
+    require("./src/models/index.cjs");
   }
 
   // ==================================================
   // 🔐 AUTH & PERMISSION MIDDLEWARE
   // ==================================================
-  const {
-    protect,
-    requirePermission,
-  } = require("./src/middlewares/auth.middleware");
+  const authMw = require("./src/middlewares/auth.middleware");
+  const protect = authMw.protect;
+  const requirePermission = authMw.requirePermission;
 
   // ==================================================
   // 📦 CONTROLLERS
@@ -36,15 +34,12 @@ function createRouter({ useMongo, mongoose }) {
   const authCtrl = require("./src/controllers/auth.controller");
   const userCtrl = require("./src/controllers/user.controller");
   const roleCtrl = require("./src/controllers/role.controller");
-
   const storeCtrl = require("./src/controllers/store.controller");
   const itemCtrl = require("./src/controllers/item.controller");
   const vendorCtrl = require("./src/controllers/vendor.controller");
-
   const requisitionCtrl = require("./src/controllers/requisition.controller");
   const poCtrl = require("./src/controllers/po.controller");
   const grnCtrl = require("./src/controllers/grn.controller");
-
   const storeReplacementCtrl = require("./src/controllers/storeReplacement.controller");
   const consumptionCtrl = require("./src/controllers/consumption.controller");
 
@@ -55,36 +50,35 @@ function createRouter({ useMongo, mongoose }) {
   router.get("/api/auth/me", protect, authCtrl.me);
 
   // ==================================================
-// 👤 USERS
-// ==================================================
-router.get(
-  "/api/users",
-  protect,
-  requirePermission("USERS", "READ"),
-  userCtrl.listUsers
-);
+  // 👤 USERS
+  // ==================================================
+  router.get(
+    "/api/users",
+    protect,
+    requirePermission("USERS", "READ"),
+    userCtrl.listUsers || userCtrl.list
+  );
 
-router.post(
-  "/api/users",
-  protect,
-  requirePermission("USERS", "CREATE"),
-  userCtrl.createUser
-);
+  router.post(
+    "/api/users",
+    protect,
+    requirePermission("USERS", "CREATE"),
+    userCtrl.createUser || userCtrl.create
+  );
 
-router.put(
-  "/api/users/:id",
-  protect,
-  requirePermission("USERS", "UPDATE"),
-  userCtrl.updateUser
-);
+  router.put(
+    "/api/users/:id",
+    protect,
+    requirePermission("USERS", "UPDATE"),
+    userCtrl.updateUser || userCtrl.update
+  );
 
-router.delete(
-  "/api/users/:id",
-  protect,
-  requirePermission("USERS", "DELETE"),
-  userCtrl.deleteUser
-);
-
+  router.delete(
+    "/api/users/:id",
+    protect,
+    requirePermission("USERS", "DELETE"),
+    userCtrl.deleteUser || userCtrl.remove
+  );
 
   // ==================================================
   // 🧑‍⚖️ ROLES
@@ -215,24 +209,8 @@ router.delete(
     requisitionCtrl.reject
   );
 
-  // 🔁 Requisition → PO
-  router.post(
-    "/api/requisitions/:id/create-po",
-    protect,
-    requirePermission("PO", "CREATE"),
-    poCtrl.createFromRequisition
-  );
-
-  // 🔁 Requisition → GRN
-  router.post(
-    "/api/requisitions/:id/create-grn",
-    protect,
-    requirePermission("GRN", "CREATE"),
-    grnCtrl.createFromRequisition
-  );
-
   // ==================================================
-  // 🛒 PURCHASE ORDERS
+  // 🛒 PO
   // ==================================================
   router.get(
     "/api/po",
@@ -259,16 +237,8 @@ router.delete(
     poCtrl.remove
   );
 
-  // PO → GRN
-  router.post(
-    "/api/po/:id/create-grn",
-    protect,
-    requirePermission("GRN", "CREATE"),
-    grnCtrl.createFromPO
-  );
-
   // ==================================================
-  // 📦 GRN (AUTO STOCK ADD)
+  // 📦 GRN
   // ==================================================
   router.get(
     "/api/grn",
@@ -286,7 +256,7 @@ router.delete(
     "/api/grn/:id/close",
     protect,
     requirePermission("GRN", "UPDATE"),
-    grnCtrl.closeAndAddStock // 🔥 STOCK +++
+    grnCtrl.closeAndAddStock
   );
   router.delete(
     "/api/grn/:id",
@@ -323,21 +293,22 @@ router.delete(
     storeReplacementCtrl.createGrnAndAddStock
   );
 
- // 🍽️ CONSUMPTION (STOCK -)
-// ==================================================
-router.get(
-  "/api/consumption",
-  protect,
-  requirePermission("REPORTS", "READ"),
-  consumptionCtrl.listConsumptions
-);
+  // ==================================================
+  // 🍽️ CONSUMPTION
+  // ==================================================
+  router.get(
+    "/api/consumption",
+    protect,
+    requirePermission("REPORTS", "READ"),
+    consumptionCtrl.listConsumptions || consumptionCtrl.list
+  );
 
-router.post(
-  "/api/consumption",
-  protect,
-  requirePermission("REPORTS", "CREATE"),
-  consumptionCtrl.createConsumption
-);
+  router.post(
+    "/api/consumption",
+    protect,
+    requirePermission("REPORTS", "CREATE"),
+    consumptionCtrl.createConsumption || consumptionCtrl.create
+  );
 
   // ==================================================
   // ❤️ HEALTH
