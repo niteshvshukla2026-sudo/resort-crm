@@ -1,94 +1,85 @@
-const Department = require("../models/department.model");
+// backend/src/controllers/department.controller.js
+import Department from "../models/department.model.js";
 
 /**
  * GET /api/departments
+ * optional query: name, code
  */
-exports.listDepartments = async (req, res) => {
+export const listDepartments = async (req, res) => {
   try {
-    const departments = await Department.find()
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json(departments);
+    const filter = {};
+    if (req.query.name) filter.name = { $regex: req.query.name, $options: "i" };
+    if (req.query.code) filter.code = { $regex: req.query.code, $options: "i" };
+    const depts = await Department.find(filter).sort({ createdAt: -1 }).lean();
+    res.json(depts);
   } catch (err) {
-    console.error("LIST DEPARTMENTS ERROR ❌", err);
-    res.status(500).json({
-      message: "Failed to load departments",
-    });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-/**
- * POST /api/departments
- */
-exports.createDepartment = async (req, res) => {
+export const getDepartment = async (req, res) => {
+  try {
+    const d = await Department.findById(req.params.id).lean();
+    if (!d) return res.status(404).json({ message: "Department not found" });
+    res.json(d);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const createDepartment = async (req, res) => {
   try {
     const { name, code } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: "Name is required" });
+    if (!code || !code.trim()) return res.status(400).json({ message: "Code is required" });
 
-    if (!name || !code) {
-      return res.status(400).json({
-        message: "Name and code are required",
-      });
-    }
+    // normalize
+    const payload = { name: name.trim(), code: code.trim().toUpperCase() };
 
-    const doc = await Department.create({
-      name: name.trim(),
-      code: code.trim().toUpperCase(),
-    });
+    // avoid duplicate codes
+    const exists = await Department.findOne({ code: payload.code });
+    if (exists) return res.status(409).json({ message: "Code already exists" });
 
-    res.status(201).json(doc);
+    const created = await Department.create(payload);
+    res.status(201).json(created);
   } catch (err) {
-    console.error("CREATE DEPARTMENT ERROR ❌", err);
-    res.status(500).json({
-      message: "Failed to create department",
-    });
+    console.error("createDepartment error", err);
+    res.status(500).json({ message: "Failed to create department" });
   }
 };
 
-/**
- * PUT /api/departments/:id
- */
-exports.updateDepartment = async (req, res) => {
+export const updateDepartment = async (req, res) => {
   try {
-    const updated = await Department.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true }
-    );
+    const { name } = req.body;
+    // We will regenerate/replace code on update only if frontend sends a code.
+    // But per your frontend behavior code is auto-generated; we'll accept payload.code if present
+    const payload = {};
+    if (name) payload.name = name.trim();
+    if (req.body.code) payload.code = req.body.code.trim().toUpperCase();
 
-    if (!updated) {
-      return res.status(404).json({
-        message: "Department not found",
-      });
+    if (payload.code) {
+      const exists = await Department.findOne({ code: payload.code, _id: { $ne: req.params.id } });
+      if (exists) return res.status(409).json({ message: "Code already in use" });
     }
 
+    const updated = await Department.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true }).lean();
+    if (!updated) return res.status(404).json({ message: "Department not found" });
     res.json(updated);
   } catch (err) {
-    console.error("UPDATE DEPARTMENT ERROR ❌", err);
-    res.status(500).json({
-      message: "Failed to update department",
-    });
+    console.error("updateDepartment error", err);
+    res.status(500).json({ message: "Failed to update" });
   }
 };
 
-/**
- * DELETE /api/departments/:id
- */
-exports.deleteDepartment = async (req, res) => {
+export const deleteDepartment = async (req, res) => {
   try {
-    const deleted = await Department.findByIdAndDelete(req.params.id);
-
-    if (!deleted) {
-      return res.status(404).json({
-        message: "Department not found",
-      });
-    }
-
-    res.json({ ok: true });
+    const removed = await Department.findByIdAndDelete(req.params.id);
+    if (!removed) return res.status(404).json({ message: "Department not found" });
+    res.json({ success: true });
   } catch (err) {
-    console.error("DELETE DEPARTMENT ERROR ❌", err);
-    res.status(500).json({
-      message: "Failed to delete department",
-    });
+    console.error("deleteDepartment error", err);
+    res.status(500).json({ message: "Failed to delete" });
   }
 };

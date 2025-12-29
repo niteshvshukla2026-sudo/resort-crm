@@ -1,46 +1,66 @@
-// backend/src/controllers/store.controller.js
-// ✅ PURE CJS | PRODUCTION SAFE
-
-const Store = require("../models/store.model");
+import Store from "../models/storeModel.js";
 
 /**
  * GET /api/stores
+ * Resort-wise stores
  */
-exports.list = async (req, res) => {
+export const listStores = async (req, res) => {
   try {
-    const stores = await Store.find()
-      .populate("resort", "name code")
-      .sort({ createdAt: -1 })
-      .lean();
+    const { resort } = req.query;
 
-    return res.json(stores);
+    // 🔥 IMPORTANT: RESORT FILTER
+    const filter = {};
+
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
+    }
+
+    const stores = await Store.find(filter).sort({ name: 1 });
+
+    res.json(stores);
   } catch (err) {
-    console.error("LIST STORES ERROR ❌", err);
-    return res.status(500).json({ message: "Failed to load stores" });
+    console.error("listStores error:", err);
+    res.status(500).json({ message: "Failed to fetch stores" });
   }
 };
 
 /**
  * POST /api/stores
  */
-exports.create = async (req, res) => {
+export const createStore = async (req, res) => {
   try {
-    const doc = await Store.create(req.body);
-    return res.status(201).json(doc);
+    const { name, code, resort } = req.body;
+
+    if (!name || !resort) {
+      return res
+        .status(400)
+        .json({ message: "Store name and resort are required" });
+    }
+
+    const store = await Store.create({
+      name: name.trim(),
+      code: code?.trim() || "",
+      resort,
+    });
+
+    res.status(201).json(store);
   } catch (err) {
-    console.error("CREATE STORE ERROR ❌", err);
-    return res.status(500).json({ message: "Failed to create store" });
+    console.error("createStore error:", err);
+    res.status(500).json({ message: "Failed to create store" });
   }
 };
 
 /**
  * PUT /api/stores/:id
  */
-exports.update = async (req, res) => {
+export const updateStore = async (req, res) => {
   try {
+    const { id } = req.params;
+    const { name, code, resort } = req.body;
+
     const updated = await Store.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
+      id,
+      { name, code, resort },
       { new: true }
     );
 
@@ -48,27 +68,28 @@ exports.update = async (req, res) => {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    return res.json(updated);
+    res.json(updated);
   } catch (err) {
-    console.error("UPDATE STORE ERROR ❌", err);
-    return res.status(500).json({ message: "Failed to update store" });
+    console.error("updateStore error:", err);
+    res.status(500).json({ message: "Failed to update store" });
   }
 };
 
 /**
  * DELETE /api/stores/:id
  */
-exports.remove = async (req, res) => {
+export const deleteStore = async (req, res) => {
   try {
-    const deleted = await Store.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
 
+    const deleted = await Store.findByIdAndDelete(id);
     if (!deleted) {
       return res.status(404).json({ message: "Store not found" });
     }
 
-    return res.json({ ok: true });
+    res.json({ message: "Store deleted" });
   } catch (err) {
-    console.error("DELETE STORE ERROR ❌", err);
-    return res.status(500).json({ message: "Failed to delete store" });
+    console.error("deleteStore error:", err);
+    res.status(500).json({ message: "Failed to delete store" });
   }
 };

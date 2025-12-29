@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../../api/axios"; // 🔥 IMPORTANT: interceptor axios
+import axios from "axios";
 import { useResort } from "../../context/ResortContext";
+
+const API_BASE =
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000") + "/api";
 
 const emptyForm = () => ({ _id: undefined, name: "" });
 
@@ -20,18 +23,18 @@ const StoreList = () => {
   const [filterName, setFilterName] = useState("");
   const [filterCode, setFilterCode] = useState("");
 
-  // ================= LOAD STORES =================
+  // ================= LOAD STORES (RESORT-WISE) =================
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      let url = "/stores";
+      let url = `${API_BASE}/stores`;
       if (selectedResort && selectedResort !== "ALL") {
         url += `?resort=${selectedResort}`;
       }
 
-      const res = await api.get(url);
+      const res = await axios.get(url);
       setStores(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("load stores error", err);
@@ -45,6 +48,7 @@ const StoreList = () => {
   useEffect(() => {
     if (!selectedResort) return;
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedResort]);
 
   // ================= FILTER =================
@@ -113,9 +117,9 @@ const StoreList = () => {
       };
 
       if (form._id) {
-        await api.put(`/stores/${form._id}`, payload);
+        await axios.put(`${API_BASE}/stores/${form._id}`, payload);
       } else {
-        await api.post(`/stores`, payload);
+        await axios.post(`${API_BASE}/stores`, payload);
       }
 
       await loadData();
@@ -133,7 +137,7 @@ const StoreList = () => {
   const handleDelete = async (s) => {
     if (!window.confirm(`Delete store "${s.name}"?`)) return;
     try {
-      await api.delete(`/stores/${s._id}`);
+      await axios.delete(`${API_BASE}/stores/${s._id}`);
       await loadData();
     } catch (err) {
       console.error("delete store error", err);

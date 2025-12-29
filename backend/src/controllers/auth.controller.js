@@ -1,50 +1,103 @@
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
-const User = mongoose.models.User;
-
 /**
- * POST /api/auth/login
+ * IMPORTANT:
+ * User model server_router.cjs me bana hua hai
+ * aur global.User me attach hai
  */
-exports.login = async (req, res) => {
+const getUserModel = () => global.User;
+
+// -------------------------
+// JWT TOKEN
+// -------------------------
+const generateToken = (user) => {
+  return jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE || "7d" }
+  );
+};
+
+// -------------------------
+// LOGIN
+// -------------------------
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).populate("role");
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email & password required" });
     }
 
-    if (user.status !== "ACTIVE") {
-      return res.status(401).json({ message: "User not active" });
+    const User = getUserModel();
+    if (!User) {
+      return res.status(500).json({ message: "User model not initialized" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (user.status && user.status !== "ACTIVE") {
+      return res.status(403).json({ message: "User inactive" });
     }
 
     const match = await bcrypt.compare(password, user.password);
-
     if (!match) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET || "dev_secret_key",
-      { expiresIn: "7d" }
-    );
+    const token = generateToken(user);
 
-    res.json({
+    return res.json({
+      success: true,
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        status: user.status,
+        resorts: user.resorts || [],
+        stores: user.stores || [],
       },
     });
   } catch (err) {
-    console.error("LOGIN ERROR ❌", err);
-    res.status(500).json({ message: "Login failed" });
+    console.error("LOGIN ERROR:", err);
+    return res.status(500).json({ message: "Login failed" });
   }
+};
+
+// -------------------------
+// FORCE RESET PASSWORD (TEMP DEBUG)
+// -------------------------
+const forceResetPassword = async (req, res) => {
+  try {
+    const User = getUserModel();
+    if (!User) {
+      return res.status(500).json({ message: "User model not initialized" });
+    }
+
+    const user = await User.findOne({ email: "nitesh@example.com" });
+    if (!user) {
+      return res.json({ message: "User not found" });
+    }
+
+    user.password = "090909"; // plain password
+    await user.save();        // 🔥 pre-save hook chalega
+
+    return res.json({ message: "Password reset done" });
+  } catch (err) {
+    console.error("FORCE RESET ERROR:", err);
+    return res.status(500).json({ message: "Reset failed" });
+  }
+};
+
+// -------------------------
+// EXPORTS (CJS)
+// -------------------------
+module.exports = {
+  login,
+  forceResetPassword,
 };
