@@ -72,7 +72,10 @@ const GRNList = () => {
 
       const [grnRes, vendorRes, resortRes, storeRes] =
         await Promise.all([
-          axios.get(`${API_BASE}/api/grn`),
+         axios.get(`${API_BASE}/api/grn`, {
+  params: { resort: selectedResort },
+}),
+
           axios.get(`${API_BASE}/api/vendors`),
           axios.get(`${API_BASE}/api/resorts`),
           axios.get(`${API_BASE}/api/stores`),
@@ -192,44 +195,42 @@ const GRNList = () => {
 
 
                     {/* ACTION ICONS */}
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      {/* VIEW */}
-                      <i
-                        className="ri-eye-line"
-                        title="View GRN"
-                        style={{ cursor: "pointer", marginRight: 12 }}
-                        onClick={() => viewGrn(g)}
-                      />
-
-                      {/* CLOSE */}
-                      {g.status === "CREATED" && (
-                        <i
-                          className="ri-lock-line"
-                          title="Close GRN"
-                          style={{
-                            cursor: "pointer",
-                            marginRight: 12,
-                            color: "#22c55e",
-                          }}
-                          onClick={() => closeGrn(g)}
-                        />
-                      )}
-
-                      {/* DELETE */}
-                      {(g.status || "CREATED") === "CREATED" && (
+                   <td style={{ whiteSpace: "nowrap" }}>
   <i
-    className="ri-lock-line"
-    title="Close GRN"
-    style={{
-      cursor: "pointer",
-      marginRight: 12,
-      color: "#22c55e",
-    }}
-    onClick={() => closeGrn(g)}
+    className="ri-eye-line"
+    title="View"
+    style={{ cursor: "pointer", marginRight: 12 }}
+    onClick={() => viewGrn(g)}
   />
-)}
 
-                    </td>
+  {g.status === "CREATED" && (
+    <i
+      className="ri-edit-line"
+      title="Edit"
+      style={{ cursor: "pointer", marginRight: 12, color: "#f59e0b" }}
+      onClick={() => navigate(`/super-admin/grn/edit/${g._id}`)}
+    />
+  )}
+
+  {g.status === "CREATED" && (
+    <i
+      className="ri-lock-line"
+      title="Close"
+      style={{ cursor: "pointer", marginRight: 12, color: "#22c55e" }}
+      onClick={() => closeGrn(g)}
+    />
+  )}
+
+  {g.status === "CREATED" && (
+    <i
+      className="ri-delete-bin-line"
+      title="Delete"
+      style={{ cursor: "pointer", color: "#ef4444" }}
+      onClick={() => deleteGrn(g)}
+    />
+  )}
+</td>
+
                   </tr>
                 ))
               )}

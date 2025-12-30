@@ -142,7 +142,10 @@ const storeStockSchema = new Schema(
   { timestamps: true }
 );
 
-storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
+storeStockSchema.index(
+  { resort: 1, store: 1, item: 1 },
+  { unique: true }
+);
 
 const StoreStock =
   mongoose.models.StoreStock ||
@@ -1701,12 +1704,10 @@ router.post("/api/requisitions", async (req, res) => {
 // ==================================================
 router.post("/api/grn/:id/close", async (req, res) => {
   try {
-    const grnId = req.params.id;
-
-    const GRNModel = mongoose.models.GRN;
+    const GRN = mongoose.models.GRN;
     const StoreStock = mongoose.models.StoreStock;
 
-    const grn = await GRNModel.findById(grnId);
+    const grn = await GRN.findById(req.params.id);
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });
     }
@@ -1715,34 +1716,32 @@ router.post("/api/grn/:id/close", async (req, res) => {
       return res.status(400).json({ message: "GRN already closed" });
     }
 
-    // 🔁 ADD STOCK
+    // 🔥 ADD STOCK
     for (const line of grn.items || []) {
-      const itemId = line.item;
       const qty = Number(line.receivedQty || 0);
-      const storeId = grn.store;
-
-      if (!itemId || !storeId || qty <= 0) continue;
+      if (!line.item || qty <= 0) continue;
 
       await StoreStock.findOneAndUpdate(
-        { store: storeId, item: itemId },
-        { $inc: { qty: qty } },
+        {
+          resort: grn.resort,
+          store: grn.store,
+          item: line.item,
+        },
+        { $inc: { qty } },
         { upsert: true, new: true }
       );
     }
 
-    // 🔒 CLOSE GRN
     grn.status = "CLOSED";
     await grn.save();
 
-    return res.json({
-      message: "GRN closed & stock updated",
-      grn,
-    });
+    res.json({ message: "GRN closed & stock updated" });
   } catch (err) {
-    console.error("CLOSE GRN ERROR ❌", err);
+    console.error("GRN CLOSE ERROR", err);
     res.status(500).json({ message: "Failed to close GRN" });
   }
 });
+
 
   // =======================================================
 // 🛒 CREATE PO FROM REQUISITION
@@ -2112,13 +2111,21 @@ function makeGrnNo() {
 // --------------------------------
 router.get("/api/grn", async (req, res) => {
   try {
-    if (GRNModel) {
-      const docs = await GRNModel.find().lean();
-      return res.json(docs);
+    const { resort } = req.query;
+    const filter = {};
+
+    if (resort && resort !== "ALL") {
+      filter.resort = resort;
     }
-    return res.json(memGRNs);
+
+    const docs = await GRNModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(docs);
   } catch (err) {
-    console.error("GET /api/grn", err);
+    console.error("GET /api/grn error", err);
     res.status(500).json({ message: "Failed to fetch GRNs" });
   }
 });
