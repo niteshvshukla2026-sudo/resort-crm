@@ -848,10 +848,10 @@ await StoreStock.findOneAndUpdate(
     store: String(grn.store),
     item: String(line.item),
   },
-
   { $inc: { qty } },
   { upsert: true, new: true }
 );
+
 
       }
 
@@ -2549,6 +2549,7 @@ const stock = await StoreStock.findOne({
   store: data.storeFrom,
   item: ing.itemId,
 });
+
 
 
 
