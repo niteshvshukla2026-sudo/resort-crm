@@ -9,7 +9,7 @@ require("./src/models/User");
 const multer = require("multer");
 const csvToJson = require("csvtojson");
 const upload = multer({ dest: "tmp/" });
-require("./src/models/storeStock.model.cjs");
+
 
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
