@@ -84,7 +84,7 @@ const GRNList = () => {
       setResorts(normalize(resortRes));
       setStores(normalize(storeRes));
     } catch (e) {
-      console.error(e);
+      console.error("GRN LOAD ERROR:", e);
       setError("Failed to load GRNs");
     } finally {
       setLoading(false);
