@@ -8,14 +8,6 @@ import { useResort } from "../../context/ResortContext";
 const findById = (list, id) =>
   list.find((x) => String(x._id) === String(id));
 
-const getPoNo = (g) =>
-  typeof g.po === "object" ? g.po?.poNo || "-" : "-";
-
-const getReqNo = (g) =>
-  typeof g.requisition === "object"
-    ? g.requisition?.requisitionNo || "-"
-    : "-";
-
 const getVendorName = (g, vendors) => {
   if (typeof g.vendor === "object") return g.vendor?.name || "-";
   const v = findById(vendors, g.vendor);
@@ -35,7 +27,7 @@ const getStoreName = (g, stores) => {
 };
 
 const getGrnDate = (g) => {
-  const d = g.receivedDate || g.grnDate || g.createdAt;
+  const d = g.grnDate || g.receivedDate || g.createdAt;
   return d ? new Date(d).toLocaleDateString() : "-";
 };
 
@@ -56,11 +48,7 @@ const GRNList = () => {
   /* ---------------- LOAD DATA ---------------- */
 
   const normalize = (r) =>
-    Array.isArray(r.data)
-      ? r.data
-      : Array.isArray(r.data?.data)
-      ? r.data.data
-      : [];
+    Array.isArray(r?.data) ? r.data : [];
 
   const loadData = async () => {
     try {
@@ -69,12 +57,12 @@ const GRNList = () => {
 
       const [grnRes, vendorRes, resortRes, storeRes] =
         await Promise.all([
-          api.get("/grn", {
+          api.get("/api/grn", {
             params: { resort: selectedResort },
           }),
-          api.get("/vendors"),
-          api.get("/resorts"),
-          api.get("/stores", {
+          api.get("/api/vendors"),
+          api.get("/api/resorts"),
+          api.get("/api/stores", {
             params: { resort: selectedResort },
           }),
         ]);
@@ -83,8 +71,8 @@ const GRNList = () => {
       setVendors(normalize(vendorRes));
       setResorts(normalize(resortRes));
       setStores(normalize(storeRes));
-    } catch (e) {
-      console.error("GRN LOAD ERROR:", e);
+    } catch (err) {
+      console.error("GRN LOAD ERROR ❌", err);
       setError("Failed to load GRNs");
     } finally {
       setLoading(false);
@@ -105,7 +93,7 @@ const GRNList = () => {
     if (!window.confirm(`Close GRN ${g.grnNo}? Stock will be updated.`))
       return;
     try {
-      await api.post(`/grn/${g._id}/close`);
+      await api.post(`/api/grn/${g._id}/close`);
       loadData();
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to close GRN");
@@ -115,7 +103,7 @@ const GRNList = () => {
   const deleteGrn = async (g) => {
     if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
     try {
-      await api.delete(`/grn/${g._id}`);
+      await api.delete(`/api/grn/${g._id}`);
       loadData();
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to delete GRN");
@@ -146,8 +134,6 @@ const GRNList = () => {
             <thead>
               <tr>
                 <th>GRN No</th>
-                <th>PO</th>
-                <th>Requisition</th>
                 <th>Vendor</th>
                 <th>Resort</th>
                 <th>Store</th>
@@ -160,7 +146,7 @@ const GRNList = () => {
             <tbody>
               {grns.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>
+                  <td colSpan="7" style={{ textAlign: "center" }}>
                     No GRNs found
                   </td>
                 </tr>
@@ -174,8 +160,6 @@ const GRNList = () => {
                       {g.grnNo}
                     </td>
 
-                    <td>{getPoNo(g)}</td>
-                    <td>{getReqNo(g)}</td>
                     <td>{getVendorName(g, vendors)}</td>
                     <td>{getResortName(g, resorts)}</td>
                     <td>{getStoreName(g, stores)}</td>
@@ -192,43 +176,28 @@ const GRNList = () => {
                       />
 
                       {g.status === "CREATED" && (
-                        <i
-                          className="ri-edit-line"
-                          title="Edit"
-                          style={{
-                            cursor: "pointer",
-                            marginRight: 12,
-                            color: "#f59e0b",
-                          }}
-                          onClick={() =>
-                            navigate(`/super-admin/grn/edit/${g._id}`)
-                          }
-                        />
-                      )}
+                        <>
+                          <i
+                            className="ri-lock-line"
+                            title="Close"
+                            style={{
+                              cursor: "pointer",
+                              marginRight: 12,
+                              color: "#22c55e",
+                            }}
+                            onClick={() => closeGrn(g)}
+                          />
 
-                      {g.status === "CREATED" && (
-                        <i
-                          className="ri-lock-line"
-                          title="Close"
-                          style={{
-                            cursor: "pointer",
-                            marginRight: 12,
-                            color: "#22c55e",
-                          }}
-                          onClick={() => closeGrn(g)}
-                        />
-                      )}
-
-                      {g.status === "CREATED" && (
-                        <i
-                          className="ri-delete-bin-line"
-                          title="Delete"
-                          style={{
-                            cursor: "pointer",
-                            color: "#ef4444",
-                          }}
-                          onClick={() => deleteGrn(g)}
-                        />
+                          <i
+                            className="ri-delete-bin-line"
+                            title="Delete"
+                            style={{
+                              cursor: "pointer",
+                              color: "#ef4444",
+                            }}
+                            onClick={() => deleteGrn(g)}
+                          />
+                        </>
                       )}
                     </td>
                   </tr>
