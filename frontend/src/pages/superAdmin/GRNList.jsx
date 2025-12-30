@@ -27,7 +27,7 @@ const getStoreName = (g, stores) => {
 };
 
 const getGrnDate = (g) => {
-  const d = g.grnDate || g.receivedDate || g.createdAt;
+  const d = g.grnDate || g.createdAt;
   return d ? new Date(d).toLocaleDateString() : "-";
 };
 
@@ -41,11 +41,8 @@ const GRNList = () => {
   const [vendors, setVendors] = useState([]);
   const [resorts, setResorts] = useState([]);
   const [stores, setStores] = useState([]);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  /* ---------------- LOAD DATA ---------------- */
 
   const normalize = (r) =>
     Array.isArray(r?.data) ? r.data : [];
@@ -57,14 +54,10 @@ const GRNList = () => {
 
       const [grnRes, vendorRes, resortRes, storeRes] =
         await Promise.all([
-          api.get("/api/grn", {
-            params: { resort: selectedResort },
-          }),
+          api.get("/api/grn", { params: { resort: selectedResort } }),
           api.get("/api/vendors"),
           api.get("/api/resorts"),
-          api.get("/api/stores", {
-            params: { resort: selectedResort },
-          }),
+          api.get("/api/stores", { params: { resort: selectedResort } }),
         ]);
 
       setGrns(normalize(grnRes));
@@ -72,7 +65,7 @@ const GRNList = () => {
       setResorts(normalize(resortRes));
       setStores(normalize(storeRes));
     } catch (err) {
-      console.error("GRN LOAD ERROR ❌", err);
+      console.error("GRN LOAD ERROR", err);
       setError("Failed to load GRNs");
     } finally {
       setLoading(false);
@@ -89,25 +82,26 @@ const GRNList = () => {
     navigate(`/super-admin/grn/${g._id}`);
   };
 
-  const closeGrn = async (g) => {
-    if (!window.confirm(`Close GRN ${g.grnNo}? Stock will be updated.`))
-      return;
-    try {
-      await api.post(`/api/grn/${g._id}/close`);
-      loadData();
-    } catch (err) {
-      alert(err?.response?.data?.message || "Failed to close GRN");
-    }
+  const editGrn = (e, g) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/super-admin/grn/edit/${g._id}`);
   };
 
-  const deleteGrn = async (g) => {
+  const closeGrn = async (e, g) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Close GRN ${g.grnNo}?`)) return;
+    await api.post(`/api/grn/${g._id}/close`);
+    loadData();
+  };
+
+  const deleteGrn = async (e, g) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
-    try {
-      await api.delete(`/api/grn/${g._id}`);
-      loadData();
-    } catch (err) {
-      alert(err?.response?.data?.message || "Failed to delete GRN");
-    }
+    await api.delete(`/api/grn/${g._id}`);
+    loadData();
   };
 
   /* ---------------- UI ---------------- */
@@ -139,7 +133,7 @@ const GRNList = () => {
                 <th>Store</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th style={{ width: 140 }}>Actions</th>
+                <th style={{ width: 160 }}>Actions</th>
               </tr>
             </thead>
 
@@ -152,52 +146,65 @@ const GRNList = () => {
                 </tr>
               ) : (
                 grns.map((g) => (
-                  <tr key={g._id}>
-                    <td
-                      style={{ color: "#4ea1ff", cursor: "pointer" }}
-                      onClick={() => viewGrn(g)}
-                    >
-                      {g.grnNo}
-                    </td>
-
+                  <tr
+                    key={g._id}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => viewGrn(g)}
+                  >
+                    <td style={{ color: "#4ea1ff" }}>{g.grnNo}</td>
                     <td>{getVendorName(g, vendors)}</td>
                     <td>{getResortName(g, resorts)}</td>
                     <td>{getStoreName(g, stores)}</td>
                     <td>{getGrnDate(g)}</td>
                     <td>{(g.status || "CREATED").toUpperCase()}</td>
 
-                    {/* ACTION ICONS */}
                     <td style={{ whiteSpace: "nowrap" }}>
+                      {/* VIEW */}
                       <i
                         className="ri-eye-line"
                         title="View"
-                        style={{ cursor: "pointer", marginRight: 12 }}
-                        onClick={() => viewGrn(g)}
+                        style={{ marginRight: 12 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          viewGrn(g);
+                        }}
                       />
 
+                      {/* EDIT */}
                       {g.status === "CREATED" && (
-                        <>
-                          <i
-                            className="ri-lock-line"
-                            title="Close"
-                            style={{
-                              cursor: "pointer",
-                              marginRight: 12,
-                              color: "#22c55e",
-                            }}
-                            onClick={() => closeGrn(g)}
-                          />
+                        <i
+                          className="ri-edit-line"
+                          title="Edit"
+                          style={{
+                            marginRight: 12,
+                            color: "#f59e0b",
+                          }}
+                          onClick={(e) => editGrn(e, g)}
+                        />
+                      )}
 
-                          <i
-                            className="ri-delete-bin-line"
-                            title="Delete"
-                            style={{
-                              cursor: "pointer",
-                              color: "#ef4444",
-                            }}
-                            onClick={() => deleteGrn(g)}
-                          />
-                        </>
+                      {/* CLOSE */}
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-lock-line"
+                          title="Close"
+                          style={{
+                            marginRight: 12,
+                            color: "#22c55e",
+                          }}
+                          onClick={(e) => closeGrn(e, g)}
+                        />
+                      )}
+
+                      {/* DELETE */}
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-delete-bin-line"
+                          title="Delete"
+                          style={{ color: "#ef4444" }}
+                          onClick={(e) => deleteGrn(e, g)}
+                        />
                       )}
                     </td>
                   </tr>
