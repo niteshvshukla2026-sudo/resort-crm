@@ -20,5 +20,28 @@ try {
 } catch (e) {
   // ignore
 }
+// 🔥 RESPONSE INTERCEPTOR (LOGOUT PROTECTION)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const message = error.response?.data?.message || "";
+
+    // ❌ logout ONLY when token really invalid
+    if (status === 401) {
+      if (
+        message.includes("Invalid token") ||
+        message.includes("Token expired") ||
+        message.includes("Unauthorized")
+      ) {
+        localStorage.removeItem("auth");
+        window.location.href = "/login";
+      }
+    }
+
+    // ⚠️ IMPORTANT: do NOT auto logout on other errors
+    return Promise.reject(error);
+  }
+);
 
 export default api;

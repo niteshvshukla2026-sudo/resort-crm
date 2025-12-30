@@ -1,10 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import api from "../../utils/api";
 import { useNavigate } from "react-router-dom";
 import { useResort } from "../../context/ResortContext";
-
-const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 /* ---------------- HELPERS ---------------- */
 
@@ -72,13 +69,14 @@ const GRNList = () => {
 
       const [grnRes, vendorRes, resortRes, storeRes] =
         await Promise.all([
-         axios.get(`${API_BASE}/api/grn`, {
-  params: { resort: selectedResort },
-}),
-
-          axios.get(`${API_BASE}/api/vendors`),
-          axios.get(`${API_BASE}/api/resorts`),
-          axios.get(`${API_BASE}/api/stores`),
+          api.get("/grn", {
+            params: { resort: selectedResort },
+          }),
+          api.get("/vendors"),
+          api.get("/resorts"),
+          api.get("/stores", {
+            params: { resort: selectedResort },
+          }),
         ]);
 
       setGrns(normalize(grnRes));
@@ -95,18 +93,7 @@ const GRNList = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  /* ---------------- FILTER (GLOBAL RESORT ONLY) ---------------- */
-
-  const filteredGrns = useMemo(() => {
-    return grns.filter((g) => {
-      if (selectedResort && selectedResort !== "ALL") {
-        if (String(g.resort) !== String(selectedResort)) return false;
-      }
-      return true;
-    });
-  }, [grns, selectedResort]);
+  }, [selectedResort]);
 
   /* ---------------- ACTIONS ---------------- */
 
@@ -118,19 +105,21 @@ const GRNList = () => {
     if (!window.confirm(`Close GRN ${g.grnNo}? Stock will be updated.`))
       return;
     try {
-      await axios.post(`${API_BASE}/api/grn/${g._id}/close`);
+      await api.post(`/grn/${g._id}/close`);
       loadData();
     } catch (err) {
-      alert(
-        err?.response?.data?.message || "Failed to close GRN"
-      );
+      alert(err?.response?.data?.message || "Failed to close GRN");
     }
   };
 
   const deleteGrn = async (g) => {
     if (!window.confirm(`Delete GRN ${g.grnNo}?`)) return;
-    await axios.delete(`${API_BASE}/api/grn/${g._id}`);
-    loadData();
+    try {
+      await api.delete(`/grn/${g._id}`);
+      loadData();
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to delete GRN");
+    }
   };
 
   /* ---------------- UI ---------------- */
@@ -164,19 +153,19 @@ const GRNList = () => {
                 <th>Store</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th style={{ width: 120 }}>Actions</th>
+                <th style={{ width: 140 }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {filteredGrns.length === 0 ? (
+              {grns.length === 0 ? (
                 <tr>
                   <td colSpan="9" style={{ textAlign: "center" }}>
                     No GRNs found
                   </td>
                 </tr>
               ) : (
-                filteredGrns.map((g) => (
+                grns.map((g) => (
                   <tr key={g._id}>
                     <td
                       style={{ color: "#4ea1ff", cursor: "pointer" }}
@@ -193,44 +182,55 @@ const GRNList = () => {
                     <td>{getGrnDate(g)}</td>
                     <td>{(g.status || "CREATED").toUpperCase()}</td>
 
-
                     {/* ACTION ICONS */}
-                   <td style={{ whiteSpace: "nowrap" }}>
-  <i
-    className="ri-eye-line"
-    title="View"
-    style={{ cursor: "pointer", marginRight: 12 }}
-    onClick={() => viewGrn(g)}
-  />
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <i
+                        className="ri-eye-line"
+                        title="View"
+                        style={{ cursor: "pointer", marginRight: 12 }}
+                        onClick={() => viewGrn(g)}
+                      />
 
-  {g.status === "CREATED" && (
-    <i
-      className="ri-edit-line"
-      title="Edit"
-      style={{ cursor: "pointer", marginRight: 12, color: "#f59e0b" }}
-      onClick={() => navigate(`/super-admin/grn/edit/${g._id}`)}
-    />
-  )}
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-edit-line"
+                          title="Edit"
+                          style={{
+                            cursor: "pointer",
+                            marginRight: 12,
+                            color: "#f59e0b",
+                          }}
+                          onClick={() =>
+                            navigate(`/super-admin/grn/edit/${g._id}`)
+                          }
+                        />
+                      )}
 
-  {g.status === "CREATED" && (
-    <i
-      className="ri-lock-line"
-      title="Close"
-      style={{ cursor: "pointer", marginRight: 12, color: "#22c55e" }}
-      onClick={() => closeGrn(g)}
-    />
-  )}
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-lock-line"
+                          title="Close"
+                          style={{
+                            cursor: "pointer",
+                            marginRight: 12,
+                            color: "#22c55e",
+                          }}
+                          onClick={() => closeGrn(g)}
+                        />
+                      )}
 
-  {g.status === "CREATED" && (
-    <i
-      className="ri-delete-bin-line"
-      title="Delete"
-      style={{ cursor: "pointer", color: "#ef4444" }}
-      onClick={() => deleteGrn(g)}
-    />
-  )}
-</td>
-
+                      {g.status === "CREATED" && (
+                        <i
+                          className="ri-delete-bin-line"
+                          title="Delete"
+                          style={{
+                            cursor: "pointer",
+                            color: "#ef4444",
+                          }}
+                          onClick={() => deleteGrn(g)}
+                        />
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
