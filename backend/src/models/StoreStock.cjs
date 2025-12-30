@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const storeStockSchema = new mongoose.Schema(
   {
+    resort: { type: String, required: true },
     store: { type: String, required: true },
     item: { type: String, required: true },
     qty: { type: Number, default: 0 },
@@ -9,8 +10,10 @@ const storeStockSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// unique stock per store + item
-storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
+storeStockSchema.index(
+  { resort: 1, store: 1, item: 1 },
+  { unique: true }
+);
 
 module.exports =
   mongoose.models.StoreStock ||
