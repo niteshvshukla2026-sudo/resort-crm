@@ -1,24 +1,17 @@
-export const hasPermission = (user, module, action) => {
+export const hasPermission = (user, module, action = "READ") => {
   if (!user) return false;
 
-  // 🔥 SUPER ADMIN = ALL ACCESS
+  // 🔥 SUPER ADMIN = FULL ACCESS
   if (
     user.role === "SUPER_ADMIN" ||
-    user.role?.name === "SUPER_ADMIN" ||
-    user.role?.key === "SUPER_ADMIN"
+    user.role?.name === "SUPER_ADMIN"
   ) {
     return true;
   }
 
-  const permissions =
-    user.permissions ||
-    user.role?.permissions ||
-    [];
-
-  return permissions.some(
+  return (user.permissions || []).some(
     (p) =>
       p.module === module &&
-      (p.actions?.includes(action) ||
-        p.actions?.includes("all"))
+      p.actions.includes(action)
   );
 };

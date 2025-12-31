@@ -10,29 +10,48 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    // ✅ SUPER ADMIN (broad access)
+    /* ===============================
+       🔥 SUPER ADMIN → FULL DASHBOARD
+    =============================== */
     if (
-      hasPermission(user, "dashboard", "view") ||
-      hasPermission(user, "requisition", "view")
+      user.role === "SUPER_ADMIN" ||
+      user.role?.name === "SUPER_ADMIN"
     ) {
       navigate("/super-admin/dashboard", { replace: true });
       return;
     }
 
-    // ✅ RESORT USER
-    if (
-      hasPermission(user, "requisition", "create") ||
-      hasPermission(user, "grn", "create")
-    ) {
-      navigate("/resort", { replace: true });
+    /* ===============================
+       🔥 NORMAL USERS → COMMON DASHBOARD
+       (cards permission-based render honge)
+    =============================== */
+    const hasAnyReadPermission = [
+      "USERS",
+      "ROLES",
+      "RESORTS",
+      "STORES",
+      "VENDORS",
+      "ITEMS",
+      "REQUISTITIONS",
+      "PO",
+      "GRN",
+      "REPORTS",
+    ].some((module) =>
+      hasPermission(user, module, "READ")
+    );
+
+    if (hasAnyReadPermission) {
+      navigate("/dashboard", { replace: true });
       return;
     }
 
-    // ✅ FINAL FALLBACK (VERY IMPORTANT)
+    /* ===============================
+       ❌ NO ACCESS → LOGIN
+    =============================== */
     navigate("/login", { replace: true });
   }, [user, navigate]);
 
-  return null; // intentional
+  return null; // intentional redirect-only component
 };
 
 export default Dashboard;
