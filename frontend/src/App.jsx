@@ -41,7 +41,7 @@ import GRNEntry from "./pages/resortUser/GRNEntry.jsx";
 import Reports from "./pages/resortUser/Reports.jsx";
 
 /* ========= ROUTE GUARD ========= */
-import ProtectedRoute from "./routes/ProtectedRoute.jsx";
+import ProtectedRoute from "./router/ProtectedRoute.jsx";
 
 const App = () => {
   return (
