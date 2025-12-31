@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { hasPermission } from "../../utils/permission";
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -10,48 +9,36 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    /* ===============================
-       🔥 SUPER ADMIN → FULL DASHBOARD
-    =============================== */
-    if (
-      user.role === "SUPER_ADMIN" ||
-      user.role?.name === "SUPER_ADMIN"
-    ) {
+    const permissions = user.permissions || [];
+
+    // ❌ No access at all
+    if (permissions.length === 0) {
+      navigate("/login", { replace: true });
+      return;
+    }
+
+    // ✅ SUPER ADMIN (always full panel)
+    if (user.role?.key === "SUPER_ADMIN" || user.role === "SUPER_ADMIN") {
       navigate("/super-admin/dashboard", { replace: true });
       return;
     }
 
-    /* ===============================
-       🔥 NORMAL USERS → COMMON DASHBOARD
-       (cards permission-based render honge)
-    =============================== */
-    const hasAnyReadPermission = [
-      "USERS",
-      "ROLES",
-      "RESORTS",
-      "STORES",
-      "VENDORS",
-      "ITEMS",
-      "REQUISTITIONS",
-      "PO",
-      "GRN",
-      "REPORTS",
-    ].some((module) =>
-      hasPermission(user, module, "READ")
+    // 🔥 ANY OTHER ROLE (AUTO)
+    // If user has ANY READ permission → resort panel
+    const hasReadAccess = permissions.some(p =>
+      p.actions.includes("READ")
     );
 
-    if (hasAnyReadPermission) {
-      navigate("/dashboard", { replace: true });
+    if (hasReadAccess) {
+      navigate("/resort", { replace: true });
       return;
     }
 
-    /* ===============================
-       ❌ NO ACCESS → LOGIN
-    =============================== */
+    // fallback
     navigate("/login", { replace: true });
   }, [user, navigate]);
 
-  return null; // intentional redirect-only component
+  return null;
 };
 
 export default Dashboard;
