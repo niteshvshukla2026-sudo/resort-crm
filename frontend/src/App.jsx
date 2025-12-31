@@ -8,7 +8,8 @@ import SuperAdminLayout from "./layouts/SuperAdminLayout.jsx";
 import ResortUserLayout from "./layouts/ResortUserLayout.jsx";
 
 /* ========= COMMON ========= */
-import Dashboard from "/pages/Dashboard/Dashboard.jsx";
+import Dashboard from "./pages/dashboard/Dashboard";
+
 
 /* ========= SUPER ADMIN PAGES ========= */
 import SuperAdminDashboard from "./pages/superAdmin/Dashboard.jsx";
