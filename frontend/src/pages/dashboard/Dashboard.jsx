@@ -1,44 +1,59 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { hasPermission } from "../../utils/permission";
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user) return;
-
-    const permissions = user.permissions || [];
-
-    // ❌ No access at all
-    if (permissions.length === 0) {
+    if (loading) return;        // ⏳ wait for auth hydrate
+    if (!user) {
       navigate("/login", { replace: true });
       return;
     }
 
-    // ✅ SUPER ADMIN (always full panel)
-    if (user.role?.key === "SUPER_ADMIN" || user.role === "SUPER_ADMIN") {
+    /* ===============================
+       🟢 SUPER ADMIN → FULL PANEL
+    =============================== */
+    if (
+      user.role === "SUPER_ADMIN" ||
+      user.role?.key === "SUPER_ADMIN"
+    ) {
       navigate("/super-admin/dashboard", { replace: true });
       return;
     }
 
-    // 🔥 ANY OTHER ROLE (AUTO)
-    // If user has ANY READ permission → resort panel
-    const hasReadAccess = permissions.some(p =>
-      p.actions.includes("READ")
-    );
+    /* ===============================
+       🔥 CUSTOM ROLES (AUTO ROUTING)
+       Rule:
+       - If can CREATE / READ Requisition → Resort Panel
+       - If can CREATE / APPROVE PO / GRN → Resort Panel
+    =============================== */
 
-    if (hasReadAccess) {
+    const canUseResortPanel =
+      hasPermission(user, "REQUISITIONS", "CREATE") ||
+      hasPermission(user, "REQUISITIONS", "READ") ||
+      hasPermission(user, "PO", "CREATE") ||
+      hasPermission(user, "PO", "APPROVE") ||
+      hasPermission(user, "GRN", "CREATE") ||
+      hasPermission(user, "GRN", "APPROVE");
+
+    if (canUseResortPanel) {
       navigate("/resort", { replace: true });
       return;
     }
 
-    // fallback
+    /* ===============================
+       ❌ NO VALID PERMISSION
+    =============================== */
+    console.warn("No dashboard permission for user:", user);
     navigate("/login", { replace: true });
-  }, [user, navigate]);
 
-  return null;
+  }, [user, loading, navigate]);
+
+  return null; // intentional redirect-only component
 };
 
 export default Dashboard;

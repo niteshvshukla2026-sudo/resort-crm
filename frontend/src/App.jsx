@@ -10,7 +10,6 @@ import ResortUserLayout from "./layouts/ResortUserLayout.jsx";
 /* ========= COMMON ========= */
 import Dashboard from "./pages/dashboard/Dashboard";
 
-
 /* ========= SUPER ADMIN PAGES ========= */
 import SuperAdminDashboard from "./pages/superAdmin/Dashboard.jsx";
 import SuperRequisitionList from "./pages/superAdmin/RequisitionList.jsx";
@@ -49,7 +48,7 @@ const App = () => {
       {/* ================= AUTH ================= */}
       <Route path="/login" element={<Login />} />
 
-      {/* ================= COMMON DASHBOARD ================= */}
+      {/* ================= CENTRAL DASHBOARD DECIDER ================= */}
       <Route
         path="/dashboard"
         element={
@@ -63,7 +62,7 @@ const App = () => {
       <Route
         path="/super-admin"
         element={
-          <ProtectedRoute module="dashboard" action="view">
+          <ProtectedRoute>
             <SuperAdminLayout />
           </ProtectedRoute>
         }
@@ -105,7 +104,7 @@ const App = () => {
       <Route
         path="/resort"
         element={
-          <ProtectedRoute module="dashboard" action="view">
+          <ProtectedRoute>
             <ResortUserLayout />
           </ProtectedRoute>
         }

@@ -4,34 +4,35 @@ import "../../styles/auth.css";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const Login = () => {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   /* =================================================
-     🔥 AUTO REDIRECT AFTER SUCCESSFUL LOGIN
+     🔥 AUTO REDIRECT AFTER LOGIN (SINGLE SOURCE)
   ================================================= */
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!authLoading && isAuthenticated) {
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+
+    if (!email || !password) {
+      setError("Email and password required");
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
-      if (!email || !password) {
-        throw new Error("Email and password required");
-      }
-
-      // 🔐 SINGLE SOURCE LOGIN
       const res = await login(email, password);
 
       if (!res.success) {
@@ -39,12 +40,12 @@ const Login = () => {
       }
 
       // ❌ YAHAN navigate NAHI karna
-      // redirect useEffect karega
+      // redirect useEffect karega (safe)
 
     } catch (err) {
       setError(err.message || "Login failed");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -73,6 +74,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@resort.com"
+                autoComplete="username"
                 required
               />
             </label>
@@ -84,6 +86,7 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
               />
             </label>
@@ -93,9 +96,9 @@ const Login = () => {
             <button
               type="submit"
               className="auth-button"
-              disabled={loading}
+              disabled={submitting}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {submitting ? "Signing in..." : "Sign in"}
             </button>
           </form>
         </div>
