@@ -10,20 +10,29 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    // 🔥 SUPER ADMIN FLOW
-    if (hasPermission(user, "requisition", "view")) {
+    // ✅ SUPER ADMIN (broad access)
+    if (
+      hasPermission(user, "dashboard", "view") ||
+      hasPermission(user, "requisition", "view")
+    ) {
       navigate("/super-admin/dashboard", { replace: true });
       return;
     }
 
-    // 🔥 RESORT USER FLOW
-    if (hasPermission(user, "requisition", "create")) {
+    // ✅ RESORT USER
+    if (
+      hasPermission(user, "requisition", "create") ||
+      hasPermission(user, "grn", "create")
+    ) {
       navigate("/resort", { replace: true });
       return;
     }
+
+    // ✅ FINAL FALLBACK (VERY IMPORTANT)
+    navigate("/login", { replace: true });
   }, [user, navigate]);
 
-  return null; // ⛔ kuch render hi nahi karega
+  return null; // intentional
 };
 
 export default Dashboard;
