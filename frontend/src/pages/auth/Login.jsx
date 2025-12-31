@@ -1,16 +1,25 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../styles/auth.css";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const Login = () => {
-  const { login, loading: authLoading } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  /* =================================================
+     🔥 AUTO REDIRECT AFTER SUCCESSFUL LOGIN
+  ================================================= */
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,17 +31,17 @@ const Login = () => {
         throw new Error("Email and password required");
       }
 
-      // ✅ SINGLE SOURCE OF TRUTH → AuthContext
+      // 🔐 SINGLE SOURCE LOGIN
       const res = await login(email, password);
 
       if (!res.success) {
         throw new Error(res.error || "Login failed");
       }
 
-      // ✅ ROLE-WISE / COMMON DASHBOARD
-      navigate("/dashboard");
+      // ❌ YAHAN navigate NAHI karna
+      // redirect useEffect karega
+
     } catch (err) {
-      console.error("Login error:", err);
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -84,9 +93,9 @@ const Login = () => {
             <button
               type="submit"
               className="auth-button"
-              disabled={loading || authLoading}
+              disabled={loading}
             >
-              {loading || authLoading ? "Signing in..." : "Sign in"}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
         </div>
