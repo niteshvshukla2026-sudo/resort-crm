@@ -1,20 +1,29 @@
-import React from "react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { hasPermission } from "../../utils/permission";
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  return (
-    <div>
-      <h2>Dashboard</h2>
+  useEffect(() => {
+    if (!user) return;
 
-      {hasPermission(user, "requisition", "view") && <div>Requisitions</div>}
-      {hasPermission(user, "grn", "view") && <div>GRN</div>}
-      {hasPermission(user, "inventory", "view") && <div>Inventory</div>}
-      {hasPermission(user, "consumption", "view") && <div>Consumption</div>}
-    </div>
-  );
+    // 🔥 SUPER ADMIN FLOW
+    if (hasPermission(user, "requisition", "view")) {
+      navigate("/super-admin/dashboard", { replace: true });
+      return;
+    }
+
+    // 🔥 RESORT USER FLOW
+    if (hasPermission(user, "requisition", "create")) {
+      navigate("/resort", { replace: true });
+      return;
+    }
+  }, [user, navigate]);
+
+  return null; // ⛔ kuch render hi nahi karega
 };
 
 export default Dashboard;
