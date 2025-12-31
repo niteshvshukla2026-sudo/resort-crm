@@ -23,6 +23,34 @@ function buildLoginUrl() {
 // allow cookies if needed
 axios.defaults.withCredentials = true;
 
+/* =====================================================
+ 🔥 CHANGE 1: USER NORMALIZER (ROLE + PERMISSIONS SAFE)
+===================================================== */
+function normalizeUser(rawUser) {
+  if (!rawUser) return null;
+
+  // role can be STRING or OBJECT
+  let roleObj = rawUser.role;
+
+  if (typeof roleObj === "string") {
+    roleObj = {
+      key: roleObj,
+      name: roleObj,
+      permissions: [],
+    };
+  }
+
+  if (typeof roleObj === "object" && !Array.isArray(roleObj.permissions)) {
+    roleObj.permissions = [];
+  }
+
+  return {
+    ...rawUser,
+    role: roleObj,
+    permissions: roleObj.permissions || [],
+  };
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -37,7 +65,9 @@ export const AuthProvider = ({ children }) => {
       if (stored) {
         const parsed = JSON.parse(stored);
 
-        setUser(parsed.user || null);
+        const safeUser = normalizeUser(parsed.user);
+
+        setUser(safeUser || null);
         setToken(parsed.token || null);
 
         if (parsed.token) {
@@ -96,7 +126,9 @@ export const AuthProvider = ({ children }) => {
 
       const data = res?.data || {};
       const newToken = data.token || data.accessToken || null;
-      const newUser = data.user || data.data || null;
+      const newUserRaw = data.user || data.data || null;
+
+      const newUser = normalizeUser(newUserRaw);
 
       setToken(newToken);
       setUser(newUser);
@@ -144,6 +176,10 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAuthenticated: !!token,
+
+        // 🔥 CHANGE 2: DIRECT PERMISSIONS ACCESS
+        permissions: user?.permissions || [],
+        role: user?.role || null,
       }}
     >
       {children}
