@@ -1,22 +1,15 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { hasPermission } from "../../utils/permission";
 
 const Dashboard = () => {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (loading) return;        // ⏳ wait for auth hydrate
-    if (!user) {
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!user) return;
 
-    /* ===============================
-       🟢 SUPER ADMIN → FULL PANEL
-    =============================== */
+    // SUPER ADMIN
     if (
       user.role === "SUPER_ADMIN" ||
       user.role?.key === "SUPER_ADMIN"
@@ -25,35 +18,23 @@ const Dashboard = () => {
       return;
     }
 
-    /* ===============================
-       🔥 CUSTOM ROLES (AUTO ROUTING)
-       Rule:
-       - If can CREATE / READ Requisition → Resort Panel
-       - If can CREATE / APPROVE PO / GRN → Resort Panel
-    =============================== */
+    // ANY ROLE WITH DASHBOARD READ
+    const hasDashboard = user.permissions?.some(
+      (p) =>
+        p.module === "DASHBOARD" &&
+        p.actions.includes("READ")
+    );
 
-    const canUseResortPanel =
-      hasPermission(user, "REQUISITIONS", "CREATE") ||
-      hasPermission(user, "REQUISITIONS", "READ") ||
-      hasPermission(user, "PO", "CREATE") ||
-      hasPermission(user, "PO", "APPROVE") ||
-      hasPermission(user, "GRN", "CREATE") ||
-      hasPermission(user, "GRN", "APPROVE");
-
-    if (canUseResortPanel) {
+    if (hasDashboard) {
       navigate("/resort", { replace: true });
       return;
     }
 
-    /* ===============================
-       ❌ NO VALID PERMISSION
-    =============================== */
-    console.warn("No dashboard permission for user:", user);
+    // fallback
     navigate("/login", { replace: true });
+  }, [user, navigate]);
 
-  }, [user, loading, navigate]);
-
-  return null; // intentional redirect-only component
+  return null;
 };
 
 export default Dashboard;

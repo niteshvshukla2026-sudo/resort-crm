@@ -8,7 +8,7 @@ import SuperAdminLayout from "./layouts/SuperAdminLayout.jsx";
 import ResortUserLayout from "./layouts/ResortUserLayout.jsx";
 
 /* ========= COMMON ========= */
-import Dashboard from "./pages/dashboard/Dashboard";
+import Dashboard from "./pages/dashboard/Dashboard.jsx";
 
 /* ========= SUPER ADMIN PAGES ========= */
 import SuperAdminDashboard from "./pages/superAdmin/Dashboard.jsx";
@@ -49,6 +49,7 @@ const App = () => {
       <Route path="/login" element={<Login />} />
 
       {/* ================= CENTRAL DASHBOARD DECIDER ================= */}
+      {/* Ye sirf redirect karega based on role + permissions */}
       <Route
         path="/dashboard"
         element={

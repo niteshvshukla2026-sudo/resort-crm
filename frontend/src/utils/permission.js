@@ -1,17 +1,30 @@
-export const hasPermission = (user, module, action = "READ") => {
+// utils/permission.js
+
+export function hasPermission(user, module, action) {
   if (!user) return false;
 
-  // 🔥 SUPER ADMIN = FULL ACCESS
+  // SUPER ADMIN — always allow
   if (
     user.role === "SUPER_ADMIN" ||
-    user.role?.name === "SUPER_ADMIN"
+    user.role?.key === "SUPER_ADMIN"
   ) {
     return true;
   }
 
-  return (user.permissions || []).some(
+  const permissions =
+    user.permissions ||
+    user.role?.permissions ||
+    [];
+
+  if (!Array.isArray(permissions)) return false;
+
+  const mod = module.toUpperCase();
+  const act = action.toUpperCase();
+
+  return permissions.some(
     (p) =>
-      p.module === module &&
-      p.actions.includes(action)
+      p.module === mod &&
+      Array.isArray(p.actions) &&
+      p.actions.includes(act)
   );
-};
+}
