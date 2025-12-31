@@ -8,11 +8,12 @@ import axios from "axios";
 
 const AuthContext = createContext(null);
 
-// VITE_API_BASE (can be with or without /api)
+// ===============================
+// API BASE
+// ===============================
 const API_BASE_RAW = import.meta.env.VITE_API_BASE ?? "";
 const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
-// Ensure correct login URL
 function buildLoginUrl() {
   if (API_BASE.endsWith("/api")) {
     return `${API_BASE}/auth/login`;
@@ -20,16 +21,14 @@ function buildLoginUrl() {
   return `${API_BASE}/api/auth/login`;
 }
 
-// allow cookies if needed
 axios.defaults.withCredentials = true;
 
 /* =====================================================
- 🔥 CHANGE 1: USER NORMALIZER (ROLE + PERMISSIONS SAFE)
+ 🔥 USER NORMALIZER (ROLE + PERMISSIONS SAFE)
 ===================================================== */
 function normalizeUser(rawUser) {
   if (!rawUser) return null;
 
-  // role can be STRING or OBJECT
   let roleObj = rawUser.role;
 
   if (typeof roleObj === "string") {
@@ -66,12 +65,14 @@ export const AuthProvider = ({ children }) => {
         const parsed = JSON.parse(stored);
 
         const safeUser = normalizeUser(parsed.user);
+        const storedToken = parsed.token || null;
 
-        setUser(safeUser || null);
-        setToken(parsed.token || null);
+        setUser(safeUser);
+        setToken(storedToken);
 
-        if (parsed.token) {
-          axios.defaults.headers.common.Authorization = `Bearer ${parsed.token}`;
+        if (storedToken) {
+          axios.defaults.headers.common.Authorization =
+            `Bearer ${storedToken}`;
         }
       }
     } catch (err) {
@@ -83,68 +84,74 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ===================================================
-  // 🚨 AXIOS INTERCEPTOR (NO AUTO LOGOUT – VERY IMPORTANT)
+  // 🚨 AXIOS INTERCEPTOR (NO AUTO LOGOUT)
   // ===================================================
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
-        const status = error?.response?.status;
-
-        // ❌ NEVER AUTO LOGOUT
-        if (status === 401) {
+        if (error?.response?.status === 401) {
           console.warn(
-            "401 received (ignored) – user will NOT be logged out automatically"
+            "401 received – ignored (no auto logout)"
           );
         }
-
         return Promise.reject(error);
       }
     );
 
-    return () => {
-      axios.interceptors.response.eject(interceptor);
-    };
+    return () => axios.interceptors.response.eject(interceptor);
   }, []);
 
   // ===============================
-  // 🔑 LOGIN
+  // 🔑 LOGIN (UNIVERSAL RESPONSE HANDLER)
   // ===============================
   const login = async (a, b) => {
-    let credentials;
-
-    if (typeof a === "string") {
-      credentials = { email: a, password: b };
-    } else {
-      credentials = a || {};
-    }
+    const credentials =
+      typeof a === "string" ? { email: a, password: b } : a || {};
 
     try {
-      const res = await axios.post(buildLoginUrl(), credentials, {
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await axios.post(
+        buildLoginUrl(),
+        credentials,
+        { headers: { "Content-Type": "application/json" } }
+      );
 
-      const data = res?.data || {};
-      const newToken = data.token || data.accessToken || null;
-      const newUserRaw = data.user || data.data || null;
+      const raw = res?.data || {};
+
+      // 🔥 UNIVERSAL TOKEN PICKER
+      const newToken =
+        raw.token ||
+        raw.accessToken ||
+        raw?.data?.token ||
+        raw?.data?.accessToken ||
+        null;
+
+      // 🔥 UNIVERSAL USER PICKER
+      const newUserRaw =
+        raw.user ||
+        raw?.data?.user ||
+        (raw?.data && !raw?.data?.token ? raw.data : null) ||
+        null;
+
+      if (!newToken || !newUserRaw) {
+        throw new Error("Invalid login response from server");
+      }
 
       const newUser = normalizeUser(newUserRaw);
 
       setToken(newToken);
       setUser(newUser);
 
-      if (newToken) {
-        axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-      }
+      axios.defaults.headers.common.Authorization =
+        `Bearer ${newToken}`;
 
       localStorage.setItem(
         "auth",
         JSON.stringify({ token: newToken, user: newUser })
       );
 
-      return { success: true, data };
+      return { success: true };
     } catch (err) {
-      const status = err?.response?.status;
       const message =
         err?.response?.data?.message ||
         err.message ||
@@ -152,17 +159,16 @@ export const AuthProvider = ({ children }) => {
 
       console.error("Login error:", message);
 
-      return { success: false, status, error: message };
+      return { success: false, error: message };
     }
   };
 
   // ===============================
-  // 🚪 LOGOUT (ONLY MANUAL)
+  // 🚪 LOGOUT
   // ===============================
   const logout = () => {
     setUser(null);
     setToken(null);
-
     localStorage.removeItem("auth");
     delete axios.defaults.headers.common.Authorization;
   };
@@ -177,7 +183,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         isAuthenticated: !!token,
 
-        // 🔥 CHANGE 2: DIRECT PERMISSIONS ACCESS
+        // 🔥 DIRECT ACCESS
         permissions: user?.permissions || [],
         role: user?.role || null,
       }}
