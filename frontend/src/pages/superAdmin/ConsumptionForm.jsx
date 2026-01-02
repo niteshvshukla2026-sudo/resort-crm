@@ -46,21 +46,6 @@ const ConsumptionForm = () => {
   const isRecipeType =
     type === "RECIPE_LUMPSUM" || type === "RECIPE_PORTION";
 
-  // 🚫 HARD BLOCK IF RESORT NOT SELECTED
-  useEffect(() => {
-    if (!selectedResort || selectedResort === "ALL") {
-      setError("Please select a resort first");
-    } else {
-      setError("");
-    }
-  }, [selectedResort]);
-
-  // 🔁 RESET STORE & LINES ON RESORT / TYPE CHANGE
-  useEffect(() => {
-    setStoreFrom("");
-    setLines([emptyLine()]);
-  }, [selectedResort, type]);
-
   // ================= LOAD MASTERS (STRICT RESORT-WISE) =================
   const loadMasters = async () => {
     if (!selectedResort || selectedResort === "ALL") {
@@ -101,6 +86,37 @@ const ConsumptionForm = () => {
     // eslint-disable-next-line
   }, [selectedResort]);
 
+  // ================= LOAD CONSUMPTION (EDIT MODE) =================
+  useEffect(() => {
+    if (!id) return;
+
+    const loadConsumption = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/consumption/${id}`);
+        const c = res.data;
+
+        setType(c.type);
+        setStoreFrom(getId(c.storeFrom));
+        setNotes(c.notes || "");
+
+        setLines(
+          (c.lines || []).map((l) => ({
+            category: getId(l.category) || "",
+            item: getId(l.item) || "",
+            recipe: getId(l.recipe) || "",
+            qty: l.qty,
+            uom: l.uom || "",
+            remarks: l.remarks || "",
+          }))
+        );
+      } catch (err) {
+        console.error("Load consumption failed", err);
+      }
+    };
+
+    loadConsumption();
+  }, [id]);
+
   // ================= FILTER RECIPES BY TYPE =================
   const filteredRecipes = recipes.filter((r) => {
     if (type === "RECIPE_LUMPSUM" && r.type !== "RECIPE_LUMPSUM") return false;
@@ -140,11 +156,6 @@ const ConsumptionForm = () => {
 
   // ================= VALIDATION =================
   const validate = () => {
-    if (!selectedResort || selectedResort === "ALL") {
-      setError("Resort selection is mandatory");
-      return false;
-    }
-
     if (!storeFrom) {
       setError("Store is required");
       return false;
@@ -217,8 +228,6 @@ const ConsumptionForm = () => {
       </div>
 
       <form className="sa-card" onSubmit={handleSubmit}>
-        {error && <div className="sa-modal-error">{error}</div>}
-
         <div
           style={{
             display: "grid",
@@ -242,7 +251,6 @@ const ConsumptionForm = () => {
             <select
               value={storeFrom}
               onChange={(e) => setStoreFrom(e.target.value)}
-              disabled={!selectedResort || selectedResort === "ALL"}
             >
               <option value="">Select Store</option>
               {stores.map((s) => (
@@ -366,10 +374,11 @@ const ConsumptionForm = () => {
           type="button"
           className="sa-secondary-button"
           onClick={addLine}
-          disabled={!selectedResort || selectedResort === "ALL"}
         >
           + Add
         </button>
+
+        {error && <div className="sa-modal-error">{error}</div>}
 
         <div className="sa-modal-actions">
           <button
@@ -379,10 +388,7 @@ const ConsumptionForm = () => {
           >
             Cancel
           </button>
-          <button
-            className="sa-primary-button"
-            disabled={saving || !selectedResort || selectedResort === "ALL"}
-          >
+          <button className="sa-primary-button" disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </button>
         </div>

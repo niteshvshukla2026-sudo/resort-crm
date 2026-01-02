@@ -10,7 +10,6 @@ const multer = require("multer");
 const csvToJson = require("csvtojson");
 const upload = multer({ dest: "tmp/" });
 
-
 function createRouter({ useMongo, mongoose }) {
   const router = express.Router();
   let UserModel = null;
@@ -143,10 +142,7 @@ const storeStockSchema = new Schema(
   { timestamps: true }
 );
 
-storeStockSchema.index(
-  { resort: 1, store: 1, item: 1 },
-  { unique: true }
-);
+storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
 
 const StoreStock =
   mongoose.models.StoreStock ||
@@ -811,7 +807,7 @@ router.patch(
       repl.status = "SENT_TO_VENDOR";
 
       repl.lines = repl.lines.map((ln) => {
-        const m = lines.find((x) => x.itemId === ln.itemId);
+        const m = lines.find((x) => x.lineId === ln.lineId);
         return m
           ? { ...ln.toObject(), issuedQty: Number(m.issueQty || 0) }
           : ln;
@@ -843,18 +839,15 @@ router.post(
       for (const ln of lines) {
         const qty = Number(ln.receivedQty || 0);
         if (!ln.itemId || qty <= 0) continue;
-await StoreStock.findOneAndUpdate(
-  {
-    resort: String(grn.resort),
-    store: String(grn.store),
-    item: String(line.item),
-  },
-  { $inc: { qty } },
-  { upsert: true, new: true }
-);
 
-
-
+        await StoreStock.findOneAndUpdate(
+          {
+            store: storeId,
+            item: ln.itemId,
+          },
+          { $inc: { qty } },
+          { upsert: true, new: true }
+        );
       }
 
       repl.status = "CLOSED";
@@ -1708,10 +1701,12 @@ router.post("/api/requisitions", async (req, res) => {
 // ==================================================
 router.post("/api/grn/:id/close", async (req, res) => {
   try {
-    const GRN = mongoose.models.GRN;
+    const grnId = req.params.id;
+
+    const GRNModel = mongoose.models.GRN;
     const StoreStock = mongoose.models.StoreStock;
 
-    const grn = await GRN.findById(req.params.id);
+    const grn = await GRNModel.findById(grnId);
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });
     }
@@ -1720,32 +1715,34 @@ router.post("/api/grn/:id/close", async (req, res) => {
       return res.status(400).json({ message: "GRN already closed" });
     }
 
-    // 🔥 ADD STOCK
+    // 🔁 ADD STOCK
     for (const line of grn.items || []) {
+      const itemId = line.item;
       const qty = Number(line.receivedQty || 0);
-      if (!line.item || qty <= 0) continue;
+      const storeId = grn.store;
+
+      if (!itemId || !storeId || qty <= 0) continue;
 
       await StoreStock.findOneAndUpdate(
-        {
-          resort: grn.resort,
-          store: grn.store,
-          item: line.item,
-        },
-        { $inc: { qty } },
+        { store: storeId, item: itemId },
+        { $inc: { qty: qty } },
         { upsert: true, new: true }
       );
     }
 
+    // 🔒 CLOSE GRN
     grn.status = "CLOSED";
     await grn.save();
 
-    res.json({ message: "GRN closed & stock updated" });
+    return res.json({
+      message: "GRN closed & stock updated",
+      grn,
+    });
   } catch (err) {
-    console.error("GRN CLOSE ERROR", err);
+    console.error("CLOSE GRN ERROR ❌", err);
     res.status(500).json({ message: "Failed to close GRN" });
   }
 });
-
 
   // =======================================================
 // 🛒 CREATE PO FROM REQUISITION
@@ -1863,7 +1860,6 @@ router.post("/api/requisitions/:id/create-grn", async (req, res) => {
       store: req.body.store || reqDoc.store || null,
 
       grnDate: req.body.grnDate || new Date(),
-status: "CREATED",
 
       items: Array.isArray(req.body.items)
         ? req.body.items.map((it) => ({
@@ -1970,8 +1966,8 @@ router.post("/api/po/:id/create-grn", async (req, res) => {
 
       items: (po.items || []).map((it) => ({
         item: it.item,
-     receivedQty: Number(
-  req.body.items?.find((x) => x.item === it.item)?.receivedQty ?? it.qty
+        receivedQty: Number(
+  req.body.items?.find((x) => x.item === it.item)?.receivedQty || it.qty
 ),
 
         pendingQty: 0,
@@ -2116,21 +2112,13 @@ function makeGrnNo() {
 // --------------------------------
 router.get("/api/grn", async (req, res) => {
   try {
-    const { resort } = req.query;
-    const filter = {};
-
-    if (resort && resort !== "ALL") {
-      filter.resort = resort;
+    if (GRNModel) {
+      const docs = await GRNModel.find().lean();
+      return res.json(docs);
     }
-
-    const docs = await GRNModel
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json(docs);
+    return res.json(memGRNs);
   } catch (err) {
-    console.error("GET /api/grn error", err);
+    console.error("GET /api/grn", err);
     res.status(500).json({ message: "Failed to fetch GRNs" });
   }
 });
@@ -2158,13 +2146,12 @@ router.post("/api/grn", async (req, res) => {
       resort: data.resort || null,
       store: data.store || null,
       grnDate: data.grnDate || new Date(),
-     items: data.items.map((it) => ({
-  item: it.item,
-  receivedQty: Number(it.receivedQty || 0), // ✅ FIX
-  pendingQty: 0,
-  remark: it.remark || "",
-}))
-
+      items: data.items.map((it) => ({
+        item: it.item,
+        qtyReceived: Number(it.qtyReceived || 0), // ✅ FIXED NAME
+        pendingQty: 0,
+        remark: it.remark || "",
+      })),
     };
 
     // --------------------------
@@ -2204,7 +2191,7 @@ router.post("/api/grn", async (req, res) => {
           grns.forEach((g) => {
             (g.items || []).forEach((it) => {
               receivedMap[it.item] =
-  (receivedMap[it.item] || 0) + Number(it.receivedQty || 0);
+                (receivedMap[it.item] || 0) + Number(it.qtyReceived || 0);
             });
           });
 
@@ -2273,31 +2260,16 @@ router.delete("/api/grn/:id", async (req, res) => {
     const id = req.params.id;
 
     if (GRNModel) {
-      const grn = await GRNModel.findById(id);
-      if (!grn) {
-        return res.status(404).json({ message: "GRN not found" });
-      }
-
-      if (grn.status === "CLOSED") {
-        return res
-          .status(400)
-          .json({ message: "Closed GRN cannot be deleted" });
-      }
-
-      await GRNModel.findByIdAndDelete(id);
+      const deleted = await GRNModel.findByIdAndDelete(id);
+      if (!deleted) return res.status(404).json({ message: "GRN not found" });
       return res.json({ ok: true });
     }
 
-    // in-memory
-    const grn = memGRNs.find((g) => g._id === id);
-    if (!grn) return res.status(404).json({ message: "GRN not found" });
-    if (grn.status === "CLOSED") {
-      return res
-        .status(400)
-        .json({ message: "Closed GRN cannot be deleted" });
-    }
-
+    const before = memGRNs.length;
     memGRNs = memGRNs.filter((g) => g._id !== id);
+    if (memGRNs.length === before)
+      return res.status(404).json({ message: "GRN not found" });
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("DELETE /api/grn/:id", err);
@@ -2546,14 +2518,11 @@ if (data.type === "LUMPSUM") {
   for (const line of data.lines || []) {
     const qty = Number(line.qty || 0);
     if (!line.item || qty <= 0) continue;
-const stock = await StoreStock.findOne({
-  resort: data.resort,
-  store: data.storeFrom,
-  item: ing.itemId,
-});
 
-
-
+    const stock = await StoreStock.findOne({
+      store: data.storeFrom,
+      item: line.item,
+    });
 
     if (!stock) {
       return res.status(400).json({

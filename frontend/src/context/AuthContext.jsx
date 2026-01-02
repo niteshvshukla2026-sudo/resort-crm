@@ -8,12 +8,11 @@ import axios from "axios";
 
 const AuthContext = createContext(null);
 
-// ===============================
-// API BASE
-// ===============================
+// VITE_API_BASE (can be with or without /api)
 const API_BASE_RAW = import.meta.env.VITE_API_BASE ?? "";
 const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
+// Ensure correct login URL
 function buildLoginUrl() {
   if (API_BASE.endsWith("/api")) {
     return `${API_BASE}/auth/login`;
@@ -21,34 +20,8 @@ function buildLoginUrl() {
   return `${API_BASE}/api/auth/login`;
 }
 
+// allow cookies if needed
 axios.defaults.withCredentials = true;
-
-/* =====================================================
- 🔥 USER NORMALIZER (ROLE + PERMISSIONS SAFE)
-===================================================== */
-function normalizeUser(rawUser) {
-  if (!rawUser) return null;
-
-  let roleObj = rawUser.role;
-
-  if (typeof roleObj === "string") {
-    roleObj = {
-      key: roleObj,
-      name: roleObj,
-      permissions: [],
-    };
-  }
-
-  if (typeof roleObj === "object" && !Array.isArray(roleObj.permissions)) {
-    roleObj.permissions = [];
-  }
-
-  return {
-    ...rawUser,
-    role: roleObj,
-    permissions: roleObj.permissions || [],
-  };
-}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -64,15 +37,11 @@ export const AuthProvider = ({ children }) => {
       if (stored) {
         const parsed = JSON.parse(stored);
 
-        const safeUser = normalizeUser(parsed.user);
-        const storedToken = parsed.token || null;
+        setUser(parsed.user || null);
+        setToken(parsed.token || null);
 
-        setUser(safeUser);
-        setToken(storedToken);
-
-        if (storedToken) {
-          axios.defaults.headers.common.Authorization =
-            `Bearer ${storedToken}`;
+        if (parsed.token) {
+          axios.defaults.headers.common.Authorization = `Bearer ${parsed.token}`;
         }
       }
     } catch (err) {
@@ -84,74 +53,66 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ===================================================
-  // 🚨 AXIOS INTERCEPTOR (NO AUTO LOGOUT)
+  // 🚨 AXIOS INTERCEPTOR (NO AUTO LOGOUT – VERY IMPORTANT)
   // ===================================================
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error?.response?.status === 401) {
+        const status = error?.response?.status;
+
+        // ❌ NEVER AUTO LOGOUT
+        if (status === 401) {
           console.warn(
-            "401 received – ignored (no auto logout)"
+            "401 received (ignored) – user will NOT be logged out automatically"
           );
         }
+
         return Promise.reject(error);
       }
     );
 
-    return () => axios.interceptors.response.eject(interceptor);
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
   }, []);
 
   // ===============================
-  // 🔑 LOGIN (UNIVERSAL RESPONSE HANDLER)
+  // 🔑 LOGIN
   // ===============================
   const login = async (a, b) => {
-    const credentials =
-      typeof a === "string" ? { email: a, password: b } : a || {};
+    let credentials;
+
+    if (typeof a === "string") {
+      credentials = { email: a, password: b };
+    } else {
+      credentials = a || {};
+    }
 
     try {
-      const res = await axios.post(
-        buildLoginUrl(),
-        credentials,
-        { headers: { "Content-Type": "application/json" } }
-      );
+      const res = await axios.post(buildLoginUrl(), credentials, {
+        headers: { "Content-Type": "application/json" },
+      });
 
-      const raw = res?.data || {};
-
-      // 🔥 UNIVERSAL TOKEN PICKER
-      const newToken =
-        raw.token ||
-        raw.accessToken ||
-        raw?.data?.token ||
-        raw?.data?.accessToken ||
-        null;
-
-      // 🔥 UNIVERSAL USER PICKER
-      const newUserRaw =
-        raw.user ||
-        raw?.data?.user ||
-        (raw?.data && !raw?.data?.token ? raw.data : null) ||
-        null;
-
-      if (!newToken || !newUserRaw) {
-        throw new Error("Invalid login response from server");
-      }
-
-      const newUser = normalizeUser(newUserRaw);
+      const data = res?.data || {};
+      const newToken = data.token || data.accessToken || null;
+      const newUser = data.user || data.data || null;
 
       setToken(newToken);
       setUser(newUser);
 
-      axios.defaults.headers.common.Authorization =
-        `Bearer ${newToken}`;
+      if (newToken) {
+        axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+      }
 
       localStorage.setItem(
         "auth",
         JSON.stringify({ token: newToken, user: newUser })
       );
 
-      return { success: true };
+      return { success: true, data };
     } catch (err) {
+      const status = err?.response?.status;
       const message =
         err?.response?.data?.message ||
         err.message ||
@@ -159,16 +120,17 @@ export const AuthProvider = ({ children }) => {
 
       console.error("Login error:", message);
 
-      return { success: false, error: message };
+      return { success: false, status, error: message };
     }
   };
 
   // ===============================
-  // 🚪 LOGOUT
+  // 🚪 LOGOUT (ONLY MANUAL)
   // ===============================
   const logout = () => {
     setUser(null);
     setToken(null);
+
     localStorage.removeItem("auth");
     delete axios.defaults.headers.common.Authorization;
   };
@@ -182,10 +144,6 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAuthenticated: !!token,
-
-        // 🔥 DIRECT ACCESS
-        permissions: user?.permissions || [],
-        role: user?.role || null,
       }}
     >
       {children}
