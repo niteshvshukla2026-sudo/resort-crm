@@ -1,252 +1,223 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import api from "../../api/axios"; // 👈 same axios instance jo CRM me use ho raha hai
+
+/* =====================================================
+   REPORTS OVERVIEW – FINAL PRODUCTION VERSION
+===================================================== */
 
 const ReportsOverview = () => {
-  const [activeTab, setActiveTab] = useState("purchase");
+  const [activeTab, setActiveTab] = useState("item-stock");
+
   const [filters, setFilters] = useState({
-    resort: "all",
+    resortId: "all",
+    storeId: "all",
+    itemId: "all",
+    userId: "all",
     from: "",
     to: "",
   });
 
-  const handleFilterChange = (e) => {
-    setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const [meta, setMeta] = useState({
+    resorts: [],
+    stores: [],
+    items: [],
+    users: [],
+  });
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  /* ===============================
+     LOAD FILTER MASTER DATA
+  =============================== */
+  useEffect(() => {
+    const loadMeta = async () => {
+      const [resorts, stores, items, users] = await Promise.all([
+        api.get("/resorts"),
+        api.get("/stores"),
+        api.get("/items"),
+        api.get("/users"),
+      ]);
+
+      setMeta({
+        resorts: resorts.data || [],
+        stores: stores.data || [],
+        items: items.data || [],
+        users: users.data || [],
+      });
+    };
+
+    loadMeta();
+  }, []);
+
+  /* ===============================
+     LOAD REPORT DATA
+  =============================== */
+  useEffect(() => {
+    loadReport();
+    // eslint-disable-next-line
+  }, [activeTab, filters]);
+
+  const loadReport = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/reports/${activeTab}`, {
+        params: filters,
+      });
+      setRows(res.data || []);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  /* ===============================
+     DOWNLOAD REPORT
+  =============================== */
+  const downloadReport = () => {
+    const params = new URLSearchParams({ ...filters, download: true });
+    window.open(
+      `${import.meta.env.VITE_API_BASE}/api/reports/${activeTab}?${params.toString()}`,
+      "_blank"
+    );
+  };
+
+  const onFilterChange = (e) => {
+    setFilters((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
   return (
     <div className="sa-page">
+      {/* ================= HEADER ================= */}
       <div className="sa-page-header">
         <div>
           <h2>Reports</h2>
-          <p>Purchase, stock & consumption analytics for all resorts.</p>
+          <p>Resort, store, item, stock & user activity reports</p>
         </div>
-        <button className="sa-primary-button" type="button">
-          <i className="ri-download-2-line" /> Export
+        <button className="sa-primary-button" onClick={downloadReport}>
+          <i className="ri-download-2-line" /> Download
         </button>
       </div>
 
-      {/* Filters */}
+      {/* ================= FILTERS ================= */}
       <div className="sa-card sa-report-filters">
         <div className="sa-tabs">
-          <button
-            type="button"
-            className={`sa-tab ${activeTab === "purchase" ? "active" : ""}`}
-            onClick={() => setActiveTab("purchase")}
-          >
-            Purchase Summary
-          </button>
-          <button
-            type="button"
-            className={`sa-tab ${activeTab === "stock" ? "active" : ""}`}
-            onClick={() => setActiveTab("stock")}
-          >
-            Stock Ledger
-          </button>
-          <button
-            type="button"
-            className={`sa-tab ${activeTab === "consumption" ? "active" : ""}`}
-            onClick={() => setActiveTab("consumption")}
-          >
-            Consumption Report
-          </button>
+          <Tab label="Item Stock" value="item-stock" {...{ activeTab, setActiveTab }} />
+          <Tab label="Store Stock" value="store-stock" {...{ activeTab, setActiveTab }} />
+          <Tab label="Purchase" value="purchase" {...{ activeTab, setActiveTab }} />
+          <Tab label="Consumption" value="consumption" {...{ activeTab, setActiveTab }} />
+          <Tab label="User Activity" value="user-activity" {...{ activeTab, setActiveTab }} />
+          <Tab label="Audit Logs" value="audit-logs" {...{ activeTab, setActiveTab }} />
         </div>
 
         <div className="sa-report-filter-row">
-          <div className="sa-report-filter-group">
-            <label>Resort</label>
-            <select
-              name="resort"
-              value={filters.resort}
-              onChange={handleFilterChange}
-            >
+          <Filter label="Resort">
+            <select name="resortId" value={filters.resortId} onChange={onFilterChange}>
               <option value="all">All Resorts</option>
-              <option value="beachside">Beachside Resort</option>
-              <option value="hillview">Hillview Resort</option>
+              {meta.resorts.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name}
+                </option>
+              ))}
             </select>
-          </div>
-          <div className="sa-report-filter-group">
-            <label>From</label>
-            <input
-              type="date"
-              name="from"
-              value={filters.from}
-              onChange={handleFilterChange}
-            />
-          </div>
-          <div className="sa-report-filter-group">
-            <label>To</label>
-            <input
-              type="date"
-              name="to"
-              value={filters.to}
-              onChange={handleFilterChange}
-            />
-          </div>
+          </Filter>
+
+          <Filter label="Store">
+            <select name="storeId" value={filters.storeId} onChange={onFilterChange}>
+              <option value="all">All Stores</option>
+              {meta.stores.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Filter>
+
+          <Filter label="Item">
+            <select name="itemId" value={filters.itemId} onChange={onFilterChange}>
+              <option value="all">All Items</option>
+              {meta.items.map((i) => (
+                <option key={i._id} value={i._id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+          </Filter>
+
+          <Filter label="User">
+            <select name="userId" value={filters.userId} onChange={onFilterChange}>
+              <option value="all">All Users</option>
+              {meta.users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </Filter>
+
+          <Filter label="From">
+            <input type="date" name="from" value={filters.from} onChange={onFilterChange} />
+          </Filter>
+
+          <Filter label="To">
+            <input type="date" name="to" value={filters.to} onChange={onFilterChange} />
+          </Filter>
         </div>
       </div>
 
-      {/* Tab content */}
-      {activeTab === "purchase" && <PurchaseSummary />}
-      {activeTab === "stock" && <StockLedger />}
-      {activeTab === "consumption" && <ConsumptionReport />}
+      {/* ================= REPORT TABLE ================= */}
+      <div className="sa-card">
+        <div className="sa-card-title">
+          {activeTab.replace("-", " ").toUpperCase()}
+        </div>
+
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          <div className="sa-table-wrapper">
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  {rows[0] &&
+                    Object.keys(rows[0]).map((h) => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    {Object.values(r).map((c, j) => (
+                      <td key={j}>{c}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-const PurchaseSummary = () => {
-  const rows = [
-    {
-      resort: "Beachside Resort",
-      vendor: "FreshFoods Supplier",
-      orders: 12,
-      value: "₹ 4,25,000",
-    },
-    {
-      resort: "Hillview Resort",
-      vendor: "Beverage Distributors",
-      orders: 8,
-      value: "₹ 2,10,000",
-    },
-  ];
+/* ===============================
+   SMALL COMPONENTS
+=============================== */
 
-  return (
-    <>
-      <div className="sa-grid-3">
-        <div className="sa-card sa-report-kpi">
-          <div className="sa-report-kpi-label">Total PO Value</div>
-          <div className="sa-report-kpi-value">₹ 9,80,000</div>
-          <div className="sa-report-kpi-sub">Last 30 days</div>
-        </div>
-        <div className="sa-card sa-report-kpi">
-          <div className="sa-report-kpi-label">Vendors</div>
-          <div className="sa-report-kpi-value">18</div>
-          <div className="sa-report-kpi-sub">With active PO</div>
-        </div>
-        <div className="sa-card sa-report-kpi">
-          <div className="sa-report-kpi-label">Avg. PO Value</div>
-          <div className="sa-report-kpi-value">₹ 54,000</div>
-          <div className="sa-report-kpi-sub">Per order</div>
-        </div>
-      </div>
+const Tab = ({ label, value, activeTab, setActiveTab }) => (
+  <button
+    type="button"
+    className={`sa-tab ${activeTab === value ? "active" : ""}`}
+    onClick={() => setActiveTab(value)}
+  >
+    {label}
+  </button>
+);
 
-      <div className="sa-card" style={{ marginTop: 16 }}>
-        <div className="sa-card-title">Resort & vendor-wise purchase</div>
-        <table className="sa-table">
-          <thead>
-            <tr>
-              <th>Resort</th>
-              <th>Vendor</th>
-              <th>No. of POs</th>
-              <th>Total Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, idx) => (
-              <tr key={idx}>
-                <td>{r.resort}</td>
-                <td>{r.vendor}</td>
-                <td>{r.orders}</td>
-                <td>{r.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-};
-
-const StockLedger = () => {
-  const rows = [
-    {
-      item: "Mineral Water 1L",
-      store: "Beachside - Main Store",
-      opening: 120,
-      inQty: 80,
-      outQty: 60,
-      closing: 140,
-    },
-    {
-      item: "Room Freshener",
-      store: "Hillview - HK Store",
-      opening: 40,
-      inQty: 30,
-      outQty: 20,
-      closing: 50,
-    },
-  ];
-
-  return (
-    <div className="sa-card">
-      <div className="sa-card-title">Item-wise in/out balance</div>
-      <table className="sa-table">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Store</th>
-            <th>Opening</th>
-            <th>In</th>
-            <th>Out</th>
-            <th>Closing</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <tr key={idx}>
-              <td>{r.item}</td>
-              <td>{r.store}</td>
-              <td>{r.opening}</td>
-              <td>{r.inQty}</td>
-              <td>{r.outQty}</td>
-              <td>{r.closing}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-const ConsumptionReport = () => {
-  const rows = [
-    {
-      resort: "Beachside Resort",
-      department: "F&B",
-      item: "Mineral Water 1L",
-      qty: 220,
-    },
-    {
-      resort: "Hillview Resort",
-      department: "Housekeeping",
-      item: "Room Freshener",
-      qty: 65,
-    },
-  ];
-
-  return (
-    <div className="sa-card">
-      <div className="sa-card-title">Department / outlet-wise usage</div>
-      <table className="sa-table">
-        <thead>
-          <tr>
-            <th>Resort</th>
-            <th>Department</th>
-            <th>Item</th>
-            <th>Consumed Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <tr key={idx}>
-              <td>{r.resort}</td>
-              <td>{r.department}</td>
-              <td>{r.item}</td>
-              <td>{r.qty}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
+const Filter = ({ label, children }) => (
+  <div className="sa-report-filter-group">
+    <label>{label}</label>
+    {children}
+  </div>
+);
 
 export default ReportsOverview;
