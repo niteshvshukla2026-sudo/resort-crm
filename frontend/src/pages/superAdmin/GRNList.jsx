@@ -11,24 +11,29 @@ const API_BASE =
 const findById = (list, id) =>
   list.find((x) => String(x._id) === String(id));
 
-const getPoNo = (g) =>
-  typeof g.po === "object" ? g.po?.poNo || "-" : "-";
+const getPoNo = (g, pos = []) => {
+  if (typeof g.po === "object") return g.po?.poNo || "-";
+  if (g.po) {
+    const p = findById(pos, g.po);
+    return p?.poNo || "-";
+  }
+  return "-";
+};
 
-const getReqNo = (g) =>
-  typeof g.requisition === "object"
-    ? g.requisition?.requisitionNo || "-"
-    : "-";
+const getReqNo = (g, requisitions = []) => {
+  if (typeof g.requisition === "object")
+    return g.requisition?.requisitionNo || "-";
+  if (g.requisition) {
+    const r = findById(requisitions, g.requisition);
+    return r?.requisitionNo || "-";
+  }
+  return "-";
+};
 
 const getVendorName = (g, vendors) => {
   if (typeof g.vendor === "object") return g.vendor?.name || "-";
   const v = findById(vendors, g.vendor);
   return v?.name || "-";
-};
-
-const getResortName = (g, resorts) => {
-  if (typeof g.resort === "object") return g.resort?.name || "-";
-  const r = findById(resorts, g.resort);
-  return r?.name || "-";
 };
 
 const getStoreName = (g, stores) => {
@@ -50,13 +55,12 @@ const GRNList = () => {
 
   const [grns, setGrns] = useState([]);
   const [vendors, setVendors] = useState([]);
-  const [resorts, setResorts] = useState([]);
   const [stores, setStores] = useState([]);
+  const [pos, setPos] = useState([]);
+  const [requisitions, setRequisitions] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  /* ---------------- LOAD DATA ---------------- */
 
   const normalize = (r) =>
     Array.isArray(r.data)
@@ -65,23 +69,32 @@ const GRNList = () => {
       ? r.data.data
       : [];
 
+  /* ---------------- LOAD DATA ---------------- */
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [grnRes, vendorRes, resortRes, storeRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/api/grn`),
-          axios.get(`${API_BASE}/api/vendors`),
-          axios.get(`${API_BASE}/api/resorts`),
-          axios.get(`${API_BASE}/api/stores`),
-        ]);
+      const [
+        grnRes,
+        vendorRes,
+        storeRes,
+        poRes,
+        reqRes,
+      ] = await Promise.all([
+        axios.get(`${API_BASE}/api/grn`),
+        axios.get(`${API_BASE}/api/vendors`),
+        axios.get(`${API_BASE}/api/stores`),
+        axios.get(`${API_BASE}/api/po`),
+        axios.get(`${API_BASE}/api/requisitions`),
+      ]);
 
       setGrns(normalize(grnRes));
       setVendors(normalize(vendorRes));
-      setResorts(normalize(resortRes));
       setStores(normalize(storeRes));
+      setPos(normalize(poRes));
+      setRequisitions(normalize(reqRes));
     } catch (e) {
       console.error(e);
       setError("Failed to load GRNs");
@@ -99,7 +112,11 @@ const GRNList = () => {
   const filteredGrns = useMemo(() => {
     return grns.filter((g) => {
       if (selectedResort && selectedResort !== "ALL") {
-        if (String(g.resort) !== String(selectedResort)) return false;
+        const rid =
+          typeof g.resort === "object"
+            ? g.resort?._id
+            : g.resort;
+        if (String(rid) !== String(selectedResort)) return false;
       }
       return true;
     });
@@ -157,7 +174,6 @@ const GRNList = () => {
                 <th>PO</th>
                 <th>Requisition</th>
                 <th>Vendor</th>
-                <th>Resort</th>
                 <th>Store</th>
                 <th>Date</th>
                 <th>Status</th>
@@ -168,7 +184,7 @@ const GRNList = () => {
             <tbody>
               {filteredGrns.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center" }}>
+                  <td colSpan="8" style={{ textAlign: "center" }}>
                     No GRNs found
                   </td>
                 </tr>
@@ -182,16 +198,13 @@ const GRNList = () => {
                       {g.grnNo}
                     </td>
 
-                    <td>{getPoNo(g)}</td>
-                    <td>{getReqNo(g)}</td>
+                    <td>{getPoNo(g, pos)}</td>
+                    <td>{getReqNo(g, requisitions)}</td>
                     <td>{getVendorName(g, vendors)}</td>
-                    <td>{getResortName(g, resorts)}</td>
                     <td>{getStoreName(g, stores)}</td>
                     <td>{getGrnDate(g)}</td>
                     <td>{(g.status || "CREATED").toUpperCase()}</td>
 
-
-                    {/* ACTION ICONS */}
                     <td style={{ whiteSpace: "nowrap" }}>
                       {/* VIEW */}
                       <i
@@ -202,7 +215,7 @@ const GRNList = () => {
                       />
 
                       {/* CLOSE */}
-                      {g.status === "CREATED" && (
+                      {(g.status || "CREATED") === "CREATED" && (
                         <i
                           className="ri-lock-line"
                           title="Close GRN"
@@ -217,18 +230,16 @@ const GRNList = () => {
 
                       {/* DELETE */}
                       {(g.status || "CREATED") === "CREATED" && (
-  <i
-    className="ri-lock-line"
-    title="Close GRN"
-    style={{
-      cursor: "pointer",
-      marginRight: 12,
-      color: "#22c55e",
-    }}
-    onClick={() => closeGrn(g)}
-  />
-)}
-
+                        <i
+                          className="ri-delete-bin-6-line"
+                          title="Delete GRN"
+                          style={{
+                            cursor: "pointer",
+                            color: "#ef4444",
+                          }}
+                          onClick={() => deleteGrn(g)}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))
