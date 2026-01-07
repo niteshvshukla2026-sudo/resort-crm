@@ -1725,14 +1725,13 @@ router.post("/api/grn/:id/close", async (req, res) => {
       const storeId = grn.store;
 
       if (!itemId || !storeId || qty <= 0) continue;
-
-    await StoreStock.findOneAndUpdate(
+await StoreStock.findOneAndUpdate(
   {
-    resort: grn.resort,   // ✅ ADD THIS
+    resort: grn.resort,   // 🔥 MUST
     store: storeId,
     item: itemId,
   },
-  { $inc: { qty: qty } },
+  { $inc: { qty } },
   { upsert: true, new: true }
 );
 
