@@ -8,16 +8,16 @@ import axios from "axios";
 
 const AuthContext = createContext(null);
 
-// VITE_API_BASE (can be with or without /api)
+/* ======================================================
+   🌍 API BASE (supports with/without /api)
+====================================================== */
 const API_BASE_RAW = import.meta.env.VITE_API_BASE ?? "";
 const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
-// Ensure correct login URL
 function buildLoginUrl() {
-  if (API_BASE.endsWith("/api")) {
-    return `${API_BASE}/auth/login`;
-  }
-  return `${API_BASE}/api/auth/login`;
+  return API_BASE.endsWith("/api")
+    ? `${API_BASE}/auth/login`
+    : `${API_BASE}/api/auth/login`;
 }
 
 // allow cookies if needed
@@ -28,43 +28,47 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ===============================
-  // 🔐 LOAD AUTH FROM LOCAL STORAGE
-  // ===============================
+  /* ======================================================
+     🔐 RESTORE AUTH FROM LOCAL STORAGE (RELOAD SAFE)
+  ===================================================== */
   useEffect(() => {
     try {
       const stored = localStorage.getItem("auth");
       if (stored) {
         const parsed = JSON.parse(stored);
 
-        setUser(parsed.user || null);
-        setToken(parsed.token || null);
+        if (parsed?.token) {
+          setToken(parsed.token);
+          axios.defaults.headers.common.Authorization =
+            `Bearer ${parsed.token}`;
+        }
 
-        if (parsed.token) {
-          axios.defaults.headers.common.Authorization = `Bearer ${parsed.token}`;
+        if (parsed?.user) {
+          setUser(parsed.user);
         }
       }
     } catch (err) {
       console.error("Auth storage parse error:", err);
       localStorage.removeItem("auth");
     } finally {
-      setLoading(false);
+      setLoading(false); // 🔥 MUST for ProtectedRoute
     }
   }, []);
 
-  // ===================================================
-  // 🚨 AXIOS INTERCEPTOR (NO AUTO LOGOUT – VERY IMPORTANT)
-  // ===================================================
+  /* ======================================================
+     🚨 AXIOS RESPONSE INTERCEPTOR
+     ❌ NEVER AUTO LOGOUT
+  ===================================================== */
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         const status = error?.response?.status;
 
-        // ❌ NEVER AUTO LOGOUT
         if (status === 401) {
+          // ❗ Do NOT logout automatically
           console.warn(
-            "401 received (ignored) – user will NOT be logged out automatically"
+            "[Auth] 401 received – ignored to prevent forced logout"
           );
         }
 
@@ -77,17 +81,14 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // ===============================
-  // 🔑 LOGIN
-  // ===============================
+  /* ======================================================
+     🔑 LOGIN
+  ===================================================== */
   const login = async (a, b) => {
-    let credentials;
-
-    if (typeof a === "string") {
-      credentials = { email: a, password: b };
-    } else {
-      credentials = a || {};
-    }
+    const credentials =
+      typeof a === "string"
+        ? { email: a, password: b }
+        : a || {};
 
     try {
       const res = await axios.post(buildLoginUrl(), credentials, {
@@ -98,12 +99,15 @@ export const AuthProvider = ({ children }) => {
       const newToken = data.token || data.accessToken || null;
       const newUser = data.user || data.data || null;
 
+      if (!newToken || !newUser) {
+        throw new Error("Invalid login response");
+      }
+
       setToken(newToken);
       setUser(newUser);
 
-      if (newToken) {
-        axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-      }
+      axios.defaults.headers.common.Authorization =
+        `Bearer ${newToken}`;
 
       localStorage.setItem(
         "auth",
@@ -118,15 +122,15 @@ export const AuthProvider = ({ children }) => {
         err.message ||
         "Login failed";
 
-      console.error("Login error:", message);
+      console.error("[Auth] Login error:", message);
 
       return { success: false, status, error: message };
     }
   };
 
-  // ===============================
-  // 🚪 LOGOUT (ONLY MANUAL)
-  // ===============================
+  /* ======================================================
+     🚪 LOGOUT (MANUAL ONLY)
+  ===================================================== */
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -151,9 +155,15 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// ===============================
-// 🪝 HOOK
-// ===============================
-export const useAuth = () => useContext(AuthContext);
+/* ======================================================
+   🪝 HOOK
+====================================================== */
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+  return ctx;
+};
 
 export default AuthContext;
