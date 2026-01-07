@@ -142,7 +142,10 @@ const storeStockSchema = new Schema(
   { timestamps: true }
 );
 
-storeStockSchema.index({ store: 1, item: 1 }, { unique: true });
+storeStockSchema.index(
+  { resort: 1, store: 1, item: 1 },
+  { unique: true }
+);
 
 const StoreStock =
   mongoose.models.StoreStock ||
@@ -1723,11 +1726,16 @@ router.post("/api/grn/:id/close", async (req, res) => {
 
       if (!itemId || !storeId || qty <= 0) continue;
 
-      await StoreStock.findOneAndUpdate(
-        { store: storeId, item: itemId },
-        { $inc: { qty: qty } },
-        { upsert: true, new: true }
-      );
+    await StoreStock.findOneAndUpdate(
+  {
+    resort: grn.resort,   // ✅ ADD THIS
+    store: storeId,
+    item: itemId,
+  },
+  { $inc: { qty: qty } },
+  { upsert: true, new: true }
+);
+
     }
 
     // 🔒 CLOSE GRN
@@ -2147,11 +2155,11 @@ router.post("/api/grn", async (req, res) => {
       store: data.store || null,
       grnDate: data.grnDate || new Date(),
       items: data.items.map((it) => ({
-        item: it.item,
-        qtyReceived: Number(it.qtyReceived || 0), // ✅ FIXED NAME
-        pendingQty: 0,
-        remark: it.remark || "",
-      })),
+  item: it.item,
+  receivedQty: Number(it.receivedQty || 0), // ✅ SAHI
+  pendingQty: 0,
+  remark: it.remark || "",
+})),
     };
 
     // --------------------------
