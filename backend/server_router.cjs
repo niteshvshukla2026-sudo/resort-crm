@@ -793,69 +793,68 @@ router.post("/api/store-replacements", async (req, res) => {
     res.status(500).json({ message: "Failed to create replacement" });
   }
 });
-router.patch(
-  "/api/store-replacements/:id/issue-vendor",
-  async (req, res) => {
-    try {
-      const { vendorId, lines } = req.body;
+router.patch("/api/store-replacements/:id/issue-vendor", async (req, res) => {
+  try {
+    const { vendorId, lines } = req.body;
 
-      const StoreReplacement = mongoose.models.StoreReplacement;
-      const repl = await StoreReplacement.findById(req.params.id);
+    const StoreReplacement = mongoose.models.StoreReplacement;
+    const StoreStock = mongoose.models.StoreStock;
 
-      if (!repl) {
-        return res.status(404).json({ message: "Replacement not found" });
+    const repl = await StoreReplacement.findById(req.params.id);
+    if (!repl) {
+      return res.status(404).json({ message: "Replacement not found" });
+    }
+
+    // ===============================
+    // 🔻 STOCK MINUS (CRITICAL FIX)
+    // ===============================
+    for (const ln of lines) {
+      const issueQty = Number(ln.issueQty || 0);
+      if (!ln.itemId || issueQty <= 0) continue;
+
+      const stock = await StoreStock.findOne({
+        resort: repl.resort,
+        store: repl.storeId,
+        item: ln.itemId,
+      });
+
+      if (!stock || stock.qty < issueQty) {
+        return res.status(400).json({
+          message: "Insufficient stock for replacement",
+        });
       }
 
-      repl.vendorId = vendorId;
-      repl.status = "SENT_TO_VENDOR";
-
-      repl.lines = repl.lines.map((ln) => {
-        const m = lines.find((x) => x.lineId === ln.lineId);
-        return m
-          ? { ...ln.toObject(), issuedQty: Number(m.issueQty || 0) }
-          : ln;
-      });
-// ===============================
-// 🔥 STOCK MINUS ON ISSUE TO VENDOR
-// ===============================
-const StoreStock = mongoose.models.StoreStock;
-
-for (const ln of lines) {
-  const issueQty = Number(ln.issueQty || 0);
-  if (!ln.itemId || issueQty <= 0) continue;
-
-  const stock = await StoreStock.findOne({
-    resort: repl.resort,
-    store: repl.storeId,
-    item: ln.itemId,
-  });
-
-  if (!stock) {
-    return res.status(400).json({
-      message: "Stock not found for item",
-    });
-  }
-
-  if (stock.qty < issueQty) {
-    return res.status(400).json({
-      message: `Insufficient stock. Available: ${stock.qty}`,
-    });
-  }
-
-  await StoreStock.updateOne(
-    { _id: stock._id },
-    { $inc: { qty: -issueQty } }
-  );
-}
-
-      await repl.save();
-      res.json(repl);
-    } catch (err) {
-      console.error("ISSUE VENDOR ERROR", err);
-      res.status(500).json({ message: "Failed to issue to vendor" });
+      await StoreStock.updateOne(
+        { _id: stock._id },
+        { $inc: { qty: -issueQty } }
+      );
     }
+
+    // ===============================
+    // UPDATE REPLACEMENT DOC
+    // ===============================
+    repl.vendorId = vendorId;
+    repl.status = "SENT_TO_VENDOR";
+
+    repl.lines = repl.lines.map((ln) => {
+      const m = lines.find((x) => x.itemId === ln.itemId);
+      return m
+        ? { ...ln.toObject(), issuedQty: Number(m.issueQty || 0) }
+        : ln;
+    });
+
+    await repl.save();
+
+    res.json({
+      message: "Replacement issued & stock updated",
+      repl,
+    });
+  } catch (err) {
+    console.error("ISSUE VENDOR ERROR ❌", err);
+    res.status(500).json({ message: "Failed to issue replacement" });
   }
-);
+});
+
 router.post(
   "/api/store-replacements/:id/create-grn",
   async (req, res) => {
