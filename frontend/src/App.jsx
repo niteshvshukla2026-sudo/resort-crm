@@ -27,7 +27,7 @@ import GRNEntry from "./pages/resortUser/GRNEntry.jsx";
 import Reports from "./pages/resortUser/Reports.jsx";
 
 import ReportsOverview from "./pages/superAdmin/ReportsOverview.jsx";
-import { ProtectedRoute } from "./router/ProtectedRoute.jsx";
+import  ProtectedRoute  from "./router/ProtectedRoute.jsx";
 import RoleList from "./pages/superAdmin/RoleList.jsx";
 import ConsumptionList from "./pages/superAdmin/ConsumptionList.jsx";
 import ConsumptionForm from "./pages/superAdmin/ConsumptionForm.jsx";
