@@ -1704,50 +1704,43 @@ router.post("/api/requisitions", async (req, res) => {
 // ==================================================
 router.post("/api/grn/:id/close", async (req, res) => {
   try {
-    const grnId = req.params.id;
-
-    const GRNModel = mongoose.models.GRN;
-    const StoreStock = mongoose.models.StoreStock;
-
-    const grn = await GRNModel.findById(grnId);
-    if (!grn) {
-      return res.status(404).json({ message: "GRN not found" });
-    }
+    const grn = await mongoose.models.GRN.findById(req.params.id);
+    if (!grn) return res.status(404).json({ message: "GRN not found" });
 
     if (grn.status === "CLOSED") {
-      return res.status(400).json({ message: "GRN already closed" });
+      return res.status(400).json({ message: "Already closed" });
     }
 
-    // 🔁 ADD STOCK
+    const StoreStock = mongoose.models.StoreStock;
+
     for (const line of grn.items || []) {
-      const itemId = line.item;
       const qty = Number(line.receivedQty || 0);
-      const storeId = grn.store;
+      if (!line.item || qty <= 0) continue;
 
-      if (!itemId || !storeId || qty <= 0) continue;
-await StoreStock.findOneAndUpdate(
-  {
-    resort: grn.resort,   // 🔥 MUST
-    store: storeId,
-    item: itemId,
-  },
-  { $inc: { qty } },
-  { upsert: true, new: true }
-);
-
+      await StoreStock.findOneAndUpdate(
+        {
+          resort: String(grn.resort),   // ✅ FORCE STRING
+          store:  String(grn.store),
+          item:   String(line.item),
+        },
+        {
+          $inc: { qty }
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true   // 🔥 IMPORTANT
+        }
+      );
     }
 
-    // 🔒 CLOSE GRN
     grn.status = "CLOSED";
     await grn.save();
 
-    return res.json({
-      message: "GRN closed & stock updated",
-      grn,
-    });
+    res.json({ message: "GRN closed & stock updated" });
   } catch (err) {
-    console.error("CLOSE GRN ERROR ❌", err);
-    res.status(500).json({ message: "Failed to close GRN" });
+    console.error("❌ CLOSE GRN ERROR", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
