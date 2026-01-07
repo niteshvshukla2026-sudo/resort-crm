@@ -815,6 +815,38 @@ router.patch(
           ? { ...ln.toObject(), issuedQty: Number(m.issueQty || 0) }
           : ln;
       });
+// ===============================
+// 🔥 STOCK MINUS ON ISSUE TO VENDOR
+// ===============================
+const StoreStock = mongoose.models.StoreStock;
+
+for (const ln of lines) {
+  const issueQty = Number(ln.issueQty || 0);
+  if (!ln.itemId || issueQty <= 0) continue;
+
+  const stock = await StoreStock.findOne({
+    resort: repl.resort,
+    store: repl.storeId,
+    item: ln.itemId,
+  });
+
+  if (!stock) {
+    return res.status(400).json({
+      message: "Stock not found for item",
+    });
+  }
+
+  if (stock.qty < issueQty) {
+    return res.status(400).json({
+      message: `Insufficient stock. Available: ${stock.qty}`,
+    });
+  }
+
+  await StoreStock.updateOne(
+    { _id: stock._id },
+    { $inc: { qty: -issueQty } }
+  );
+}
 
       await repl.save();
       res.json(repl);
@@ -834,6 +866,14 @@ router.post(
       const StoreStock = mongoose.models.StoreStock;
 
       const repl = await StoreReplacement.findById(req.params.id);
+      // ===============================
+// 🔒 FIX-3: BUILD ISSUED QTY MAP
+// ===============================
+const issuedMap = {};
+(repl.lines || []).forEach((l) => {
+  issuedMap[l.itemId] = Number(l.issuedQty || 0);
+});
+
       if (!repl) {
         return res.status(404).json({ message: "Replacement not found" });
       }
@@ -842,14 +882,21 @@ router.post(
       for (const ln of lines) {
         const qty = Number(ln.receivedQty || 0);
         if (!ln.itemId || qty <= 0) continue;
+// ❌ received > issued not allowed
+if (qty > (issuedMap[ln.itemId] || 0)) {
+  return res.status(400).json({
+    message: `Received qty cannot exceed issued qty for item`,
+  });
+}
 
         await StoreStock.findOneAndUpdate(
           {
+             resort: repl.resort,     
             store: storeId,
             item: ln.itemId,
           },
           { $inc: { qty } },
-          { upsert: true, new: true }
+          { upsert: true, new: true, setDefaultsOnInsert: true, }
         );
       }
 
