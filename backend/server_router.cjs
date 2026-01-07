@@ -1779,7 +1779,10 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
       requisitionId: id,
       vendor: reqDoc.vendor,
       resort: reqDoc.resort,
-      deliverTo: reqDoc.store || reqDoc.toStore,
+ deliverTo:
+    reqDoc.type === "VENDOR"
+      ? reqDoc.store
+      : reqDoc.toStore,
       poDate: new Date(),
       items: (reqDoc.lines || []).map((l) => ({
         item: l.item,

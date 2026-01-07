@@ -729,7 +729,7 @@ const POList = () => {
                   <td>{getResortName(po.resort)}</td>
 
 
-                    <td>{getStoreName(po.store)}</td>
+                    <td>{getStoreName(po.deliverTo)}</td>
                     <td>{(po.poDate || po.date || "").slice(0, 10)}</td>
                     <td>{po.status || "Open"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
