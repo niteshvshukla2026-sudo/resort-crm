@@ -5,22 +5,17 @@ import { useAuth } from "../context/AuthContext.jsx";
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
 
-  // 🔥 IMPORTANT: wait until auth state is restored from localStorage
-  if (loading) {
-    return null; // or a loader component
-  }
+  if (loading) return null;
 
-  // ❌ Not logged in
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // ❌ Role not allowed
+  // 🔥 FIX: role fail pe logout page mat dikhao
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />; // 👈 ONLY CHANGE
   }
 
-  // ✅ Authorized
   return children;
 };
 
