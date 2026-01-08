@@ -7,9 +7,8 @@ const API_BASE =
 
 const InventoryOverview = () => {
   const { selectedResort } = useResort();
-  const [activeTab, setActiveTab] = useState("snapshot");
+  const [activeTab, setActiveTab] = useState("store");
 
-  // ---------- guards ----------
   if (!selectedResort || selectedResort === "ALL") {
     return (
       <div className="sa-card">
@@ -31,7 +30,6 @@ const InventoryOverview = () => {
       {/* TABS */}
       <div className="sa-card" style={{ display: "flex", gap: 8 }}>
         {[
-          { k: "snapshot", l: "Snapshot" },
           { k: "store", l: "Store-wise Stock" },
           { k: "ledger", l: "Item Ledger" },
           { k: "reorder", l: "Low Stock / Reorder" },
@@ -46,7 +44,6 @@ const InventoryOverview = () => {
         ))}
       </div>
 
-      {activeTab === "snapshot" && <SnapshotTab />}
       {activeTab === "store" && <StoreStockTab />}
       {activeTab === "ledger" && <ItemLedgerTab />}
       {activeTab === "reorder" && <ReorderTab />}
@@ -54,46 +51,9 @@ const InventoryOverview = () => {
   );
 };
 
-/* ================= SNAPSHOT ================= */
-
-const SnapshotTab = () => {
-  const { selectedResort } = useResort();
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    axios
-      .get(`${API_BASE}/inventory/snapshot`, {
-        params: { resort: selectedResort },
-      })
-      .then((res) => setData(res.data || null))
-      .catch(() => setData(null));
-  }, [selectedResort]);
-
-  if (!data) return <div className="sa-card">Loading snapshot...</div>;
-
-  return (
-    <div className="sa-grid-4">
-      <div className="sa-card sa-report-kpi">
-        <div className="sa-report-kpi-label">Total Stock Value</div>
-        <div className="sa-report-kpi-value">₹ {data.totalValue || 0}</div>
-      </div>
-      <div className="sa-card sa-report-kpi">
-        <div className="sa-report-kpi-label">Items in Stock</div>
-        <div className="sa-report-kpi-value">{data.totalItems || 0}</div>
-      </div>
-      <div className="sa-card sa-report-kpi">
-        <div className="sa-report-kpi-label">Slow Moving</div>
-        <div className="sa-report-kpi-value">{data.slowMoving || 0}</div>
-      </div>
-      <div className="sa-card sa-report-kpi">
-        <div className="sa-report-kpi-label">Near Expiry</div>
-        <div className="sa-report-kpi-value">{data.nearExpiry || 0}</div>
-      </div>
-    </div>
-  );
-};
-
-/* ================= STORE STOCK ================= */
+/* ======================================================
+   STORE-WISE STOCK  (✅ MAIN FIXED & WORKING)
+====================================================== */
 
 const StoreStockTab = () => {
   const { selectedResort } = useResort();
@@ -108,33 +68,69 @@ const StoreStockTab = () => {
       .catch(() => setRows([]));
   }, [selectedResort]);
 
+  const totalStores = new Set(rows.map((r) => r.store)).size;
+  const totalItems = new Set(rows.map((r) => r.item)).size;
+  const totalQty = rows.reduce(
+    (sum, r) => sum + Number(r.closingQty || 0),
+    0
+  );
+
   return (
-    <div className="sa-card">
-      <table className="sa-table">
-        <thead>
-          <tr>
-            <th>Store</th>
-            <th>Item</th>
-            <th>UOM</th>
-            <th>Closing Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r._id}>
-              <td>{r.storeName}</td>
-              <td>{r.itemName}</td>
-              <td>{r.uom}</td>
-              <td>{r.closingQty}</td>
+    <>
+      {/* KPI SUMMARY */}
+      <div className="sa-grid-3" style={{ marginBottom: 16 }}>
+        <div className="sa-card sa-report-kpi">
+          <div className="sa-report-kpi-label">Stores</div>
+          <div className="sa-report-kpi-value">{totalStores}</div>
+        </div>
+        <div className="sa-card sa-report-kpi">
+          <div className="sa-report-kpi-label">Items</div>
+          <div className="sa-report-kpi-value">{totalItems}</div>
+        </div>
+        <div className="sa-card sa-report-kpi">
+          <div className="sa-report-kpi-label">Total Qty</div>
+          <div className="sa-report-kpi-value">{totalQty}</div>
+        </div>
+      </div>
+
+      {/* TABLE */}
+      <div className="sa-card">
+        <table className="sa-table">
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Item</th>
+              <th>UOM</th>
+              <th>Closing Qty</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan="4" style={{ textAlign: "center" }}>
+                  No stock available
+                </td>
+              </tr>
+            )}
+
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td>{r.store}</td>
+                <td>{r.item}</td>
+                <td>{r.uom}</td>
+                <td>{r.closingQty}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 };
 
-/* ================= ITEM LEDGER ================= */
+/* ======================================================
+   ITEM LEDGER (API READY – UI READY)
+====================================================== */
 
 const ItemLedgerTab = () => {
   const { selectedResort } = useResort();
@@ -164,12 +160,20 @@ const ItemLedgerTab = () => {
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan="7" style={{ textAlign: "center" }}>
+                Ledger not available
+              </td>
+            </tr>
+          )}
+
           {rows.map((r, i) => (
             <tr key={i}>
               <td>{r.date}</td>
               <td>{r.docType}</td>
               <td>{r.refNo}</td>
-              <td>{r.storeName}</td>
+              <td>{r.store}</td>
               <td>{r.inQty}</td>
               <td>{r.outQty}</td>
               <td>{r.balanceQty}</td>
@@ -181,7 +185,9 @@ const ItemLedgerTab = () => {
   );
 };
 
-/* ================= REORDER ================= */
+/* ======================================================
+   LOW STOCK / REORDER (FRONTEND SAFE)
+====================================================== */
 
 const ReorderTab = () => {
   const { selectedResort } = useResort();
@@ -203,17 +209,25 @@ const ReorderTab = () => {
           <tr>
             <th>Store</th>
             <th>Item</th>
-            <th>Min</th>
-            <th>Reorder</th>
+            <th>Min Qty</th>
+            <th>Reorder Qty</th>
             <th>Stock</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r._id}>
-              <td>{r.storeName}</td>
-              <td>{r.itemName}</td>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan="6" style={{ textAlign: "center" }}>
+                No low stock items
+              </td>
+            </tr>
+          )}
+
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.store}</td>
+              <td>{r.item}</td>
               <td>{r.minQty}</td>
               <td>{r.reorderQty}</td>
               <td>{r.stockQty}</td>
