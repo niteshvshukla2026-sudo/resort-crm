@@ -303,12 +303,18 @@ console.log("StoreStock model initialised (Mongo)");
             "REJECTED",
             "PO_CREATED",
             "GRN_CREATED",
+            "TRANSFER_CREATED",
+
           ],
           default: "PENDING",
         },
 
         lines: [reqLineSchema],
-
+// 🔁 INTERNAL TRANSFER REF
+transfer: {
+  transferNo: String,
+  transferId: String,
+},
         // --- Audit Fields ---
         createdBy: { type: String },
         approvedBy: { type: String },
@@ -452,6 +458,27 @@ const roleSchema = new Schema(
 );
 
 mongoose.models.Role || mongoose.model("Role", roleSchema);
+const storeTransferSchema = new mongoose.Schema(
+  {
+    transferNo: { type: String, required: true, unique: true },
+    requisitionId: { type: String, required: true },
+
+    resort: { type: String, required: true },
+    fromStore: { type: String, required: true },
+    toStore: { type: String, required: true },
+
+    items: [
+      {
+        item: { type: String, required: true },
+        qty: { type: Number, required: true },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+mongoose.models.StoreTransfer ||
+  mongoose.model("StoreTransfer", storeTransferSchema);
 
     // ------------------------
     // GRN model
@@ -2140,6 +2167,117 @@ router.post("/api/po/:id/create-grn", async (req, res) => {
       res.status(500).json({ message: "Failed to delete PO" });
     }
   });
+
+
+  router.post("/api/requisitions/:id/create-transfer", async (req, res) => {
+  try {
+    const reqId = req.params.id;
+    const { transferNo, fromStore, toStore, items } = req.body;
+
+    // 1️⃣ Basic validation
+    if (!transferNo || !fromStore || !toStore || !items?.length) {
+      return res.status(400).json({ message: "Invalid payload" });
+    }
+
+    // 2️⃣ Load requisition
+    const reqDoc = await RequisitionModel.findById(reqId);
+    if (!reqDoc) {
+      return res.status(404).json({ message: "Requisition not found" });
+    }
+
+    if (reqDoc.type !== "INTERNAL") {
+      return res.status(400).json({ message: "Not internal requisition" });
+    }
+
+    if (reqDoc.status !== "APPROVED") {
+      return res.status(400).json({ message: "Requisition not approved" });
+    }
+
+    if (reqDoc.transfer) {
+      return res.status(400).json({ message: "Transfer already done" });
+    }
+
+    if (fromStore === toStore) {
+      return res.status(400).json({ message: "Same store transfer not allowed" });
+    }
+
+    const StoreStock = mongoose.models.StoreStock;
+    const StoreTransfer = mongoose.models.StoreTransfer;
+
+    // 3️⃣ STOCK CHECK (FROM STORE)
+    for (const ln of items) {
+      const qty = Number(ln.qty || 0);
+      if (!ln.item || qty <= 0) continue;
+
+      const stock = await StoreStock.findOne({
+        resort: String(reqDoc.resort),
+        store: fromStore,
+        item: ln.item,
+      });
+
+      if (!stock || stock.qty < qty) {
+        return res.status(400).json({
+          message: "Insufficient stock for transfer",
+        });
+      }
+    }
+
+    // 4️⃣ STOCK MOVE (− FROM, + TO)
+    for (const ln of items) {
+      const qty = Number(ln.qty || 0);
+      if (!ln.item || qty <= 0) continue;
+
+      // 🔻 MINUS
+      await StoreStock.updateOne(
+        {
+          resort: String(reqDoc.resort),
+          store: fromStore,
+          item: ln.item,
+        },
+        { $inc: { qty: -qty } }
+      );
+
+      // 🔺 ADD
+      await StoreStock.findOneAndUpdate(
+        {
+          resort: String(reqDoc.resort),
+          store: toStore,
+          item: ln.item,
+        },
+        { $inc: { qty } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
+
+    // 5️⃣ SAVE TRANSFER DOC
+    const transfer = await StoreTransfer.create({
+      transferNo,
+      requisitionId: reqId,
+      resort: String(reqDoc.resort),
+      fromStore,
+      toStore,
+      items,
+    });
+
+    // 6️⃣ UPDATE REQUISITION
+    reqDoc.status = "TRANSFER_CREATED";
+    reqDoc.transfer = {
+      transferNo,
+      transferId: transfer._id,
+    };
+
+    await reqDoc.save();
+
+    res.json({
+      message: "Transfer completed",
+      requisition: reqDoc,
+      transfer,
+    });
+  } catch (err) {
+    console.error("TRANSFER ERROR ❌", err);
+    res.status(500).json({ message: err.message });
+  }
+});
 
   // =======================================================
   // 📦 GRN (Goods Received Note) — Full CRUD + Auto PO Update

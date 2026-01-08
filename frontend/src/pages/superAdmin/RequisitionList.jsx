@@ -69,6 +69,13 @@ const RequisitionList = () => {
     taxAmount: 0,
     total: 0,
   });
+// 🔁 INTERNAL TRANSFER modal state
+const [transferModal, setTransferModal] = useState({
+  open: false,
+  req: null,
+  transferNo: "",
+  items: [],
+});
 
   // GRN modal state
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -706,6 +713,51 @@ const openCreateGRN = (req) => {
       setSaving(false);
     }
   };
+const submitCreateTransfer = async () => {
+  const { req, transferNo, items } = transferModal;
+
+  if (!transferNo) {
+    setError("Transfer No is required");
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const payload = {
+      transferNo,
+      fromStore: req.fromStore,
+      toStore: req.toStore,
+      items: items.map((i) => ({
+        item: i.item,
+        qty: Number(i.qtyTransfer),
+      })),
+    };
+
+    const res = await axios.post(
+      `${API_BASE}/requisitions/${req._id}/create-transfer`,
+      payload
+    );
+
+    // update same requisition in list
+    setRequisitions((prev) =>
+      prev.map((r) =>
+        r._id === req._id ? res.data.requisition : r
+      )
+    );
+
+    setTransferModal({
+      open: false,
+      req: null,
+      transferNo: "",
+      items: [],
+    });
+  } catch (err) {
+    setError(err.response?.data?.message || "Transfer failed");
+  } finally {
+    setSaving(false);
+  }
+};
 
   // navigation helpers
   const viewPO = (po) => {
@@ -726,12 +778,28 @@ const openCreateGRN = (req) => {
     navigate(`/super-admin/requisition/${req._id}`);
   };
 
-  // placeholder for internal transfer
-  const openCreateTransfer = (req) => {
-    window.alert(
-      `Transfer action for internal requisition ${req.requisitionNo || req._id} is not implemented yet.`
-    );
-  };
+const openCreateTransfer = (req) => {
+  if (req.status !== "APPROVED") {
+    setError("Approve requisition before transfer");
+    return;
+  }
+
+  const itemsPayload = (req.lines || []).map((ln) => ({
+    lineId: ln.lineId,
+    item: ln.item?._id || ln.item,
+    itemName: ln.item?.name || getItemName(ln.item),
+    qtyRequested: ln.qty,
+    qtyTransfer: ln.qty, // default full transfer
+  }));
+
+  setTransferModal({
+    open: true,
+    req,
+    transferNo: `TR-${Date.now()}`,
+    items: itemsPayload,
+  });
+};
+
 
   // current stock helper
   const renderCurrentStock = (ln) => {
@@ -1117,17 +1185,24 @@ if (selectedResort && selectedResort !== "ALL") {
 )}
 
 
+{r.type === "INTERNAL" && (
+  <>
+    {r.status === "TRANSFER_CREATED" ? (
+      <span style={disabledActionStyle} title="Transfer completed">
+        <i className="ri-arrow-left-right-line" />
+      </span>
+    ) : (
+      <span
+        style={actionStyle}
+        onClick={() => openCreateTransfer(r)}
+        title="Create Transfer"
+      >
+        <i className="ri-arrow-left-right-line" />
+      </span>
+    )}
+  </>
+)}
 
-                      {/* INTERNAL requisition → Transfer button, no PO/GRN */}
-                      {r.type === "INTERNAL" && (
-                        <span style={actionStyle} onClick={() => openCreateTransfer(r)} title="Transfer">
-                          <i className="ri-arrow-left-right-line" />
-                        </span>
-                      )}
-
-                      <span style={actionStyle} onClick={() => handleDelete(r)} title="Delete">
-                        <i className="ri-delete-bin-6-line" />
-                      </span>
                     </td>
                   </tr>
                 ))}
@@ -1523,6 +1598,106 @@ if (selectedResort && selectedResort !== "ALL") {
           </div>
         </div>
       )}
+{/* 🔁 INTERNAL TRANSFER MODAL */}
+{transferModal.open && (
+  <div
+    className="sa-modal-backdrop"
+    onClick={() => !saving && setTransferModal({ open: false })}
+  >
+    <div
+      className="sa-modal large"
+      onClick={(e) => e.stopPropagation()}
+      style={{ maxWidth: 900 }}
+    >
+      <h3>Create Store Transfer</h3>
+      <p className="sa-modal-sub">
+        Internal stock transfer between stores
+      </p>
+
+      <div className="sa-modal-form">
+        <label>
+          Transfer No
+          <input
+            value={transferModal.transferNo}
+            onChange={(e) =>
+              setTransferModal((p) => ({
+                ...p,
+                transferNo: e.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label>
+          From Store
+          <input
+            value={getStoreName(transferModal.req?.fromStore)}
+            readOnly
+          />
+        </label>
+
+        <label>
+          To Store
+          <input
+            value={getStoreName(transferModal.req?.toStore)}
+            readOnly
+          />
+        </label>
+
+        <table className="sa-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Requested</th>
+              <th>Transfer Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transferModal.items.map((ln, idx) => (
+              <tr key={ln.lineId}>
+                <td>{ln.itemName}</td>
+                <td>{ln.qtyRequested}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    max={ln.qtyRequested}
+                    value={ln.qtyTransfer}
+                    onChange={(e) => {
+                      const v = Number(e.target.value || 0);
+                      setTransferModal((p) => {
+                        const items = [...p.items];
+                        items[idx].qtyTransfer = v;
+                        return { ...p, items };
+                      });
+                    }}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="sa-modal-actions">
+          <button
+            className="sa-secondary-button"
+            onClick={() => setTransferModal({ open: false })}
+          >
+            Cancel
+          </button>
+
+          <button
+            className="sa-primary-button"
+            onClick={submitCreateTransfer}
+            disabled={saving}
+          >
+            {saving ? "Transferring..." : "Create Transfer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* GRN Modal (unchanged) */}
       {grnModal.open && (
