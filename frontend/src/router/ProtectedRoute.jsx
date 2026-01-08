@@ -11,9 +11,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // 🔥 FIX: role fail pe logout page mat dikhao
+  // 🔥 FINAL FIX
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />; // 👈 ONLY CHANGE
+    return <Navigate to="/" replace />;
   }
 
   return children;
