@@ -1840,9 +1840,7 @@ router.post("/api/requisitions/:id/create-po", async (req, res) => {
       return res.status(400).json({ message: "Only vendor requisition can create PO" });
     }
 
-    if (reqDoc.status !== "APPROVED") {
-      return res.status(400).json({ message: "Requisition not approved" });
-    }
+   
 
     // 2️⃣ Create PO
     const poNo = makePoNo();
