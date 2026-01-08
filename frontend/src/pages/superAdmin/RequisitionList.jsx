@@ -1106,6 +1106,25 @@ if (selectedResort && selectedResort !== "ALL") {
                       <span style={actionStyle} onClick={() => openEditForm(r)} title="Edit">
                         <i className="ri-edit-line" />
                       </span>
+<span
+  style={{
+    ...actionStyle,
+    color: "#dc2626",
+  }}
+  onClick={() => handleDelete(r)}
+  title="Delete"
+>
+  <i className="ri-delete-bin-line" />
+</span>
+ {r.status === "PENDING" && (
+  <span
+    style={{ ...actionStyle, color: "#dc2626" }}
+    onClick={() => handleDelete(r)}
+    title="Delete"
+  >
+    <i className="ri-delete-bin-line" />
+  </span>
+)}
 
                       {/* <span
                         style={{
