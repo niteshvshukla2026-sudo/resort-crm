@@ -2193,9 +2193,10 @@ router.post("/api/po/:id/create-grn", async (req, res) => {
       return res.status(400).json({ message: "Requisition not approved" });
     }
 
-    if (reqDoc.transfer) {
-      return res.status(400).json({ message: "Transfer already done" });
-    }
+    if (reqDoc.status === "TRANSFER_CREATED") {
+  return res.status(400).json({ message: "Transfer already done" });
+}
+
 
     if (fromStore === toStore) {
       return res.status(400).json({ message: "Same store transfer not allowed" });
