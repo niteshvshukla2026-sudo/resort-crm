@@ -1,26 +1,15 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, token, loading } = useAuth();
+const ProtectedRoute = ({ children }) => {
+  const { loading } = useAuth();
 
-  // wait till auth restore
+  // wait for auth restore
   if (loading) return null;
 
-  // 🔥 FINAL FIX: token is the source of truth
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // role check ONLY if user exists
-  if (
-    allowedRoles &&
-    user &&
-    !allowedRoles.includes(user.role)
-  ) {
-    return <Navigate to="/" replace />;
-  }
+  // 🔥 FINAL FIX:
+  // NEVER redirect to login automatically
+  // Login will happen ONLY manually
 
   return children;
 };
