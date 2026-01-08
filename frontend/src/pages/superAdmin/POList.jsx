@@ -738,27 +738,12 @@ const POList = () => {
                         <i className="ri-eye-line" />
                       </span>
 
-                      {/* DUPLICATE (create from PO) */}
-                      <span style={actionStyle} onClick={() => openDuplicatePo(po)} title="Create (Duplicate)">
-                        <i className="ri-file-copy-line" />
-                      </span>
-
+                     
                       {/* EDIT */}
                       <span style={actionStyle} onClick={() => openEditPo(po)} title="Edit">
                         <i className="ri-edit-line" />
                       </span>
 
-                      {/* APPROVE */}
-                      <span
-                        style={{
-                          ...actionStyle,
-                          background: po.status === "Approved" || po.status === "APPROVED" ? "#052e16" : "transparent",
-                        }}
-                        onClick={() => handleApprove(po)}
-                        title={po.status === "Approved" || po.status === "APPROVED" ? "Already approved" : "Approve"}
-                      >
-                        <i className="ri-checkbox-circle-line" />
-                      </span>
 
                       {/* CREATE GRN / VIEW GRN */}
                       {po.grn ? (
