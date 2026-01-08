@@ -417,44 +417,44 @@ if (form.type === "INTERNAL") {
     }
   };
 
-  // approve / hold / reject
-  const handleApprove = async (req) => {
-    if (req.status === "APPROVED") return;
-    if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
-    try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/approve`);
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "APPROVED" } : r)));
-    } catch (err) {
-      console.error("approve error", err);
-      setError(err.response?.data?.message || "Failed to approve requisition");
-    }
-  };
+  // // approve / hold / reject
+  // const handleApprove = async (req) => {
+  //   if (req.status === "APPROVED") return;
+  //   if (!window.confirm(`Approve requisition ${req.requisitionNo || req._id}?`)) return;
+  //   try {
+  //     const res = await axios.post(`${API_BASE}/requisitions/${req._id}/approve`);
+  //     if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+  //     else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "APPROVED" } : r)));
+  //   } catch (err) {
+  //     console.error("approve error", err);
+  //     setError(err.response?.data?.message || "Failed to approve requisition");
+  //   }
+  // };
 
-  const handleHold = async (req) => {
-    if (!window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)) return;
-    try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/hold`);
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "ON_HOLD" } : r)));
-    } catch (err) {
-      console.error("hold error", err);
-      setError(err.response?.data?.message || "Failed to put requisition on hold");
-    }
-  };
+  // const handleHold = async (req) => {
+  //   if (!window.confirm(`Put requisition ${req.requisitionNo || req._id} on hold?`)) return;
+  //   try {
+  //     const res = await axios.post(`${API_BASE}/requisitions/${req._id}/hold`);
+  //     if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+  //     else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "ON_HOLD" } : r)));
+  //   } catch (err) {
+  //     console.error("hold error", err);
+  //     setError(err.response?.data?.message || "Failed to put requisition on hold");
+  //   }
+  // };
 
-  const handleReject = async (req) => {
-    const reason = window.prompt("Enter rejection reason (optional):", "");
-    if (reason === null) return;
-    try {
-      const res = await axios.post(`${API_BASE}/requisitions/${req._id}/reject`, { reason });
-      if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
-      else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "REJECTED" } : r)));
-    } catch (err) {
-      console.error("reject error", err);
-      setError(err.response?.data?.message || "Failed to reject requisition");
-    }
-  };
+  // const handleReject = async (req) => {
+  //   const reason = window.prompt("Enter rejection reason (optional):", "");
+  //   if (reason === null) return;
+  //   try {
+  //     const res = await axios.post(`${API_BASE}/requisitions/${req._id}/reject`, { reason });
+  //     if (res?.data) setRequisitions((p) => p.map((r) => (r._id === req._id ? res.data : r)));
+  //     else setRequisitions((p) => p.map((r) => (r._id === req._id ? { ...r, status: "REJECTED" } : r)));
+  //   } catch (err) {
+  //     console.error("reject error", err);
+  //     setError(err.response?.data?.message || "Failed to reject requisition");
+  //   }
+  // };
 
   // ------------- PO modal -------------
   const openCreatePO = (req) => {
@@ -779,10 +779,10 @@ const submitCreateTransfer = async () => {
   };
 
 const openCreateTransfer = (req) => {
-  if (req.status !== "APPROVED") {
-    setError("Approve requisition before transfer");
-    return;
-  }
+  // if (req.status !== "APPROVED") {
+  //   setError("Approve requisition before transfer");
+  //   return;
+  // }
 
   const itemsPayload = (req.lines || []).map((ln) => ({
     lineId: ln.lineId,
@@ -975,11 +975,10 @@ if (selectedResort && selectedResort !== "ALL") {
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ marginLeft: 6 }}>
             <option value="ALL">All</option>
             <option value="PENDING">Pending</option>
-            <option value="APPROVED">Approved</option>
-            <option value="ON_HOLD">On Hold</option>
-            <option value="REJECTED">Rejected</option>
+           
             <option value="PO_CREATED">PO Created</option>
             <option value="GRN_CREATED">GRN Created</option>
+            <option value="TRANSFER_CREATED">Transfer Created</option>
           </select>
         </label>
 
@@ -1108,7 +1107,7 @@ if (selectedResort && selectedResort !== "ALL") {
                         <i className="ri-edit-line" />
                       </span>
 
-                      <span
+                      {/* <span
                         style={{
                           ...actionStyle,
                           background: r.status === "APPROVED" ? "#052e16" : "transparent",
@@ -1125,7 +1124,7 @@ if (selectedResort && selectedResort !== "ALL") {
 
                       <span style={actionStyle} onClick={() => handleReject(r)} title="Reject">
                         <i className="ri-close-circle-line" />
-                      </span>
+                      </span> */}
 
                       {/* VENDOR requisition → PO / GRN allowed, with mutual disable */}
                     {r.type === "VENDOR" && (
