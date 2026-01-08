@@ -3,16 +3,22 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth();
+  const { user, token, loading } = useAuth();
 
+  // wait till auth restore
   if (loading) return null;
 
-  if (!user) {
+  // 🔥 FINAL FIX: token is the source of truth
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // 🔥 FINAL FIX
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  // role check ONLY if user exists
+  if (
+    allowedRoles &&
+    user &&
+    !allowedRoles.includes(user.role)
+  ) {
     return <Navigate to="/" replace />;
   }
 
