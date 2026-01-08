@@ -298,9 +298,7 @@ console.log("StoreStock model initialised (Mongo)");
           type: String,
           enum: [
             "PENDING",
-            "APPROVED",
-            "ON_HOLD",
-            "REJECTED",
+           
             "PO_CREATED",
             "GRN_CREATED",
             "TRANSFER_CREATED",
@@ -317,10 +315,7 @@ transfer: {
 },
         // --- Audit Fields ---
         createdBy: { type: String },
-        approvedBy: { type: String },
-        approvedAt: { type: Date },
-        rejectedBy: { type: String },
-        rejectionReason: { type: String },
+        
       },
       { timestamps: true }
     );
@@ -1690,88 +1685,7 @@ router.post("/api/requisitions", async (req, res) => {
     }
   });
 
-  // APPROVE
-  router.post("/api/requisitions/:id/approve", async (req, res) => {
-    try {
-      const id = req.params.id;
-
-      const update = {
-        status: "APPROVED",
-        approvedBy: req.user?.id || "SYSTEM",
-        approvedAt: new Date(),
-      };
-
-      if (RequisitionModel) {
-        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
-        if (!updated) return res.status(404).json({ message: "Requisition not found" });
-        return res.json(updated);
-      }
-
-      const idx = memRequisitions.findIndex((r) => r._id === id);
-      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
-
-      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
-      return res.json(memRequisitions[idx]);
-    } catch (err) {
-      console.error("APPROVE requisition error", err);
-      res.status(500).json({ message: "Failed to approve requisition" });
-    }
-  });
-
-  // HOLD
-  router.post("/api/requisitions/:id/hold", async (req, res) => {
-    try {
-      const id = req.params.id;
-
-      const update = { status: "ON_HOLD" };
-
-      if (RequisitionModel) {
-        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
-        if (!updated) return res.status(404).json({ message: "Requisition not found" });
-        return res.json(updated);
-      }
-
-      const idx = memRequisitions.findIndex((r) => r._id === id);
-      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
-
-      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
-      return res.json(memRequisitions[idx]);
-    } catch (err) {
-      console.error("HOLD requisition error", err);
-      res.status(500).json({ message: "Failed to hold requisition" });
-    }
-  });
-
-  // REJECT
-  router.post("/api/requisitions/:id/reject", async (req, res) => {
-    try {
-      const id = req.params.id;
-      const reason = req.body.reason || "";
-
-      const update = {
-        status: "REJECTED",
-        rejectedBy: req.user?.id || "SYSTEM",
-        rejectionReason: reason,
-      };
-
-      if (RequisitionModel) {
-        const updated = await RequisitionModel.findByIdAndUpdate(id, { $set: update }, { new: true });
-        if (!updated) return res.status(404).json({ message: "Requisition not found" });
-        return res.json(updated);
-      }
-
-      const idx = memRequisitions.findIndex((r) => r._id === id);
-      if (idx === -1) return res.status(404).json({ message: "Requisition not found" });
-
-      memRequisitions[idx] = { ...memRequisitions[idx], ...update };
-      return res.json(memRequisitions[idx]);
-    } catch (err) {
-      console.error("REJECT requisition error", err);
-      res.status(500).json({ message: "Failed to reject requisition" });
-    }
-  });
-
-
+ 
 // ==================================================
 // 🔒 CLOSE GRN + ADD STOCK
 // ==================================================
@@ -2187,9 +2101,7 @@ router.post("/api/po/:id/create-grn", async (req, res) => {
       return res.status(400).json({ message: "Not internal requisition" });
     }
 
-    if (reqDoc.status !== "APPROVED") {
-      return res.status(400).json({ message: "Requisition not approved" });
-    }
+  
 
     if (reqDoc.status === "TRANSFER_CREATED") {
   return res.status(400).json({ message: "Transfer already done" });
